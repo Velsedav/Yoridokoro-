@@ -122,6 +122,8 @@
 
 .chapter-item-dots {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 3px;
     align-items: center;
 }
@@ -134,6 +136,7 @@
 }
 
 .chapter-dot {
+    display: block;
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -240,6 +243,14 @@
 
 .chapter-spacing-btn.has-override:hover {
     background: rgba(var(--primary-rgb), 0.12);
+}
+
+.chapter-spacing-progress {
+    margin-left: auto;
+    color: var(--primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    white-space: nowrap;
 }
 
 .chapter-study-btn:hover {

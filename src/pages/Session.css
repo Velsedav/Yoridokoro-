@@ -498,10 +498,26 @@
     gap: 16px;
     justify-content: center;
     margin-top: 16px;
+    flex-wrap: wrap;
 }
 
-.pause-resume-btn {
+.pause-resume-btn,
+.add-time-btn {
     min-width: 120px;
+}
+
+.session-time-expired {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+    color: var(--accent);
+    font-size: 0.85rem;
+}
+
+.session-time-expired span {
+    color: var(--text-muted);
+    font-size: 0.78rem;
 }
 
 .end-session-btn {

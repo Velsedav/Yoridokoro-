@@ -1,6 +1,6 @@
 {
   "name": "study-buddy-electron",
-  "version": "2.0.2",
+  "version": "2.0.4",
   "private": true,
   "author": {
     "name": "Velsedav",
@@ -13,7 +13,7 @@
     "build": "electron-vite build --config electron-vite.config.mjs",
     "preview": "electron-vite preview --config electron-vite.config.mjs",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
-    "dist": "npm run build && electron-builder --config.win.signAndEditExecutable=false",
+    "dist": "npm run build && electron-builder",
     "test": "vitest",
     "test:run": "vitest run"
   },
@@ -38,20 +38,23 @@
     ],
     "linux": {
       "target": ["deb", "AppImage"],
-      "icon": "build/icons",
+      "icon": "icons-dark-academia",
       "category": "Education"
     },
     "win": {
       "target": "nsis",
-      "icon": "src/public/icon.png"
+      "icon": "icon-dark-academia.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "src/public/icon.png"
+      "icon": "icons-dark-academia/1024x1024.png"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "icon-dark-academia.ico",
+      "uninstallerIcon": "icon-dark-academia.ico",
+      "installerHeaderIcon": "icon-dark-academia.ico"
     }
   },
   "dependencies": {

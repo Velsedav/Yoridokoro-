@@ -62,10 +62,58 @@ export function parseSpacing(schedule: string): number[] {
     return schedule.trim().split(/\s+/).map(Number).filter(n => n > 0 && !isNaN(n));
 }
 
+/** The complete display schedule for a chapter, including per-chapter overrides. */
+export function getChapterSpacingIntervals(chapter: Pick<Chapter, 'spacingOverride'>): number[] {
+    const configured = parseSpacing(chapter.spacingOverride || getDefaultSpacing());
+    return configured.length > 0 ? configured : [1];
+}
+
 function getIntervalForCount(intervals: number[], studyCount: number): number {
     if (intervals.length === 0) return 1;
     const idx = studyCount - 1; // studyCount is 1-based
     return idx < intervals.length ? intervals[idx] : intervals[intervals.length - 1];
+}
+
+export interface SpacedRepetitionStatus {
+    intervals: number[];
+    stepNumber: number;
+    totalSteps: number;
+    isRepeatingLastStep: boolean;
+    currentIntervalDays: number;
+    nextIntervalDays: number;
+    dueDate: Date;
+    daysUntilDue: number;
+    isDue: boolean;
+}
+
+/** A display-ready snapshot of where a chapter sits in its review schedule. */
+export function getSpacedRepetitionStatus(chapter: Chapter, at = new Date()): SpacedRepetitionStatus | null {
+    if (chapter.studyCount <= 0 || !chapter.lastStudiedAt) return null;
+
+    const intervals = getChapterSpacingIntervals(chapter);
+    const currentIntervalDays = getIntervalForCount(intervals, chapter.studyCount);
+    const nextIntervalDays = getIntervalForCount(intervals, chapter.studyCount + 1);
+    const currentIndex = Math.max(0, chapter.studyCount - 1);
+
+    const dueDate = new Date(chapter.lastStudiedAt);
+    dueDate.setHours(0, 0, 0, 0);
+    dueDate.setDate(dueDate.getDate() + currentIntervalDays);
+
+    const today = new Date(at);
+    today.setHours(0, 0, 0, 0);
+    const daysUntilDue = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+
+    return {
+        intervals,
+        stepNumber: Math.min(currentIndex + 1, intervals.length),
+        totalSteps: intervals.length,
+        isRepeatingLastStep: currentIndex >= intervals.length,
+        currentIntervalDays,
+        nextIntervalDays,
+        dueDate,
+        daysUntilDue,
+        isDue: daysUntilDue <= 0,
+    };
 }
 
 export function getAllChapters(): Chapter[] {
@@ -211,8 +259,10 @@ export function applyMasteryRating(id: string, rating: MasteryRating): void {
     const ch = all.find(c => c.id === id);
     if (!ch) return;
     if (rating === 'forgot') {
-        ch.studyCount = 0;
-        ch.lastStudiedAt = null;
+        // Restart at the first interval without making the chapter disappear
+        // from the review queue after it was just studied.
+        ch.studyCount = 1;
+        ch.lastStudiedAt ||= new Date().toISOString();
     } else if (rating === 'hard' && ch.studyCount > 1) {
         ch.studyCount = Math.max(1, ch.studyCount - 1);
     } else if (rating === 'easy') {
@@ -236,11 +286,11 @@ export interface Recommendation {
     chapter: Chapter;
     subjectName: string;
     daysOverdue: number;
+    status: SpacedRepetitionStatus;
 }
 
 export function getRecommendations(subjectNames: Record<string, string>): Recommendation[] {
     const all = loadAll();
-    const defaultSpacing = getDefaultSpacing();
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
@@ -249,24 +299,16 @@ export function getRecommendations(subjectNames: Record<string, string>): Recomm
     for (const ch of all) {
         if (ch.studyCount === 0 || !ch.lastStudiedAt) continue;
 
-        const schedule = ch.spacingOverride || defaultSpacing;
-        const intervals = parseSpacing(schedule);
-        const intervalDays = getIntervalForCount(intervals, ch.studyCount);
-
-        const lastStudied = new Date(ch.lastStudiedAt);
-        lastStudied.setHours(0, 0, 0, 0);
-
-        const dueDate = new Date(lastStudied);
-        dueDate.setDate(dueDate.getDate() + intervalDays);
-
-        const diffMs = now.getTime() - dueDate.getTime();
-        const daysOverdue = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const status = getSpacedRepetitionStatus(ch, now);
+        if (!status) continue;
+        const daysOverdue = status.daysUntilDue === 0 ? 0 : -status.daysUntilDue;
 
         if (daysOverdue >= 0) {
             recommendations.push({
                 chapter: ch,
                 subjectName: subjectNames[ch.subjectId] || 'Unknown',
                 daysOverdue,
+                status,
             });
         }
     }

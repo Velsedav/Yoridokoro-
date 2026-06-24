@@ -218,6 +218,9 @@ ipcMain.handle('autostart:setEnabled', (_e, enabled: boolean) => {
 // ── Window ────────────────────────────────────────────────────────────────────
 
 function createWindow() {
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'public', 'icon-dark-academia.png')
+    : path.join(app.getAppPath(), 'src', 'public', 'icon-dark-academia.png')
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -229,6 +232,7 @@ function createWindow() {
       nodeIntegration: false,
     },
     backgroundColor: '#1a1625',
+    icon: iconPath,
     show: false,
   })
 
@@ -247,6 +251,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  app.setAppUserModelId('com.velsedav.study-buddy')
   initDatabases()
   createWindow()
 

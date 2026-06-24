@@ -252,7 +252,13 @@ export default function Session() {
     // Kept separate from the updater to respect React's pure-updater rule
     useEffect(() => {
         if (remaining === 0 && session && !paused) {
-            handleBlockComplete();
+            const block = session.draft[session.nowBlockIdx];
+            if (block?.type === 'WORK') {
+                // Keep the lesson open so the learner can extend a productive block.
+                setPaused(true);
+            } else {
+                handleBlockComplete();
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [remaining]);
@@ -349,6 +355,27 @@ export default function Session() {
             setRestCountdown(600);
             setEndConfirmStep('total-rest');
         }
+    }
+
+    function extendCurrentBlock(minutes = 5) {
+        if (!session || minutes <= 0) return;
+        const addedSeconds = minutes * 60;
+        const wasExpired = remaining === 0;
+        setSession((current: any) => {
+            if (!current) return current;
+            const draft = current.draft.map((block: any, index: number) =>
+                index === current.nowBlockIdx
+                    ? { ...block, minutes: block.minutes + minutes }
+                    : block
+            );
+            return {
+                ...current,
+                draft,
+                plannedMinutes: (current.plannedMinutes ?? 0) + minutes,
+            };
+        });
+        setRemaining(value => value + addedSeconds);
+        if (wasExpired) setPaused(false);
     }
 
     async function handleBlockComplete() {
@@ -555,6 +582,7 @@ export default function Session() {
     const tech = currentBlock.technique_id ? TECHNIQUES.find(t => t.id === currentBlock.technique_id) : null;
     const totalSeconds = (currentBlock.minutes ?? 0) * 60;
     const elapsed = Math.max(0, totalSeconds - remaining);
+    const isWorkExpired = currentBlock.type === 'WORK' && remaining === 0;
     const fiveMinTicks = totalSeconds > 0
         ? Array.from({ length: Math.floor(totalSeconds / 300) }, (_, i) => i + 1).filter(i => i * 300 < totalSeconds)
         : [];
@@ -1015,15 +1043,36 @@ export default function Session() {
                         {(() => { const [mm, ss] = formatSecondsMMSS(remaining).split(':'); return <>{mm}<span className="timer-colon">:</span>{ss}</>; })()}
                     </div>
 
+                    {isWorkExpired && (
+                        <div className="session-time-expired" role="status">
+                            <strong>{t('session.time_up')}</strong>
+                            <span>{t('session.time_up_hint')}</span>
+                        </div>
+                    )}
+
                     <div className="session-controls">
-                        <button
-                            className={`btn pause-resume-btn ${paused ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => { playSFX('glass_session_end', theme); setPaused(!paused); }}
-                        >
-                            {paused ? t('session.resume') : t('session.pause')}
-                        </button>
-                        <button className="btn btn-secondary" onClick={() => { playSFX('glass_ui_cancel', theme); handleBlockComplete(); }}>
-                            {t('session.skip_block')}
+                        {currentBlock.type === 'WORK' && (
+                            <button
+                                className={`btn add-time-btn ${isWorkExpired ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => { playSFX('glass_ui_check', theme); extendCurrentBlock(5); }}
+                            >
+                                {t('session.add_five_minutes')}
+                            </button>
+                        )}
+                        {!isWorkExpired && (
+                            <button
+                                className={`btn pause-resume-btn ${paused ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => { playSFX('glass_session_end', theme); setPaused(!paused); }}
+                            >
+                                {paused ? t('session.resume') : t('session.pause')}
+                            </button>
+                        )}
+                        <button className="btn btn-secondary" onClick={() => {
+                            playSFX('glass_ui_cancel', theme);
+                            if (isWorkExpired) setPaused(false);
+                            handleBlockComplete();
+                        }}>
+                            {isWorkExpired ? t('session.next_block') : t('session.skip_block')}
                         </button>
                         <button
                             className="btn end-session-btn"

@@ -1,162 +1,335 @@
-/* ── Step navigation pills ── */
-
-.mc-step-pill {
-    flex: 1;
-    max-width: 120px;
-    padding: 10px 8px;
-    border-radius: 12px;
-    border: 2px solid var(--glass-border);
-    background: var(--card-bg);
-    color: var(--text-muted);
-    font-weight: 500;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
+.metacognition-page {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    color: var(--text-dark);
+    background: var(--bg-color);
+}
+
+.mc-header {
+    display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: space-between;
+    gap: 20px;
+    min-height: 82px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--card-bg);
 }
 
-.mc-step-pill:hover:not(.active) {
-    border-color: var(--primary);
-    color: var(--primary);
-    background: rgba(var(--primary-rgb), 0.06);
-    transform: translateY(-1px);
+.mc-header-identity,
+.mc-header-actions,
+.mc-actions,
+.mc-primary-action,
+.mc-timer {
+    display: flex;
+    align-items: center;
 }
 
-.mc-step-pill.active {
-    border-color: var(--primary);
-    background: rgba(var(--primary-rgb), 0.12);
+.mc-header-identity { gap: 12px; min-width: 0; }
+.mc-header-actions { gap: 10px; flex-shrink: 0; }
+
+.mc-header-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm, 4px);
+    background: var(--surface-raised);
     color: var(--primary);
+}
+
+.mc-eyebrow,
+.mc-panel-kicker,
+.mc-mobile-step {
+    color: var(--primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.mc-header h1 {
+    margin: 1px 0 0;
+    font-size: 1.25rem;
+    line-height: 1.25;
+}
+
+.mc-header p {
+    margin: 2px 0 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.mc-timer {
+    gap: 7px;
+    min-height: 36px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm, 4px);
+    background: var(--bg-color);
+    color: var(--text-dark);
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
     font-weight: 700;
 }
 
-/* ── Exam type cards ── */
+.mc-timer.is-warning { border-color: var(--danger); color: var(--danger); }
+
+.mc-close {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm, 4px);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.mc-close:hover { border-color: var(--primary); color: var(--primary); background: var(--surface-raised); }
+
+.mc-layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    min-height: 0;
+}
+
+.mc-step-rail {
+    padding: 18px 12px;
+    border-right: 1px solid var(--border-color);
+    background: var(--card-bg);
+    min-height: 100%;
+}
+
+.mc-step-button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 42px;
+    padding: 7px 9px;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius-sm, 4px);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    font-size: 0.8rem;
+}
+
+.mc-step-button:hover:not(:disabled) { background: var(--surface-raised); color: var(--text-dark); }
+.mc-step-button.is-active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 11%, transparent); color: var(--primary); font-weight: 700; }
+.mc-step-button.is-complete { color: var(--success); }
+.mc-step-button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.mc-step-number {
+    display: grid;
+    place-items: center;
+    width: 25px;
+    height: 25px;
+    flex: 0 0 25px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+}
+
+.mc-rail-progress {
+    height: 3px;
+    margin: 16px 9px 0;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--surface-raised);
+}
+
+.mc-rail-progress span { display: block; height: 100%; background: var(--primary); transition: width 0.2s ease; }
+
+.mc-main { min-width: 0; padding: 24px; overflow-y: auto; }
+.mc-mobile-step { display: none; margin-bottom: 12px; }
+.mc-anim-wrapper { width: 100%; }
+
+.mc-panel {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 26px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius, 6px);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+}
+
+.mc-panel h2 {
+    margin: 4px 0 7px;
+    outline: none;
+    font-size: 1.35rem;
+    line-height: 1.3;
+}
+
+.mc-panel-lede {
+    margin: 0 0 22px;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+
+.mc-intro { padding-top: 36px; }
+
+.mc-callout,
+.mc-risk-field,
+.mc-example {
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--border-radius-sm, 4px);
+    background: var(--bg-color);
+}
+
+.mc-callout { padding: 16px; }
+.mc-callout strong { display: block; margin-bottom: 4px; font-size: 0.82rem; }
+.mc-callout p { margin: 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.55; }
+
+.mc-field { margin-top: 20px; }
+.mc-field > label,
+.mc-fieldset > legend,
+.mc-obstacle-field > span,
+.mc-free-time-label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--text-dark);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.mc-input {
+    width: 100%;
+    min-height: 40px;
+    padding: 9px 11px;
+    border: 1px solid var(--input-border, var(--border-color));
+    border-radius: var(--border-radius-sm, 4px);
+    background: var(--input-bg-focus, var(--bg-color));
+    color: var(--text-dark);
+    font: inherit;
+    font-size: 0.86rem;
+}
+
+.mc-input::placeholder { color: var(--text-muted); opacity: 0.78; }
+.mc-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
+
+.mc-fieldset {
+    min-width: 0;
+    margin: 20px 0 0;
+    padding: 0;
+    border: 0;
+}
 
 .mc-exam-type-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
 }
 
 .mc-exam-type-card {
-    padding: 24px 16px;
-    border-radius: 16px;
+    display: grid;
+    gap: 3px;
+    min-height: 72px;
+    padding: 11px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm, 4px);
+    background: var(--bg-color);
+    color: var(--text-dark);
     cursor: pointer;
-    border: 2px solid transparent;
-    background: transparent;
-    transition: all 0.2s ease;
-    text-align: center;
+    text-align: left;
+    font: inherit;
 }
 
-.mc-exam-type-card:hover:not(.active) {
-    border-color: var(--primary);
-    background: rgba(var(--primary-rgb), 0.04);
-    transform: translateY(-2px);
-}
+.mc-exam-type-card:hover { border-color: var(--primary); }
+.mc-exam-type-card.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--bg-color)); }
+.mc-exam-type-card strong { color: inherit; font-size: 0.82rem; }
+.mc-exam-type-card span { color: var(--text-muted); font-size: 0.7rem; line-height: 1.35; }
 
-.mc-exam-type-card.active {
-    border-color: var(--primary);
-    background: rgba(var(--primary-rgb), 0.08);
-}
+.mc-free-time-group { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-color); }
+.mc-free-time-desc { margin: 0 0 10px; color: var(--text-muted); font-size: 0.76rem; line-height: 1.45; }
+.mc-free-time-input-row { display: flex; align-items: center; gap: 9px; }
+.mc-free-time-input { width: 115px; }
+.mc-free-time-unit { color: var(--text-muted); font-size: 0.78rem; }
 
-/* ── Mention autocomplete ── */
+.mc-obstacle-grid { display: grid; gap: 10px; }
+.mc-obstacle-field { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 10px; }
+.mc-obstacle-field > span { margin: 0; color: var(--text-muted); }
 
-.mc-mention-wrapper {
-    position: relative;
-}
+.mc-risk-field { padding: 14px; }
+.mc-risk-field > p { margin: -2px 0 10px; color: var(--text-muted); font-size: 0.76rem; }
 
-.mc-boussole-textarea {
-    resize: vertical;
-    width: 100%;
-    font-size: 1rem;
-    padding: 16px;
-}
+.mc-example { margin: 0 0 10px; padding: 10px 12px; color: var(--text-muted); font-size: 0.74rem; line-height: 1.45; }
+.mc-system-textarea,
+.mc-boussole-textarea { resize: vertical; min-height: 130px; }
 
+.mc-mention-wrapper { position: relative; }
 .mc-mention-dropdown {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
-    z-index: 200;
-    background: var(--bg-color);
-    border: 1px solid var(--glass-border);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-    margin-top: 4px;
-    overflow: hidden;
-    max-height: 240px;
+    z-index: 20;
+    max-height: 210px;
     overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm, 4px);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-md);
 }
 
 .mc-mention-item {
     display: block;
     width: 100%;
-    padding: 10px 16px;
-    text-align: left;
+    min-height: 36px;
+    padding: 7px 11px;
+    border: 0;
+    border-bottom: 1px solid var(--border-color);
     background: transparent;
-    border: none;
-    cursor: pointer;
     color: var(--text-dark);
-    font-size: 0.9rem;
-    transition: background 0.15s;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    font-size: 0.8rem;
 }
 
+.mc-mention-item:last-child { border-bottom: 0; }
 .mc-mention-item:hover,
-.mc-mention-item--active {
-    background: rgba(var(--primary-rgb), 0.12);
-    color: var(--primary);
+.mc-mention-item--active { background: var(--surface-raised); color: var(--primary); }
+
+.mc-actions { justify-content: space-between; gap: 10px; margin-top: 24px; }
+.mc-actions-end { justify-content: flex-end; }
+.mc-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; }
+.mc-primary-action { gap: 6px; min-width: 122px; }
+.mc-save-error { margin: 16px 0 0; color: var(--danger); font-size: 0.8rem; }
+
+@media (max-width: 760px) {
+    .mc-header { align-items: flex-start; }
+    .mc-header p { display: none; }
+    .mc-layout { display: block; }
+    .mc-step-rail { display: none; }
+    .mc-main { padding: 14px; }
+    .mc-mobile-step { display: block; }
+    .mc-panel { padding: 19px; }
+    .mc-exam-type-grid { grid-template-columns: 1fr; }
+    .mc-obstacle-field { grid-template-columns: 1fr; gap: 4px; }
 }
 
-/* ── Free time input (Step 2) ── */
-
-.mc-free-time-group {
-    margin-top: 28px;
-    padding-top: 24px;
-    border-top: 1px solid var(--glass-border);
-}
-
-.mc-free-time-label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 6px;
-}
-
-.mc-free-time-desc {
-    color: var(--text-muted);
-    font-size: 0.875rem;
-    line-height: 1.5;
-    margin: 0 0 14px;
-}
-
-.mc-free-time-input-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.mc-free-time-input {
-    width: 120px;
-    font-size: 1.1rem;
-    text-align: center;
-}
-
-.mc-free-time-unit {
-    font-size: 0.95rem;
-    color: var(--text-muted);
-}
-
-/* ── Complete step actions row ── */
-
-.mc-complete-actions {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 32px;
-}
-
-.mc-complete-btn {
-    font-size: 1.05rem;
-    padding: 14px 40px;
-    background: var(--success);
+@media (max-width: 480px) {
+    .mc-header { padding: 11px; }
+    .mc-header-icon { display: none; }
+    .mc-header h1 { font-size: 1.02rem; }
+    .mc-eyebrow { font-size: 0.58rem; }
+    .mc-timer { padding: 5px 7px; font-size: 0.76rem; }
+    .mc-panel { padding: 15px; }
+    .mc-actions { align-items: stretch; flex-direction: column-reverse; }
+    .mc-actions .btn { width: 100%; }
 }

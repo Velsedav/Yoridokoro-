@@ -15,10 +15,11 @@ const LS_TECHNIQUE_KEY = 'obsidian-qs-technique'
 
 interface Props {
   subject: Subject
+  initialChapterName?: string
   onClose: () => void
 }
 
-export default function ObsidianQuickStart({ subject, onClose }: Props) {
+export default function ObsidianQuickStart({ subject, initialChapterName = '', onClose }: Props) {
   const navigate = useNavigate()
   const [duration, setDuration] = useState<number>(() => {
     const saved = localStorage.getItem(LS_DURATION_KEY)
@@ -28,7 +29,7 @@ export default function ObsidianQuickStart({ subject, onClose }: Props) {
   const [techniqueId, setTechniqueId] = useState<string>(() => {
     return localStorage.getItem(LS_TECHNIQUE_KEY) || TECHNIQUES[0].id
   })
-  const [chapterName, setChapterName] = useState<string>('')
+  const [chapterName, setChapterName] = useState<string>(initialChapterName)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
 

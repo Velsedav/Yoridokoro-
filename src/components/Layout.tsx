@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, Calendar, Sparkles, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { BookOpen, BrainCircuit, Calendar, Sparkles, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { getQuotes, addQuote, saveSession, updateSubjectStats } from '../lib/db';
 import type { Quote } from '../lib/db';
 import QuoteEditorModal from './QuoteEditorModal';
@@ -9,6 +9,8 @@ import { playSFX } from '../lib/sounds';
 import { useSettings } from '../lib/settings';
 import { getChaptersForSubject, incrementStudyCount } from '../lib/chapters';
 import { isDevNavUnlocked, toggleDevNav } from '../lib/devMode';
+import { getLatestMetacognitionCompletion, getMetacognitionStatus, METACOGNITION_UPDATED_EVENT, type MetacognitionStatus } from '../lib/metacognitionStatus';
+import MetacognitionGate from './MetacognitionGate';
 import './Layout.css';
 
 const MASCOT_DEFAULT_QUOTE = "The exam is won at home, not on exam day 🏠";
@@ -96,7 +98,7 @@ export default function Layout() {
     const location = useLocation();
     const navigate = useNavigate();
     const { t } = useTranslation();
-    const { theme } = useSettings();
+    const { theme, metacognitionDay } = useSettings();
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [currentIdx, setCurrentIdx] = useState(0);
     const [animClass, setAnimClass] = useState('quote-visible');
@@ -108,6 +110,7 @@ export default function Layout() {
     const [mascotClickCount, setMascotClickCount] = useState(0);
     const mascotClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [learningReviewDue, setLearningReviewDue] = useState(false);
+    const [metacognitionStatus, setMetacognitionStatus] = useState<MetacognitionStatus>('upcoming');
 
     function handleMascotClick() {
         const next = mascotClickCount + 1;
@@ -153,6 +156,22 @@ export default function Layout() {
         const id = setInterval(check, 60_000);
         return () => clearInterval(id);
     }, []);
+
+    useEffect(() => {
+        const check = async () => {
+            const latestCompletion = await getLatestMetacognitionCompletion();
+            setMetacognitionStatus(getMetacognitionStatus(new Date(), metacognitionDay, latestCompletion));
+        };
+        void check();
+        const intervalId = window.setInterval(() => void check(), 60 * 60 * 1000);
+        window.addEventListener('focus', check);
+        window.addEventListener(METACOGNITION_UPDATED_EVENT, check);
+        return () => {
+            window.clearInterval(intervalId);
+            window.removeEventListener('focus', check);
+            window.removeEventListener(METACOGNITION_UPDATED_EVENT, check);
+        };
+    }, [metacognitionDay, location.pathname]);
 
     const loadQuotes = useCallback(async () => {
         try {
@@ -339,6 +358,24 @@ export default function Layout() {
                             </Link>
                         );
                     })}
+                    <Link
+                        to="/metacognition"
+                        className={`obsidian-nav-link obsidian-reflection-launch is-${metacognitionStatus}${location.pathname === '/metacognition' ? ' obsidian-nav-active' : ''}`}
+                        title={t(`metacog.status_${metacognitionStatus}`)}
+                        aria-label={t(`metacog.status_${metacognitionStatus}`)}
+                        onMouseEnter={() => playSFX('glass_ui_hover', theme)}
+                        onClick={(event) => handleNavClick(event, '/metacognition')}
+                    >
+                        <BrainCircuit size={20} aria-hidden="true" />
+                        {metacognitionStatus === 'complete' && (
+                            <CheckCircle2 className="metacognition-status-badge" size={14} aria-hidden="true" />
+                        )}
+                        {metacognitionStatus === 'due' && (
+                            <span className="metacognition-status-badge metacognition-status-due" aria-hidden="true">!</span>
+                        )}
+                        {starry && <span className="obsidian-nav-label">{t('metacog.prompt_start')}</span>}
+                        <span className="sr-only">{t(`metacog.status_${metacognitionStatus}`)}</span>
+                    </Link>
                     {starry ? (
                         <div className="obsidian-sb-mascot">
                             <div className="mascot-bubble-wrapper">
@@ -401,6 +438,7 @@ export default function Layout() {
                 )}
 
                 <CloseOverlay />
+                <MetacognitionGate />
 
                 {navWarningStep !== 'none' && (
                     <div className="modal-overlay" onClick={() => { setNavWarningStep('none'); setPendingNavPath(null); }}>

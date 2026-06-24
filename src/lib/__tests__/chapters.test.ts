@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { parseSpacing, getRetentionPercent, getRecommendations } from '../chapters'
+import { applyMasteryRating, parseSpacing, getChapterSpacingIntervals, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus } from '../chapters'
 import type { Chapter } from '../chapters'
 
 // ── parseSpacing ──────────────────────────────────────────────────────────────
@@ -134,5 +134,59 @@ describe('getRecommendations', () => {
 
     const result = getRecommendations({ 'sub-1': 'Math' })
     expect(result[0].subjectName).toBe('Unknown')
+  })
+})
+
+describe('getChapterSpacingIntervals', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('returns one progress step for every configured SRS interval', () => {
+    expect(getChapterSpacingIntervals({ spacingOverride: '1 1 2 5 7' })).toEqual([1, 1, 2, 5, 7])
+  })
+})
+
+describe('getSpacedRepetitionStatus', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('shows the current and next interval step', () => {
+    const chapter = makeChapter({
+      id: 'ch-status',
+      studyCount: 2,
+      lastStudiedAt: new Date(2024, 5, 14, 12).toISOString(),
+      spacingOverride: '1 3 7',
+    })
+    const status = getSpacedRepetitionStatus(chapter, NOW)
+
+    expect(status).toMatchObject({
+      stepNumber: 2,
+      totalSteps: 3,
+      currentIntervalDays: 3,
+      nextIntervalDays: 7,
+      daysUntilDue: 2,
+      isDue: false,
+    })
+  })
+
+  it('marks the final interval as repeating', () => {
+    const chapter = makeChapter({ id: 'ch-status', studyCount: 4, spacingOverride: '1 3 7' })
+    const status = getSpacedRepetitionStatus(chapter, NOW)
+    expect(status?.isRepeatingLastStep).toBe(true)
+    expect(status?.currentIntervalDays).toBe(7)
+    expect(status?.nextIntervalDays).toBe(7)
+  })
+})
+
+describe('applyMasteryRating', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('restarts a forgotten chapter at step one without removing its review date', () => {
+    const chapter = makeChapter({ id: 'forgotten', studyCount: 3, spacingOverride: '1 3 7' })
+    localStorage.setItem('study-buddy-chapters', JSON.stringify([chapter]))
+
+    applyMasteryRating(chapter.id, 'forgot')
+
+    const stored = JSON.parse(localStorage.getItem('study-buddy-chapters') || '[]')[0]
+    expect(stored.studyCount).toBe(1)
+    expect(stored.lastStudiedAt).toBe(chapter.lastStudiedAt)
   })
 })

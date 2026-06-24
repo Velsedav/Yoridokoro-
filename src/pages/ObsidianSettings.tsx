@@ -226,6 +226,8 @@ function LookAndFeelPanel() {
                                         className={`theme-color-select ${theme === th.id ? 'active' : ''}`}
                                         style={{ background: th.background || th.color }}
                                         onMouseEnter={() => { handleThemeHover(th.id); playSFX(SFX.HOVER); }}
+                                        onFocus={() => handleThemeHover(th.id)}
+                                        onBlur={handleThemeLeave}
                                         onClick={() => setTheme(th.id)}
                                         title={th.name}
                                         aria-label={th.name}

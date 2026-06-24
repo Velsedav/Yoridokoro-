@@ -14,6 +14,10 @@ export const THEME_GROUPS: { name: string; themes: ThemeOption[] }[] = [
     { id: 'obsidian-ai-pro', name: 'AI Pro', color: '#7c3aed' },
     { id: 'obsidian-cyber-scan', name: 'Cyber Scan', color: '#b8ff00' },
   ]},
+  { name: 'Academia', themes: [
+    { id: 'obsidian-dark-academia', name: 'Dark Academia', color: '#d0ad6b', background: 'linear-gradient(135deg, #18140f 0%, #30271d 58%, #d0ad6b 100%)' },
+    { id: 'obsidian-light-academia', name: 'Light Academia', color: '#6b3f2a', background: 'linear-gradient(135deg, #fffaf0 0%, #e8ddc7 58%, #6b3f2a 100%)' },
+  ]},
   { name: 'Editor', themes: [
     { id: 'obsidian-dracula', name: 'Dracula', color: '#bd93f9' },
     { id: 'obsidian-nord', name: 'Nord', color: '#88c0d0' },

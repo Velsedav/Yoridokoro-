@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
-import { List, LayoutGrid, Columns, Search, Plus } from 'lucide-react'
+import { List, LayoutGrid, Columns, Search, Plus, CalendarClock, ArrowRight, BrainCircuit } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import type { Subject, Tag, Session } from '../lib/db'
 import { getSubjects, getSubjectTags, getSessions } from '../lib/db'
-import { getAllChapters, getRetentionPercent } from '../lib/chapters'
-import type { Chapter } from '../lib/chapters'
+import { getAllChapters, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus } from '../lib/chapters'
+import type { Chapter, Recommendation, SpacedRepetitionStatus } from '../lib/chapters'
 import { groupByTag, retentionColor } from '../lib/obsidian-utils'
 import ObsidianQuickStart from '../components/ObsidianQuickStart'
 import SubjectEditorModal from '../components/SubjectEditorModal'
+import { useTranslation } from '../lib/i18n'
 import './ObsidianHome.css'
 
 type ViewMode = 'list' | 'board' | 'split'
@@ -43,7 +45,7 @@ function useObsidianData() {
     return () => { mounted = false }
   }, [])
 
-  return { subjects, sessions, allChapters, loading, setSubjects }
+  return { subjects, sessions, allChapters, loading, setSubjects, setAllChapters }
 }
 
 function computeStats(sessions: Session[]) {
@@ -90,9 +92,11 @@ interface TopBarProps {
   view: ViewMode
   onViewChange: (v: ViewMode) => void
   onAdd: () => void
+  onReflect: () => void
+  reflectLabel: string
 }
 
-function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewChange, onAdd }: TopBarProps) {
+function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewChange, onAdd, onReflect, reflectLabel }: TopBarProps) {
   return (
     <div className="ohi-topbar">
       <div className="ohi-stats">
@@ -115,6 +119,9 @@ function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewCha
         <button className={`ohi-view-btn${view === 'board' ? ' ohi-view-active' : ''}`} title="Board view" aria-label="Board view" onClick={() => onViewChange('board')}><LayoutGrid size={16} /></button>
         <button className={`ohi-view-btn${view === 'split' ? ' ohi-view-active' : ''}`} title="Split view" aria-label="Split view" onClick={() => onViewChange('split')}><Columns size={16} /></button>
       </div>
+      <button className="ohi-reflect-btn" title={reflectLabel} aria-label={reflectLabel} onClick={onReflect}>
+        <BrainCircuit size={15} aria-hidden="true" />
+      </button>
       <button className="ohi-add-btn" title="Add subject" aria-label="Add subject" onClick={onAdd}>
         <Plus size={16} />
       </button>
@@ -123,16 +130,36 @@ function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewCha
 }
 
 export default function ObsidianHome() {
-  const { subjects, sessions, allChapters, loading, setSubjects } = useObsidianData()
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { subjects, sessions, allChapters, loading, setSubjects, setAllChapters } = useObsidianData()
   const [view, setView] = useState<ViewMode>(() => {
     return (localStorage.getItem(LS_VIEW_KEY) as ViewMode) || 'list'
   })
   const [filter, setFilter] = useState('')
-  const [quickStartSubject, setQuickStartSubject] = useState<Subject | null>(null)
+  const [quickStart, setQuickStart] = useState<{ subject: Subject; chapterName?: string } | null>(null)
   const [editingSubject, setEditingSubject] = useState<(Subject & { tags: Tag[] }) | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
 
   const { todayHours, weekHours } = useMemo(() => computeStats(sessions), [sessions])
+
+  const { dueReviews, upcomingReviews } = useMemo(() => {
+    const subjectNames = Object.fromEntries(subjects.map(s => [s.id, s.name]))
+    const due = getRecommendations(subjectNames).filter(r => subjects.some(s => s.id === r.chapter.subjectId))
+    const dueIds = new Set(due.map(r => r.chapter.id))
+    const upcoming = allChapters
+      .map(chapter => ({
+        chapter,
+        subjectName: subjectNames[chapter.subjectId],
+        status: getSpacedRepetitionStatus(chapter),
+      }))
+      .filter((item): item is { chapter: Chapter; subjectName: string; status: SpacedRepetitionStatus } =>
+        Boolean(item.subjectName && item.status && item.status.daysUntilDue > 0 && !dueIds.has(item.chapter.id))
+      )
+      .sort((a, b) => a.status.daysUntilDue - b.status.daysUntilDue)
+      .slice(0, 3)
+    return { dueReviews: due, upcomingReviews: upcoming }
+  }, [subjects, allChapters])
 
   const filtered = useMemo(() => {
     const q = filter.toLowerCase()
@@ -152,6 +179,16 @@ export default function ObsidianHome() {
         .map(async s => ({ ...s, tags: await getSubjectTags(s.id) }))
     )
     setSubjects(withTags)
+    setAllChapters(getAllChapters())
+  }
+
+  function startSubject(subject: Subject) {
+    setQuickStart({ subject })
+  }
+
+  function startReview(recommendation: Recommendation) {
+    const subject = subjects.find(s => s.id === recommendation.chapter.subjectId)
+    if (subject) setQuickStart({ subject, chapterName: recommendation.chapter.name })
   }
 
   if (loading) {
@@ -168,14 +205,21 @@ export default function ObsidianHome() {
         view={view}
         onViewChange={handleViewChange}
         onAdd={() => setCreateOpen(true)}
+        onReflect={() => navigate('/metacognition')}
+        reflectLabel={t('metacog.prompt_start') || 'Start reflection'}
       />
 
       <div className="ohi-content">
+        <ReviewQueue
+          due={dueReviews}
+          upcoming={upcomingReviews}
+          onStartReview={startReview}
+        />
         {view === 'list' && (
           <ListView
             subjects={filtered}
             allChapters={allChapters}
-            onStart={setQuickStartSubject}
+            onStart={startSubject}
             onEdit={setEditingSubject}
           />
         )}
@@ -183,23 +227,24 @@ export default function ObsidianHome() {
           <BoardView
             subjects={filtered}
             allChapters={allChapters}
-            onStart={setQuickStartSubject}
+            onStart={startSubject}
           />
         )}
         {view === 'split' && (
           <SplitView
             subjects={filtered}
             allChapters={allChapters}
-            onStart={setQuickStartSubject}
+            onStart={startSubject}
             onEdit={setEditingSubject}
           />
         )}
       </div>
 
-      {quickStartSubject && (
+      {quickStart && (
         <ObsidianQuickStart
-          subject={quickStartSubject}
-          onClose={() => setQuickStartSubject(null)}
+          subject={quickStart.subject}
+          initialChapterName={quickStart.chapterName}
+          onClose={() => setQuickStart(null)}
         />
       )}
 
@@ -224,6 +269,73 @@ export default function ObsidianHome() {
         />
       )}
     </div>
+  )
+}
+
+// ── Spaced repetition review queue ──────────────────────────────────────────
+
+interface ReviewQueueProps {
+  due: Recommendation[]
+  upcoming: Array<{ chapter: Chapter; subjectName: string; status: SpacedRepetitionStatus }>
+  onStartReview: (recommendation: Recommendation) => void
+}
+
+function ReviewQueue({ due, upcoming, onStartReview }: ReviewQueueProps) {
+  return (
+    <section className="ohi-review-queue" aria-labelledby="review-queue-title">
+      <div className="ohi-review-heading">
+        <div className="ohi-review-title-wrap">
+          <CalendarClock size={17} aria-hidden="true" />
+          <div>
+            <h2 id="review-queue-title">Review queue</h2>
+            <p>Your spaced-repetition schedule, with the active interval highlighted.</p>
+          </div>
+        </div>
+        <span className={`ohi-due-count${due.length > 0 ? ' has-due' : ''}`}>{due.length} due</span>
+      </div>
+
+      {due.length > 0 ? (
+        <div className="ohi-review-list">
+          {due.slice(0, 4).map(item => (
+            <ReviewCard key={item.chapter.id} item={item} onStart={() => onStartReview(item)} />
+          ))}
+        </div>
+      ) : (
+        <div className="ohi-review-empty">
+          <span>Nothing is due today.</span>
+          {upcoming.length > 0 && (
+            <span className="ohi-review-next">Next: {upcoming[0].subjectName} · {upcoming[0].chapter.name} in {upcoming[0].status.daysUntilDue}d</span>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ReviewCard({ item, onStart }: { item: Recommendation; onStart: () => void }) {
+  const { chapter, subjectName, daysOverdue, status } = item
+  return (
+    <article className="ohi-review-card">
+      <div className="ohi-review-card-main">
+        <span className="ohi-review-subject">{subjectName}</span>
+        <strong className="ohi-review-chapter">{chapter.name}</strong>
+        <span className="ohi-review-due">{daysOverdue === 0 ? 'Due today' : `${daysOverdue}d overdue`}</span>
+      </div>
+      <div className="ohi-review-schedule" aria-label={`Review step ${status.stepNumber} of ${status.totalSteps}`}>
+        <div className="ohi-review-step-label">
+          Step {status.stepNumber}{status.isRepeatingLastStep ? '+' : ''}/{status.totalSteps}
+          <span>Next +{status.nextIntervalDays}d</span>
+        </div>
+        <div className="ohi-review-intervals" aria-hidden="true">
+          {status.intervals.map((days, index) => (
+            <span key={`${days}-${index}`} className={index === status.stepNumber - 1 ? 'active' : ''}>+{days}</span>
+          ))}
+        </div>
+      </div>
+      <button className="ohi-review-start" onClick={onStart} aria-label={`Review ${chapter.name}`}>
+        Review <ArrowRight size={13} />
+      </button>
+    </article>
   )
 }
 

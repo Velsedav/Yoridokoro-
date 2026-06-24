@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { migrateTheme } from '../settings';
+import { migrateMetacognitionDay, migrateTheme } from '../settings';
 
 describe('migrateTheme', () => {
   it('remaps each legacy classic id to its obsidian variant', () => {
@@ -19,5 +19,16 @@ describe('migrateTheme', () => {
   });
   it('falls back to the default for unknown ids', () => {
     expect(migrateTheme('does-not-exist')).toBe('obsidian-pastel');
+  });
+});
+
+describe('migrateMetacognitionDay', () => {
+  it('moves the historical Saturday default to the Friday-Sunday window once', () => {
+    expect(migrateMetacognitionDay('saturday', false)).toBe('friday');
+    expect(migrateMetacognitionDay('saturday', true)).toBe('saturday');
+  });
+
+  it('preserves a previous explicit Sunday choice', () => {
+    expect(migrateMetacognitionDay('sunday', false)).toBe('sunday');
   });
 });

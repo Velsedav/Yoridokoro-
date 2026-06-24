@@ -18,7 +18,7 @@ import { useTranslation } from '../lib/i18n';
 import {
     getChaptersForSubject, addChapter, deleteChapter, renameChapter,
     incrementStudyCount, updateChapterFocusType, updateChapterSpacing, updateChapterSources,
-    getDefaultSpacing, parseSpacing,
+    getDefaultSpacing, getSpacedRepetitionStatus, getChapterSpacingIntervals, parseSpacing,
     type Chapter, type ChapterSource, type FocusType, FOCUS_TYPE_LABELS, FOCUS_TYPE_COLORS
 } from '../lib/chapters';
 
@@ -506,6 +506,9 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                         <div className="chapter-list">
                             {chapters.map(ch => {
                                 const isSubChapter = /^\s+[A-Z]\./.test(ch.name);
+                                const repetitionStatus = getSpacedRepetitionStatus(ch);
+                                const spacingIntervals = getChapterSpacingIntervals(ch);
+                                const completedSpacingSteps = Math.min(ch.studyCount, spacingIntervals.length);
                                 return (
                                     <div key={ch.id} className={`chapter-item${isSubChapter ? ' sub-chapter' : ''}`}>
                                         <div className="chapter-item-header">
@@ -528,14 +531,23 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                                                     onClick={() => { setRenamingChapterId(ch.id); setRenamingChapterValue(ch.name); }}
                                                 >{ch.name}</span>
                                             )}
-                                            <div className="chapter-item-dots">
+                                            <div
+                                                className="chapter-item-dots"
+                                                role="img"
+                                                aria-label={`SRS progress: ${completedSpacingSteps} of ${spacingIntervals.length} steps completed. Schedule: ${spacingIntervals.map(days => `+${days} days`).join(', ')}.`}
+                                            >
                                                 {ch.studyCount > 0 && (
-                                                    <span className="chapter-study-count-badge">
+                                                    <span className="chapter-study-count-badge" aria-hidden="true">
                                                         ×{ch.studyCount}
                                                     </span>
                                                 )}
-                                                {[0, 1, 2].map(i => (
-                                                    <div key={i} className={`chapter-dot${i < Math.min(ch.studyCount, 3) ? ' filled' : ''}`} />
+                                                {spacingIntervals.map((days, i) => (
+                                                    <span
+                                                        key={`${i}-${days}`}
+                                                        className={`chapter-dot${i < completedSpacingSteps ? ' filled' : ''}`}
+                                                        title={`Step ${i + 1}: +${days} day${days === 1 ? '' : 's'}`}
+                                                        aria-hidden="true"
+                                                    />
                                                 ))}
                                             </div>
                                             <button
@@ -611,6 +623,15 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                                                 >
                                                     {t('subject_editor.schedule')} {ch.spacingOverride || t('subject_editor.chapter_default')}
                                                 </button>
+                                            )}
+                                            {repetitionStatus && (
+                                                <span
+                                                    className="chapter-spacing-progress"
+                                                    title={`Due ${repetitionStatus.dueDate.toLocaleDateString()}`}
+                                                >
+                                                    SRS {repetitionStatus.stepNumber}{repetitionStatus.isRepeatingLastStep ? '+' : ''}/{repetitionStatus.totalSteps}
+                                                    {' · '}+{repetitionStatus.currentIntervalDays}d → +{repetitionStatus.nextIntervalDays}d
+                                                </span>
                                             )}
                                         </div>
                                         <div className="chapter-sources-row">

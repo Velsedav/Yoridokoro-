@@ -5,6 +5,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
 
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 :root {
   --font-main: 'Plus Jakarta Sans', sans-serif;
   --font-heading: 'Lora', Georgia, serif;
@@ -5130,3 +5142,126 @@ input[type="checkbox"] {
 [data-theme="obsidian-tdr-warp"] .btn { border-radius: 0; }
 [data-theme="obsidian-tdr-warp"] .btn-primary { background: var(--primary); color: var(--bg-color); }
 [data-theme="obsidian-tdr-warp"] .btn-primary:hover { background: var(--primary-hover); }
+
+/* ── Academia pair ─────────────────────────────────────────────── */
+
+[data-theme="obsidian-dark-academia"] {
+  color-scheme: dark;
+  --font-main: 'IBM Plex Sans', sans-serif;
+  --font-heading: Georgia, 'Times New Roman', serif;
+  --bg-color: #18140f;
+  --bg-gradient: var(--bg-color);
+  --card-bg: #241d16;
+  --surface-raised: #30271d;
+  --border-color: #735f44;
+  --primary: #d0ad6b;
+  --primary-rgb: 208, 173, 107;
+  --primary-hover: #e2c487;
+  --secondary: #74866a;
+  --accent: #c9826e;
+  --success: #8ea978;
+  --danger: #e17c70;
+  --danger-rgb: 225, 124, 112;
+  --text-dark: #f0e7d6;
+  --text-light: #fffaf0;
+  --text-muted: #b2a48f;
+  --border-radius: 6px;
+  --border-radius-sm: 4px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --transition: all 0.15s ease;
+  --sidebar-bg: #201a14;
+  --glass-border: var(--border-color);
+  --input-border: var(--border-color);
+  --input-bg-focus: #120f0b;
+  --input-focus-ring: rgba(var(--primary-rgb), 0.34);
+  --bubble-bg: var(--card-bg);
+  --h-0: #241d16;
+  --h-1: #4b3820;
+  --h-2: #755c31;
+  --h-3: #a27c40;
+  --h-4: #d0ad6b;
+}
+
+[data-theme="obsidian-light-academia"] {
+  color-scheme: light;
+  --font-main: 'IBM Plex Sans', sans-serif;
+  --font-heading: Georgia, 'Times New Roman', serif;
+  --bg-color: #f3ecdc;
+  --bg-gradient: var(--bg-color);
+  --card-bg: #fffaf0;
+  --surface-raised: #e8ddc7;
+  --border-color: #9a8060;
+  --primary: #6b3f2a;
+  --primary-rgb: 107, 63, 42;
+  --primary-hover: #4d2b1d;
+  --secondary: #526b56;
+  --accent: #82562d;
+  --success: #356744;
+  --danger: #9b312d;
+  --danger-rgb: 155, 49, 45;
+  --text-dark: #30251e;
+  --text-light: #211913;
+  --text-muted: #6d5c4f;
+  --border-radius: 6px;
+  --border-radius-sm: 4px;
+  --shadow-sm: 0 1px 3px rgba(63, 42, 24, 0.14);
+  --shadow-md: 0 3px 10px rgba(63, 42, 24, 0.16);
+  --shadow-lg: 0 8px 24px rgba(63, 42, 24, 0.2);
+  --transition: all 0.15s ease;
+  --sidebar-bg: #e8ddc7;
+  --glass-border: var(--border-color);
+  --input-border: var(--border-color);
+  --input-bg-focus: #fffdf8;
+  --input-focus-ring: rgba(var(--primary-rgb), 0.34);
+  --bubble-bg: var(--card-bg);
+  --h-0: #e8ddc7;
+  --h-1: #d7c6a8;
+  --h-2: #b99b6a;
+  --h-3: #8a6238;
+  --h-4: #5f3d25;
+}
+
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) .glass {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  backdrop-filter: none;
+}
+
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) .btn {
+  border-radius: var(--border-radius-sm);
+}
+
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) .btn-primary {
+  background: var(--primary);
+  color: var(--bg-color);
+}
+
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) .btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) h1,
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) h2,
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) h3,
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) .obsidian-quote-text {
+  font-family: var(--font-heading);
+  letter-spacing: 0.01em;
+}
+
+[data-theme="obsidian-dark-academia"] :is(.ohi-page, .obs-meta-page, .obs-learn-page, .obs-settings-page, .op-page) {
+  background-color: var(--bg-color);
+  background-image: radial-gradient(circle at 50% -20%, rgba(208, 173, 107, 0.08), transparent 44%);
+}
+
+[data-theme="obsidian-light-academia"] :is(.ohi-page, .obs-meta-page, .obs-learn-page, .obs-settings-page, .op-page) {
+  background-color: var(--bg-color);
+  background-image: linear-gradient(rgba(107, 63, 42, 0.018) 1px, transparent 1px);
+  background-size: 100% 24px;
+}
+
+:is([data-theme="obsidian-dark-academia"], [data-theme="obsidian-light-academia"]) ::selection {
+  background: var(--primary);
+  color: var(--bg-color);
+}

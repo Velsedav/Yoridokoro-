@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
     BookOpen, CheckCircle2, ChevronRight, GraduationCap, Lock, Play, RotateCcw,
     Sparkles, Trophy, XCircle,
@@ -38,70 +37,6 @@ import './ObsidianLearning.css';
 
 type QuizMap = Record<number, Record<string, boolean>>;
 
-function lessonImage(lessonId: string, onEnlarge: (src: string) => void): React.ReactNode {
-    const single = (src: string, caption: string, alt: string, full = false): React.ReactNode => (
-        <div className="obs-learn-lesson-image">
-            <img
-                src={src}
-                alt={alt}
-                className={full ? 'full' : undefined}
-                onClick={() => onEnlarge(src)}
-            />
-            <p className="obs-learn-lesson-image-caption">{caption}</p>
-        </div>
-    );
-
-    switch (lessonId) {
-        case 'lesson-1-1-a':
-            return single(
-                '/assets/images/learning center/01_mascot-sleep.png',
-                'Sleep is when your brain consolidates memories and grows new neural connections.',
-                'The mascot sleeping — memory consolidation happens during sleep',
-            );
-        case 'lesson-1-1-b':
-            return single(
-                '/assets/images/learning center/01_mascot-brainfertilizer.png',
-                "Exercise releases BDNF — the brain's own fertilizer for stronger neural connections.",
-                'The mascot after a workout — BDNF boosts brain connections',
-            );
-        case 'lesson-1-1-c':
-            return single(
-                '/assets/images/learning center/01_mascot-brain-fuel.png',
-                'Your brain runs on quality fuel — complex carbs, Omega-3s, antioxidants. Sugar spikes crash it.',
-                'The mascot fueling up — proper nutrition powers the brain',
-            );
-        case 'lesson-1-2-a':
-            return single(
-                '/assets/images/learning center/01_mascot-the-illusion-of-laziness.png',
-                "Evening brain fog isn't laziness — your prefrontal cortex has simply run out of energy.",
-                "The mascot exhausted — it's biology, not laziness",
-            );
-        case 'lesson-1-2-c':
-            return (
-                <div className="obs-learn-lesson-modes">
-                    {[
-                        { src: '/assets/images/learning center/01_mascot_focused-mode.png', label: 'Focused Mode — tight, directed thinking along known neural paths.' },
-                        { src: '/assets/images/learning center/01_mascot-diffuse-mode.png', label: 'Diffuse Mode — relaxed, wandering thought that makes unexpected connections.' },
-                    ].map(img => (
-                        <div key={img.src} className="obs-learn-lesson-image">
-                            <img src={img.src} alt={img.label} className="full" onClick={() => onEnlarge(img.src)} />
-                            <p className="obs-learn-lesson-image-caption small">{img.label}</p>
-                        </div>
-                    ))}
-                </div>
-            );
-        case 'lesson-2-2-a':
-            return single(
-                '/assets/images/learning center/spaced_repetition.png',
-                'The Forgetting Curve shows how memory decays without review. Spaced repetition resets it.',
-                'The Forgetting Curve & Spaced Repetition',
-                true,
-            );
-        default:
-            return null;
-    }
-}
-
 function sectionShortTitle(section: Section): string {
     return section.title.replace(/^Section\s+\d+:\s*/i, '');
 }
@@ -116,7 +51,6 @@ export default function ObsidianLearning() {
 
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [showCelebration, setShowCelebration] = useState(false);
-    const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
 
     const mainRef = useRef<HTMLDivElement>(null);
 
@@ -275,12 +209,6 @@ export default function ObsidianLearning() {
 
     return (
         <div className="obs-learn-page">
-            {enlargedImage && createPortal(
-                <div className="obs-learn-lightbox" onClick={() => setEnlargedImage(null)}>
-                    <img src={enlargedImage} alt="Enlarged view" />
-                </div>,
-                document.body,
-            )}
             {showCelebration && (
                 <CelebrationOverlay onDone={() => setShowCelebration(false)} />
             )}
@@ -401,7 +329,6 @@ export default function ObsidianLearning() {
                                 ...prev,
                                 [lessonId]: [...(prev[lessonId] ?? []), obs],
                             }))}
-                            onEnlarge={setEnlargedImage}
                             onClose={handleClose}
                             theme={theme}
                             t={t}
@@ -505,7 +432,6 @@ interface SectionViewProps {
     observationsState: ObservationsState;
     onOptionClick: (questionId: number, option: QuizOption) => void;
     onAddObservation: (lessonId: string, obs: { date: string; noticed: boolean | null; note: string }) => void;
-    onEnlarge: (src: string) => void;
     onClose: () => void;
     theme: string;
     t: (key: string) => string;
@@ -513,7 +439,7 @@ interface SectionViewProps {
 
 function SectionView({
     section, srsEntry, quizState, observationsState,
-    onOptionClick, onAddObservation, onEnlarge, onClose, theme, t,
+    onOptionClick, onAddObservation, onClose, theme, t,
 }: SectionViewProps) {
     const locked = isSectionLocked(srsEntry);
     const perfect = isSectionPerfect(section, quizState);
@@ -574,8 +500,6 @@ function SectionView({
                         {chapter.lessons.map(lesson => {
                             const qState = quizState[lesson.question.id] || {};
                             const solved = Object.values(qState).some(v => v === true);
-                            const image = lessonImage(lesson.id, onEnlarge);
-
                             return (
                                 <article
                                     key={lesson.id}
@@ -588,15 +512,10 @@ function SectionView({
                                         </h4>
                                     </header>
 
-                                    <div className={`obs-learn-lesson-body${image ? ' has-image' : ''}`}>
+                                    <div className="obs-learn-lesson-body">
                                         <div className="obs-learn-lesson-text">
                                             <p className="obs-learn-lesson-content">{lesson.content}</p>
                                         </div>
-                                        {image && (
-                                            <div className="obs-learn-lesson-side">
-                                                {image}
-                                            </div>
-                                        )}
                                     </div>
 
                                     <div className="obs-learn-lesson-quiz">

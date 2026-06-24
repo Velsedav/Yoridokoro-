@@ -14,6 +14,7 @@ import Learning from './pages/Learning.tsx'
 import Analytics from './pages/Analytics.tsx'
 import Settings from './pages/Settings.tsx'
 import MetacognitionLogs from './pages/MetacognitionLogs.tsx'
+import Metacognition from './pages/Metacognition.tsx'
 import DevPage from './pages/Dev.tsx'
 import BingoDashboard from './pages/bingoals/BingoDashboard.tsx'
 import BingoObjectivePage from './pages/bingoals/BingoObjectivePage.tsx'
@@ -77,6 +78,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="learning" element={<Learning />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="metacognition-logs" element={<MetacognitionLogs />} />
+            <Route path="metacognition" element={<Metacognition />} />
             <Route path="settings" element={<Settings />} />
             <Route path="dev" element={<DevPage />} />
             <Route path="bingoals" element={<BingoDashboard />} />

@@ -8,7 +8,8 @@ export type Theme = 'obsidian' | 'obsidian-terminal-green' | 'obsidian-terminal-
   | 'obsidian-transformation-ribbon' | 'obsidian-honey-lemon' | 'obsidian-ai-pro'
   | 'obsidian-cyber-scan' | 'obsidian-terminal-red' | 'obsidian-terminal-cyan'
   | 'obsidian-terminal-amber' | 'obsidian-terminal-acid' | 'obsidian-terminal-blue'
-  | 'obsidian-tdr-blue' | 'obsidian-tdr-ember' | 'obsidian-tdr-night' | 'obsidian-tdr-warp';
+  | 'obsidian-tdr-blue' | 'obsidian-tdr-ember' | 'obsidian-tdr-night' | 'obsidian-tdr-warp'
+  | 'obsidian-dark-academia' | 'obsidian-light-academia';
 
 /** Classic theme ids removed in the redesign unification → obsidian equivalents. */
 const LEGACY_THEME_MAP: Record<string, Theme> = {
@@ -47,6 +48,14 @@ export function migrateTheme(theme: string): Theme {
 
 export type WeekStart = 'monday' | 'sunday';
 export type MetacognitionDay = 'friday' | 'saturday' | 'sunday';
+const METACOGNITION_FRIDAY_MIGRATION_KEY = 'study-buddy-metacognition-friday-default-v1';
+
+export function migrateMetacognitionDay(day: MetacognitionDay | undefined, migrationDone: boolean): MetacognitionDay {
+  if (migrationDone) return day ?? 'friday';
+  // Saturday was the historical default. Move existing default installs to the
+  // intended Friday-Sunday window once; users can still choose another day later.
+  return day === 'saturday' || day === undefined ? 'friday' : day;
+}
 
 interface Settings {
     theme: Theme;
@@ -64,7 +73,7 @@ const defaultSettings: Settings = {
     weekStart: 'monday',
     language: 'en',
     zoomLevel: 100,
-    metacognitionDay: 'saturday',
+    metacognitionDay: 'friday',
     performanceMode: isLinux,
 };
 
@@ -85,7 +94,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const saved = localStorage.getItem('study-buddy-settings');
         if (saved) {
             try {
-                const merged = { ...defaultSettings, ...JSON.parse(saved) };
+                const parsed = JSON.parse(saved);
+                const migrationDone = localStorage.getItem(METACOGNITION_FRIDAY_MIGRATION_KEY) === '1';
+                const merged = {
+                    ...defaultSettings,
+                    ...parsed,
+                    metacognitionDay: migrateMetacognitionDay(parsed.metacognitionDay, migrationDone),
+                };
+                if (!migrationDone) localStorage.setItem(METACOGNITION_FRIDAY_MIGRATION_KEY, '1');
                 return { ...merged, theme: migrateTheme(merged.theme) };
             } catch (e) {
                 console.error("Failed to parse settings", e);

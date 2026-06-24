@@ -73,7 +73,7 @@ export default function ObsidianDev() {
     const eligibleCount = MUSCLE_GROUPS.filter(m => isMuscleEligible(m.id, workoutLog)).length;
 
     if (showMetacognition) {
-        return <MetacognitionMode onComplete={() => setShowMetacognition(false)} />;
+        return <MetacognitionMode onComplete={() => setShowMetacognition(false)} onCancel={() => setShowMetacognition(false)} />;
     }
 
     const running = seedStatus.kind === 'running';

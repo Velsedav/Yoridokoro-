@@ -184,6 +184,39 @@
   background: var(--surface-raised, #21262d);
 }
 
+.obsidian-reflection-launch {
+  flex-shrink: 0;
+}
+
+.obsidian-reflection-launch.is-due { color: var(--accent, #d29922); }
+.obsidian-reflection-launch.is-complete { color: var(--success, #3fb950); }
+
+.metacognition-status-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  color: var(--success, #3fb950);
+  fill: var(--card-bg, #161b22);
+  filter: drop-shadow(0 0 2px var(--card-bg, #161b22));
+}
+
+.metacognition-status-due {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--card-bg, #161b22);
+  border-radius: 50%;
+  background: var(--accent, #d29922);
+  color: var(--bg-color, #0d1117);
+  font: 800 10px/1 'JetBrains Mono', monospace;
+}
+
+.obsidian-sidebar--starry .metacognition-status-badge {
+  top: 4px;
+  right: 8px;
+}
+
 .obsidian-nav-active {
   color: var(--primary, #58a6ff);
   background: rgba(var(--primary-rgb, 88, 166, 255), 0.1);
