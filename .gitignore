@@ -8,6 +8,7 @@ release/
 !.env.example
 coverage/
 .cache/
+.agents/
 backups/
 *.db
 *.db-journal
