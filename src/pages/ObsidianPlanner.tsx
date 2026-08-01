@@ -86,7 +86,7 @@ export default function ObsidianPlanner() {
   const [shapeName, setShapeName] = useState<PlannerShapeName>(() =>
     (localStorage.getItem(LS_SHAPE_KEY) as PlannerShapeName | null) ?? '25/5'
   )
-  const [customShape, setCustomShape] = useState<ShapeConfig>({ work: 25, break: 5, prep: 5 })
+  const [customShape, setCustomShape] = useState<ShapeConfig>({ work: 25, break: 5, prep: 9 })
   const [repeats, setRepeats] = useState(() => {
     const saved = parseInt(localStorage.getItem(LS_REPEATS_KEY) ?? '2', 10)
     return isNaN(saved) ? 2 : saved

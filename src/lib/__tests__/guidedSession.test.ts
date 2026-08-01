@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFiveMinuteDraft, createFiveMinuteSession } from '../guidedSession'
+import { buildFiveMinuteDraft, buildGuidedDraft, createFiveMinuteSession } from '../guidedSession'
 import type { PlannerRecommendation } from '../plannerRecommendations'
 
 const recommendation: PlannerRecommendation = {
@@ -27,5 +27,17 @@ describe('five-minute guided start', () => {
       template: '5-minute-start', entryMode: 'five-minute', fiveMinuteDecisionMade: false,
       nowBlockIdx: 0, remainingSeconds: 300, plannedMinutes: 5, fiveMinAlert: false,
     })
+  })
+})
+
+describe('standard guided start', () => {
+  it('allows nine minutes for preparation before the 25-minute WORK block', () => {
+    const draft = buildGuidedDraft(recommendation, 'Move forward gently')
+
+    expect(draft.map(block => [block.type, block.minutes])).toEqual([
+      ['PREP', 9],
+      ['WORK', 25],
+      ['BREAK', 5],
+    ])
   })
 })

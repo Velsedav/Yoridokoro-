@@ -913,7 +913,7 @@ liste de candidats. Le réglage complet de la session n’est pas exigé.
 
 ÉTAPE 4 — CRÉER LA SESSION
 
-Yoridokoro crée PREP 5 min → WORK 25 min → BREAK 5 min. Le bloc WORK reçoit le
+Yoridokoro crée PREP 9 min → WORK 25 min → BREAK 5 min. Le bloc WORK reçoit le
 sujet, le chapitre, la technique et un objectif formulé.
 
 ÉTAPE 5 — PRÉPARATION
@@ -1465,7 +1465,7 @@ MODE GUIDÉ
 
 Le mode guidé produit exactement trois blocs :
 
-    PREP    5 minutes
+    PREP    9 minutes
     WORK   25 minutes
     BREAK   5 minutes
 
@@ -1478,7 +1478,7 @@ automatique. Le texte d’objectif dépend de cette proposition :
 - progression : « Comprends la structure principale, note ce qui reste flou,
   puis avance sans polir. »
 
-Le bouton annonce explicitement : « 5 min de préparation · 25 min de
+Le bouton annonce explicitement : « 9 min de préparation · 25 min de
 concentration · 5 min de repos ». Entrée démarre la proposition mise en avant.
 « Une autre suggestion » fait avancer dans la file de recommandations.
 
@@ -1493,10 +1493,9 @@ partagée et assistant pas-à-pas. Les préréglages sont :
     90/15     10 min  90 min  15 min
     Custom    10 min  25 min   5 min dans la table de préréglages
 
-Une particularité actuelle doit être connue : à l’initialisation de l’écran,
-la forme personnalisée locale commence avec PREP 5, WORK 25 et BREAK 5, alors
-que la valeur « Custom » de la table commune indique PREP 10. Il s’agit d’une
-incohérence d’implémentation actuelle, pas d’une règle cognitive.
+À l’initialisation de l’écran, la forme personnalisée locale commence avec
+PREP 9, WORK 25 et BREAK 5. La valeur « Custom » de la table commune reste
+PREP 10, WORK 25 et BREAK 5 lorsqu’elle est explicitement sélectionnée.
 
 Le nombre de répétitions est borné entre 1 et 10. La génération ajoute un bloc
 PREP si sa durée est supérieure à zéro, puis, pour chaque répétition, un WORK

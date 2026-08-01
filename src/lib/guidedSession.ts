@@ -2,7 +2,7 @@ import type { PlannerRecommendation } from './plannerRecommendations'
 import type { PlannerBlock } from './obsidian-planner-utils'
 import type { SessionAnalyticsContext } from './behaviorAnalytics'
 
-export const GUIDED_SESSION_SHAPE = { prep: 5, work: 25, break: 5 } as const
+export const GUIDED_SESSION_SHAPE = { prep: 9, work: 25, break: 5 } as const
 
 export function guidedObjectiveKey(recommendation: PlannerRecommendation) {
   if (recommendation.kind === 'review') return 'planner.goal_review'
