@@ -381,6 +381,7 @@ export default function TodayDashboard() {
           <div><span className="yd-eyebrow"><Target size={14} /> Décider avant de remplir sa journée</span><h2 id="eisenhower-title">Matrice d’Eisenhower</h2><p className="yd-section-description">Déposez chaque tâche dans une case. Vous pourrez la déplacer sans glisser-déposer.</p></div>
         </div>
         <div className="yd-eisenhower-grid" role="group" aria-label="Matrice avec l’urgence en colonnes et l’importance en lignes">
+          <div className="yd-matrix-corner" aria-hidden="true"><span>Importance</span><b>×</b><span>Urgence</span></div>
           <div className="yd-matrix-axis yd-matrix-axis--urgent" aria-hidden="true"><strong>Urgent</strong><small>À traiter vite</small></div>
           <div className="yd-matrix-axis yd-matrix-axis--not-urgent" aria-hidden="true"><strong>Pas urgent</strong><small>Peut être planifié</small></div>
           <div className="yd-matrix-axis yd-matrix-axis--important" aria-hidden="true"><strong>Important</strong><small>Fort impact</small></div>
