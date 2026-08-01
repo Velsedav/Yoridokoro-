@@ -9,6 +9,7 @@ async function getAppData(): Promise<string> {
 }
 import { createSubject, updateSubject, renameChapterInDb } from '../lib/db';
 import { resizeImage } from '../lib/image';
+import { buildChapterNames } from '../lib/chapterInput';
 import type { Subject, Tag } from '../lib/db';
 import TagPicker from './TagPicker';
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Archive, ArchiveRestore, MoreHorizontal } from 'lucide-react';
@@ -97,61 +98,12 @@ export default function SubjectEditorModal({ onClose, onSaved, onCreatedAndStart
     const [nameError, setNameError] = useState(false);
 
     const chaptersPreview = useMemo(() => {
-        const val = newChapterName.trim();
-        if (!val) return [];
-
-        if (val.includes('\n')) {
-            val.split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach((line, index) => {
-                preview.push(subjectType === 'music' ? line : `Chapt. ${existingMain + index + 1} ${line}`);
-            });
-        } else if (subjectType === 'music') {
-            const measures = parseInt(newChapterMeasures.trim());
-            return [`${val}${!isNaN(measures) && measures > 0 ? ` (${measures} mesures)` : ''}`];
-        }
-
         const existingMain = chapters.filter(c => /^Chapt\.\s*\d+/.test(c.name)).length;
-        const parsed = parseInt(val);
-        const preview: string[] = [];
+        const preview = buildChapterNames(newChapterName, existingMain, subjectType);
+        if (subjectType !== 'music' || preview.length !== 1) return preview;
 
-        if (!isNaN(parsed) && parsed.toString() === val && parsed > 0 && parsed <= 50) {
-            for (let i = 1; i <= parsed; i++) {
-                preview.push(`Chapt. ${existingMain + i}`);
-            }
-        } else if (val.includes('(')) {
-            const groups: { name: string; subs: string[] }[] = [];
-            let depth = 0, current = '';
-            for (const char of val + ',') {
-                if (char === '(') depth++;
-                else if (char === ')') depth--;
-                if (char === ',' && depth === 0) {
-                    const piece = current.trim();
-                    if (piece) {
-                        const match = piece.match(/^(.+?)\s*\((.+)\)\s*$/);
-                        if (match) {
-                            groups.push({ name: match[1].trim(), subs: match[2].split(',').map(s => s.trim()).filter(Boolean) });
-                        } else {
-                            groups.push({ name: piece, subs: [] });
-                        }
-                    }
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            let chapterNum = existingMain;
-            for (const group of groups) {
-                chapterNum++;
-                preview.push(`Chapt. ${chapterNum} ${group.name}`);
-                group.subs.forEach((sub, idx) => {
-                    const letter = idx < LETTERS.length ? LETTERS[idx] : `${idx + 1}`;
-                    preview.push(`  ${letter}. ${sub}`);
-                });
-            }
-        } else {
-            preview.push(`Chapt. ${existingMain + 1} ${val}`);
-        }
-        return preview;
+        const measures = parseInt(newChapterMeasures.trim());
+        return [`${preview[0]}${!isNaN(measures) && measures > 0 ? ` (${measures} mesures)` : ''}`];
     }, [newChapterName, newChapterMeasures, subjectType, chapters]);
 
     function reloadEditorChapters() {
@@ -314,66 +266,19 @@ export default function SubjectEditorModal({ onClose, onSaved, onCreatedAndStart
     };
 
     const handleAddChapter = () => {
-        const val = newChapterName.trim();
-        if (!val) return;
+        if (!newChapterName.trim()) return;
 
         const measuresVal = newChapterMeasures.trim();
         const parsedMeasures = measuresVal ? parseInt(measuresVal) : NaN;
         const totalMeasures = !isNaN(parsedMeasures) && parsedMeasures > 0 ? parsedMeasures : undefined;
 
         const existingMain = chapters.filter(c => /^Chapt\.\s*\d+/.test(c.name)).length;
-        const parsed = parseInt(val);
-
-        if (!isNaN(parsed) && parsed.toString() === val && parsed > 0 && parsed <= 50) {
-            const newChaps = [];
-            for (let i = 1; i <= parsed; i++) {
-                newChaps.push(makeChapterDraft(`Chapt. ${existingMain + i}`));
-            }
-            setChapters([...chapters, ...newChaps]);
-        } else if (val.includes('\n')) {
-            const lines = val.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-            const newChaps = lines.map((line, index) => makeChapterDraft(
-                subjectType === 'music' ? line : `Chapt. ${existingMain + index + 1} ${line}`,
-            ));
-            setChapters([...chapters, ...newChaps]);
-        } else if (val.includes('(') && subjectType !== 'music') {
-            const groups: { name: string; subs: string[] }[] = [];
-            let depth = 0, current = '';
-            for (const char of val + ',') {
-                if (char === '(') depth++;
-                else if (char === ')') depth--;
-                if (char === ',' && depth === 0) {
-                    const piece = current.trim();
-                    if (piece) {
-                        const match = piece.match(/^(.+?)\s*\((.+)\)\s*$/);
-                        if (match) {
-                            groups.push({ name: match[1].trim(), subs: match[2].split(',').map(s => s.trim()).filter(Boolean) });
-                        } else {
-                            groups.push({ name: piece, subs: [] });
-                        }
-                    }
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            const newChaps: Chapter[] = [];
-            let chapterNum = existingMain;
-            for (const group of groups) {
-                chapterNum++;
-                newChaps.push(makeChapterDraft(`Chapt. ${chapterNum} ${group.name}`));
-                group.subs.forEach((sub, idx) => {
-                    const letter = idx < LETTERS.length ? LETTERS[idx] : `${idx + 1}`;
-                    newChaps.push(makeChapterDraft(`  ${letter}. ${sub}`));
-                });
-            }
-            setChapters([...chapters, ...newChaps]);
-        } else {
-            const chName = subjectType === 'music' ? val : `Chapt. ${existingMain + 1} ${val}`;
-            const ch = makeChapterDraft(chName, totalMeasures);
-            setChapters([...chapters, ch]);
-        }
+        const chapterNames = buildChapterNames(newChapterName, existingMain, subjectType);
+        const newChapters = chapterNames.map(chapterName => makeChapterDraft(
+            chapterName,
+            subjectType === 'music' && chapterNames.length === 1 ? totalMeasures : undefined,
+        ));
+        setChapters([...chapters, ...newChapters]);
         setNewChapterName('');
         setNewChapterMeasures('');
         playSFX('glass_ui_check', theme);
