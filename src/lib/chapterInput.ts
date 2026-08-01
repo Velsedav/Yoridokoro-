@@ -14,13 +14,21 @@ export function buildChapterNames(
   if (!value) return []
 
   if (rawValue.includes('\n')) {
-    return rawValue
+    const lines = rawValue
       .split(/\r?\n/)
       .map(line => line.trim())
       .filter(Boolean)
-      .map((line, index) => subjectType === 'music'
-        ? line
-        : `Chapt. ${existingMain + index + 1} ${line}`)
+
+    if (subjectType === 'music') return lines
+
+    const names: string[] = []
+    let mainChapterCount = existingMain
+    for (const line of lines) {
+      const lineNames = buildChapterNames(line, mainChapterCount, subjectType)
+      names.push(...lineNames)
+      mainChapterCount += lineNames.filter(name => /^Chapt\.\s*\d+/.test(name)).length
+    }
+    return names
   }
 
   if (subjectType === 'music') return [value]

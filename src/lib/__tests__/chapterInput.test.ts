@@ -18,6 +18,17 @@ describe('buildChapterNames', () => {
     ])
   })
 
+  it('parses grouped subchapters independently on every pasted line', () => {
+    expect(buildChapterNames('Chap1(Test, Result)\nChap2(Bug, Function)', 0, 'academic')).toEqual([
+      'Chapt. 1 Chap1',
+      '  A. Test',
+      '  B. Result',
+      'Chapt. 2 Chap2',
+      '  A. Bug',
+      '  B. Function',
+    ])
+  })
+
   it('keeps music pieces unnumbered in multiline mode', () => {
     expect(buildChapterNames('Prélude\nFugue', 0, 'music')).toEqual(['Prélude', 'Fugue'])
   })
