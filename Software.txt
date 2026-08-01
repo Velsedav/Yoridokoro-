@@ -1,0 +1,1445 @@
+YORIDOKORO — DESCRIPTION FONCTIONNELLE, COGNITIVE ET TECHNIQUE
+Version documentée : 0.2.3
+Date de l’état des lieux : 1er août 2026
+Destination principale : NotebookLM, ChatGPT et toute personne amenée à analyser ou faire évoluer le logiciel
+
+===============================================================================
+0. COMMENT LIRE CE DOCUMENT
+===============================================================================
+
+Ce document décrit Yoridokoro à trois niveaux :
+
+[ACTUEL]
+    Fonction réellement présente dans la version documentée du logiciel.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE]
+    Fonction ou principe envisagé pour une future mise à jour. Cette fonction
+    n’existe pas dans la version 0.2.3 et reste en cours de réflexion.
+
+[LIMITE]
+    Frontière volontaire, dette connue ou affirmation que le logiciel ne doit
+    pas prétendre faire.
+
+RÈGLE DE LECTURE IMPÉRATIVE
+
+Seuls les passages marqués [ACTUEL] décrivent des fonctions disponibles dans le
+logiciel. Tout passage marqué [IDÉE FUTURE — NON IMPLÉMENTÉE] décrit un concept,
+un prototype possible ou une réflexion produit. Il ne doit jamais être présenté
+comme une capacité de Yoridokoro 0.2.3.
+
+Les idées suivantes ne sont notamment PAS implémentées au 1er août 2026 :
+
+- la métacognition quotidienne / trois jours / sept jours ;
+- la question post-session « Est-ce que mon cerveau est brûlé ? » ;
+- le diagnostic de reprise « acquis / rouillé / manquant » ;
+- le regroupement automatique des redémarrages dans l’Historique ;
+- la section non-fiction et le mode Memento Mori ;
+- le parcours Curiosity avec « réponse en cours » ;
+- les nouvelles boucles guidées de démarrage, relance et finition décrites dans
+  la seconde moitié de ce document.
+
+Ces éléments sont conservés pour préparer de futures mises à jour, pas pour
+documenter l’état actuel.
+
+Yoridokoro est un logiciel personnel. Il est développé pour son utilisateur
+principal et peut donc assumer des préférences très spécifiques. Il n’a pas à
+optimiser un hypothétique utilisateur moyen lorsqu’une préférence explicite et
+éprouvée existe déjà.
+
+===============================================================================
+1. RÉSUMÉ EN UNE PHRASE
+===============================================================================
+
+Yoridokoro est une application de bureau personnelle qui externalise le choix,
+la mémoire de travail, le déclenchement et les preuves de progression afin
+d’aider son utilisateur à transformer une intention en action, puis à reprendre
+et terminer sans faire de chaque difficulté un jugement sur sa valeur.
+
+Ce n’est pas seulement un minuteur Pomodoro, un gestionnaire de matières ou un
+tableau de statistiques. L’ensemble cherche à accompagner les transitions les
+plus fragiles :
+
+    vouloir agir
+        → choisir une direction
+        → commencer le premier geste
+        → maintenir l’engagement
+        → revenir après un décrochage
+        → fermer réellement la tâche
+        → conserver une preuve factuelle de ce qui a été fait.
+
+Le nom japonais « Yoridokoro » (拠り所) évoque un point d’appui, un lieu ou une
+présence sur laquelle on peut s’appuyer. Le logiciel doit se comporter comme ce
+point d’appui : présent au moment critique, mais sans prendre le contrôle de la
+réflexion ou faire le travail à la place de l’utilisateur.
+
+===============================================================================
+2. PROBLÈME HUMAIN AUQUEL LE LOGICIEL RÉPOND
+===============================================================================
+
+2.1 Le problème n’est pas un manque de curiosité
+-------------------------------------------------
+
+L’utilisateur principal possède une curiosité intellectuelle élevée et de
+nombreux centres d’intérêt : informatique, sciences, littérature, philosophie,
+langues, musique, cinéma, sport, cuisine et amélioration des systèmes. Il peut
+apprendre et progresser fortement lorsque l’environnement fournit des règles
+claires, un feedback fréquent et des preuves visibles.
+
+Les expériences de réussite passées ont souvent les mêmes propriétés :
+
+- la musculation rend la progression observable par les charges et répétitions ;
+- la moto fournit un feedback physique immédiat ;
+- le piano rend l’amélioration audible ;
+- les jeux vidéo rendent les règles, erreurs et progrès constamment visibles ;
+- un tuteur humain crée un rendez-vous, corrige précisément et maintient la
+  trajectoire.
+
+La difficulté principale est de transformer durablement cette curiosité en
+action régulière lorsque le feedback est tardif, le chemin ambigu et le travail
+isolé.
+
+2.2 Les trois verrous opérationnels
+-----------------------------------
+
+Les observations actuelles distinguent au moins trois verrous :
+
+1. DÉMARRER
+   Le coût peut être immense avant un geste pourtant minuscule. Une instruction
+   extérieure immédiate, précise et observable peut faire tomber ce verrou.
+
+2. MAINTENIR OU REPRENDRE
+   Une fois commencé, l’engagement peut disparaître à cause de la fatigue, de
+   l’ennui, d’un passage difficile, d’une pause, d’une nouvelle idée ou d’une
+   distraction. Se souvenir qu’une tâche existe ne suffit pas toujours à
+   restaurer l’état mental nécessaire pour la poursuivre.
+
+3. TERMINER
+   Les derniers 5 à 10 % peuvent devenir paradoxalement peu attractifs. Lorsque
+   l’essentiel paraît fait, le soulagement d’arrêter prend plus de valeur que la
+   fermeture complète. De nouvelles tâches visibles peuvent aussi déplacer
+   indéfiniment la ligne d’arrivée.
+
+Le modèle de travail est donc :
+
+    résistance
+        → consigne extérieure minuscule
+        → premier geste
+        → activation
+        → maintien
+        → éventuelle relance
+        → définition stable de « terminé »
+        → fermeture et preuve.
+
+2.3 Initiation, attention et fatigue ne sont pas la même chose
+-------------------------------------------------------------
+
+Le logiciel doit éviter de traiter toutes les difficultés comme un seul problème
+de motivation.
+
+- L’initiation est la capacité à produire le premier geste.
+- L’engagement attentionnel est la capacité à traiter réellement ce qui est
+  devant soi une fois le geste commencé.
+- La fatigue est un état physique ou cognitif pouvant amplifier les deux autres.
+- Le décrochage est la perte de l’intention en cours ou son remplacement par une
+  autre stimulation.
+- La finalisation est la capacité à fermer le périmètre décidé sans déplacer la
+  ligne d’arrivée.
+
+[LIMITE] Yoridokoro ne diagnostique aucune cause médicale ou psychologique. Il
+peut aider l’utilisateur à observer des états subjectifs et des comportements,
+mais ne mesure ni un TDAH, ni un Cognitive Disengagement Syndrome, ni une
+dépression, ni un burnout, ni une capacité intellectuelle.
+
+2.4 L’estimation émotionnelle du retard
+---------------------------------------
+
+Lors d’une reprise, le cerveau peut produire l’impression globale :
+
+    « Je suis probablement très en retard. »
+
+Cette impression est souvent une estimation émotionnelle sans inventaire
+récent. Vouloir immédiatement « rattraper » transforme alors la reprise en une
+mission immense.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Yoridokoro pourrait proposer un mode de
+diagnostic de reprise dont la
+mission n’est pas d’apprendre ou de compenser, mais seulement de répondre à :
+
+- Où suis-je exactement ?
+- Qu’est-ce que je sais encore ?
+- Qu’est-ce qui est rouillé mais revient avec un indice ?
+- Qu’est-ce qui manque réellement ?
+
+Le résultat attendu est une carte factuelle de la situation, pas une note.
+
+2.5 La compétence comme liberté
+-------------------------------
+
+La compétence est recherchée principalement pour la fluidité et l’autonomie
+qu’elle procure. Elle réduit la charge consciente nécessaire pour agir et libère
+de l’espace mental pour comprendre, créer ou apprécier l’activité.
+
+Une compétence peut être réelle sans être encore professionnelle. Pouvoir
+réaliser un laboratoire, expliquer le résultat et le reproduire avec ses notes
+constitue déjà une preuve. Consulter une note ne détruit pas automatiquement la
+compétence.
+
+Yoridokoro doit donc montrer des preuves intermédiaires sans les présenter comme
+des certificats ou comme une validation du marché du travail.
+
+===============================================================================
+3. PRINCIPES DE CONCEPTION
+===============================================================================
+
+3.1 Réduire les décisions avant l’action
+----------------------------------------
+
+Le logiciel doit proposer une prochaine action raisonnable au lieu de demander
+à l’utilisateur de reconstruire un plan complet chaque fois qu’il veut étudier.
+Les réglages avancés restent disponibles mais secondaires.
+
+3.2 Prendre en charge le déclenchement, jamais la réflexion
+----------------------------------------------------------
+
+Le système peut dire :
+
+    « Ouvre le PDF. Lis seulement les deux prochaines phrases. »
+
+Il ne doit pas automatiquement lire, résumer et résoudre tout le contenu à la
+place de l’utilisateur lorsque l’objectif est justement qu’il réfléchisse.
+
+Le rôle idéal est celui d’un guide : consigne précise, indication de l’erreur,
+question utile, prochain pas clair. L’encouragement artificiel ou vague ne
+remplace pas un feedback exploitable.
+
+3.3 Garder l’action plus simple que son système de gestion
+----------------------------------------------------------
+
+Ne pas construire un système plus compliqué que la tâche.
+
+Une obligation différée importante peut être capturée. Une micro-tâche visible
+de quelques secondes ne devrait généralement pas exiger la création d’une fiche,
+d’un tag, d’une priorité et d’une échéance.
+
+3.4 L’absence de donnée signifie « inconnu »
+--------------------------------------------
+
+Une donnée absente ne signifie jamais échec, paresse ou absence de travail. Une
+estimation doit être présentée comme une estimation. Un pourcentage de rappel
+n’est pas une mesure directe de la mémoire.
+
+3.5 Le temps réel plutôt que le temps prévu
+-------------------------------------------
+
+Les statistiques d’étude sont alimentées par le temps réellement passé dans les
+blocs WORK. La préparation, les pauses et les blocs simplement passés ne doivent
+pas gonfler artificiellement les résultats.
+
+3.6 Pas de dette de productivité
+--------------------------------
+
+Une journée manquée ne crée pas une dette à rembourser. La première séance après
+une interruption sert à reprendre. Elle ne doit pas devenir plus grande afin de
+compenser le passé.
+
+3.7 La régularité n’est pas une chaîne punitive
+-----------------------------------------------
+
+Une petite séance peut protéger la continuité même si elle n’est pas ressentie
+comme une journée idéale. Le logiciel doit montrer cette fonction sans prétendre
+qu’une micro-action équivaut à plusieurs heures de travail.
+
+3.8 Une contrainte demandée est différente d’un contrôle imposé
+--------------------------------------------------------------
+
+L’utilisateur bénéficie de contraintes extérieures, d’un chronomètre visible et
+de relances précises. Ces éléments doivent être consentis et configurés à
+l’avance. Ils constituent alors une aide exécutée à sa demande, pas une
+surveillance.
+
+3.9 Un jour de faible énergie reste un cas normal
+-------------------------------------------------
+
+Le parcours principal doit rester utilisable avec peu d’énergie exécutive. Les
+fonctions importantes doivent être accessibles au clavier, les actions
+principales clairement hiérarchisées et les choix secondaires repliés.
+
+3.10 Les préférences éprouvées priment sur les généralités
+---------------------------------------------------------
+
+Deux préférences sont actuellement explicites :
+
+- les checklists de préparation sont utiles, mais peuvent être ignorées ;
+- le compte à rebours descendant visible est stimulant et doit rester visible.
+
+Une recommandation générale affirmant qu’un minuteur visible ou une checklist
+pourrait gêner certaines personnes ne suffit pas à retirer ces fonctions à cet
+utilisateur.
+
+===============================================================================
+4. NATURE ET ARCHITECTURE GÉNÉRALE
+===============================================================================
+
+[ACTUEL] Yoridokoro est une application de bureau Electron construite avec
+React et TypeScript. L’interface fonctionne dans un renderer isolé. L’accès aux
+fichiers, aux bases locales, aux catalogues externes et au système passe par un
+bridge Electron contrôlé.
+
+[ACTUEL] Les données principales sont locales. Elles sont réparties entre :
+
+- une base SQLite principale pour les sujets, sessions, blocs, métacognition,
+  relations, activités, historique et journal d’observation ;
+- une base SQLite dédiée aux objectifs annuels ;
+- IndexedDB pour la collection Art et ses décisions de classement ;
+- localStorage pour certains réglages, l’état de session actif, les chapitres et
+  certaines évaluations ;
+- des instantanés SQLite de récupération pour renforcer la durabilité des
+  chapitres et évaluations encore pilotés par localStorage.
+
+[LIMITE] Cette pluralité de stockages est une dette d’architecture connue. Une
+source de vérité unifiée et versionnée reste souhaitable.
+
+[ACTUEL] Les liens externes ne peuvent utiliser que HTTP ou HTTPS. Les protocoles
+privilégiés comme file:, javascript: et data: sont bloqués pour l’ouverture
+externe. Les images web sont récupérées par le processus principal avec blocage
+des adresses locales et privées.
+
+[ACTUEL] Une sauvegarde complète peut inclure les données d’étude, les objectifs,
+Art et les réglages portables. Deux dossiers de sauvegarde automatique peuvent
+être configurés. La fermeture de l’application attend la fin des exports, avec
+un délai de sécurité. Art peut également produire une page HTML autonome lisible
+dans un navigateur.
+
+===============================================================================
+5. CARTE DE NAVIGATION
+===============================================================================
+
+Navigation principale :
+
+1. Aujourd’hui
+2. Historique
+3. Sujets
+4. Pomodoro
+5. Objectifs
+6. Art
+
+Navigation secondaire sous « Plus » :
+
+7. Relations
+8. Learning
+9. Analyses
+10. Métacognition (archives)
+11. Réflexion (pit-stop métacognitif)
+
+Paramètres reste accessible en bas de la navigation.
+
+Objectifs est volontairement visible dans la navigation principale. Il ne doit
+pas être caché dans « Plus ».
+
+===============================================================================
+6. DESCRIPTION DÉTAILLÉE DES MODULES ACTUELS
+===============================================================================
+
+6.1 AUJOURD’HUI — LE POINT D’APPUI IMMÉDIAT
+--------------------------------------------
+
+[ACTUEL] Aujourd’hui est la page d’entrée. Sa priorité est de rendre la prochaine
+action visible avant les outils d’organisation.
+
+Si une session est déjà active, la page affiche :
+
+- son état en cours ou en pause ;
+- le sujet associé ;
+- le temps restant ;
+- un bouton Reprendre.
+
+Si aucune session n’est active et qu’un chapitre existe, la page affiche une
+proposition :
+
+- progression vers un premier ou prochain chapitre ; ou
+- révision devenue nécessaire ;
+- sujet et chapitre ;
+- position du chapitre dans le sujet ;
+- durée de focus prévue ;
+- raison explicite de la proposition ;
+- bouton de préparation ;
+- possibilité de demander une autre suggestion.
+
+La touche Entrée démarre la proposition même après un changement de focus
+ordinaire. Elle reste neutralisée dans les champs de saisie et les dialogues.
+
+Si aucun chapitre n’existe, Aujourd’hui demande d’ajouter seulement un premier
+chapitre. L’objectif est d’éviter qu’un onboarding parfait soit nécessaire avant
+la première séance.
+
+[ACTUEL] Le reste de l’organisation est replié dans « Organiser ma journée » :
+
+- matrice d’Eisenhower avec quatre quadrants ;
+- déplacement des tâches sans drag-and-drop obligatoire ;
+- mode de démarrage TDAH ;
+- sujets récents ;
+- temps et nombre de sessions du jour ;
+- échéances proches ;
+- relations à garder en vue ;
+- sujets négligés à remettre dans le champ de vision.
+
+[ACTUEL] Le mode de démarrage TDAH demande une action physique et précise, puis
+propose un sprint de 5, 15 ou 25 minutes. Il répète trois principes : externaliser,
+réduire, commencer. Arrêter le sprint ne produit pas de jugement.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Ce mode pourrait devenir encore plus direct.
+Lorsque l’utilisateur est
+bloqué, une bonne consigne peut ne demander que deux phrases, une commande ou un
+objet déplacé. La taille de l’action doit être adaptée à la résistance actuelle,
+pas à la taille finale du projet.
+
+6.2 SUJETS — LA CARTE DES APPRENTISSAGES
+----------------------------------------
+
+[ACTUEL] Un sujet représente une matière, une compétence ou un domaine étudié.
+Il peut recevoir :
+
+- un nom ;
+- une image ;
+- des tags ;
+- une échéance ;
+- un résultat attendu ;
+- un type, notamment musique ;
+- un état épinglé, archivé ou supprimé.
+
+Chaque sujet contient des chapitres. Un chapitre peut recevoir :
+
+- un nom ;
+- un type de travail dominant : compétence, compréhension ou mémorisation ;
+- des sources et ressources ;
+- un calendrier de répétition personnalisé ;
+- pour la musique, un nombre total de mesures et une progression ;
+- un compteur d’études et la date de la dernière étude.
+
+[ACTUEL] La page Sujets affiche le temps d’étude du jour et de la semaine, une
+recherche, plusieurs vues de collection et un démarrage rapide. Elle montre une
+proposition principale de progression ou de révision et une section de révisions
+espacées dues.
+
+[ACTUEL] Les vues disponibles permettent une lecture en liste, en cartes ou en
+volet partagé. Les sujets peuvent être filtrés et triés. L’estimation de rappel
+est explicitement présentée comme une estimation.
+
+[ACTUEL] Les sujets et chapitres archivés restent récupérables. Les sujets
+supprimés passent par une corbeille avant suppression définitive.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] La reprise d’un sujet ancien pourrait commencer
+par un inventaire
+sans obligation d’apprendre. Le logiciel devrait alors enregistrer une carte
+« acquis / rouillé / manquant » et générer une première action à partir de cette
+carte.
+
+6.3 POMODORO — CHOISIR OU ACCEPTER UNE SESSION
+----------------------------------------------
+
+[ACTUEL] Pomodoro possède deux niveaux.
+
+Niveau guidé :
+
+- Yoridokoro choisit une prochaine étape explicable ;
+- il associe une technique adaptée au type de travail ;
+- il propose un objectif de séance ;
+- Entrée lance une structure standard : 5 minutes de préparation, 25 minutes de
+  travail, 5 minutes de pause.
+
+Niveau avancé, volontairement replié :
+
+- formes 25/5, 50/10, 90/15 ou personnalisée ;
+- durée de préparation personnalisable ;
+- répétition de la structure de 1 à 10 fois ;
+- blocs PREP, WORK et BREAK modifiables ;
+- association de chaque bloc WORK à un sujet, un chapitre, une technique et un
+  objectif ;
+- vues Chronologie, Partagée et Assistant ;
+- lancement au clavier avec Ctrl+Entrée lorsque le plan avancé est ouvert.
+
+[ACTUEL] Une session active est reprise plutôt que remplacée. Le planner ne doit
+pas faire disparaître un travail déjà engagé.
+
+6.4 ALGORITHME DE PROPOSITION
+-----------------------------
+
+[ACTUEL] L’algorithme construit une file stable et explicable.
+
+Pour chaque sujet, il cherche d’abord le premier chapitre jamais étudié. Ce
+chapitre représente la frontière de progression : le prochain morceau du cours
+à découvrir.
+
+Il cherche également les chapitres dont la révision est arrivée à échéance.
+
+L’ordre protège explicitement contre une boucle perfectionniste :
+
+- au maximum une révision critique peut passer avant la progression ;
+- ensuite, la progression vers un chapitre nouveau alterne avec les révisions ;
+- une révision ordinaire ne doit pas bloquer indéfiniment le prochain chapitre ;
+- les échéances actives, les sujets épinglés et les sujets longtemps négligés
+  contribuent au classement ;
+- une ancienne échéance oubliée ne reste pas éternellement prioritaire.
+
+La technique suggérée dépend du type de travail : exercices pour une compétence,
+première approche ou Stop & Recall pour progresser en compréhension, répétition
+active pour mémoriser ou réviser.
+
+[LIMITE] Cette politique est une heuristique de produit, pas un modèle clinique
+ou une preuve de la meilleure décision possible.
+
+6.5 SESSION — LE PARCOURS PENDANT L’ÉTUDE
+-----------------------------------------
+
+[ACTUEL] Une session se compose de blocs PREP, WORK et BREAK. L’état courant est
+sauvegardé afin qu’une fermeture ou une navigation n’efface pas immédiatement la
+session.
+
+PHASE PREP
+
+L’écran affiche :
+
+- le titre de la phase et la position dans la session ;
+- le prochain sujet ;
+- un compte à rebours visible ;
+- une checklist facultative organisée en mémoire de travail, carburant
+  biologique et stress/motivation ;
+- la possibilité d’ajouter des éléments personnalisés ;
+- un bouton « Je suis prêt » permettant d’avancer sans tout cocher.
+
+Les éléments de préparation peuvent inclure éloigner le téléphone, fermer les
+onglets inutiles, dégager l’espace, préparer de l’eau ou utiliser un exercice de
+régulation. Ils servent de support, pas de condition morale avant de travailler.
+
+PHASE WORK
+
+L’écran affiche :
+
+- l’objectif concret ;
+- le sujet et le chapitre ;
+- la technique choisie ;
+- les instructions ou outils spécifiques à cette technique ;
+- le compte à rebours descendant ;
+- pause/reprise ;
+- ajout de cinq minutes ;
+- passage du bloc ;
+- fin anticipée de la session.
+
+Certaines techniques possèdent une interface spécifique : lecture d’article
+scientifique, feuille blanche, Stop & Recall, Feynman, exercices ou alternance
+30 secondes de pratique / 30 secondes de repos.
+
+La barre Espace contrôle pause/reprise dans les blocs chronométrés. Entrée avance
+quand la préparation est terminée ou que le minuteur a atteint sa limite.
+
+PHASE BREAK
+
+L’écran propose une checklist de pause : se lever, marcher, bouger, s’étirer,
+boire et fermer les yeux. Un mode musculation optionnel peut présenter les
+groupes musculaires ou étirements qui ne sont pas encore en période de repos.
+
+Un bloc arrivé à zéro attend une action de l’utilisateur. Une pause terminée ne
+doit pas lancer un nouveau bloc WORK pendant que la personne est absente.
+
+MESURE DU TEMPS
+
+Le logiciel conserve les secondes réellement écoulées par bloc. Seuls les blocs
+WORK contribuent au temps d’étude. Les blocs passés sans travail ne créent pas de
+fausse activité.
+
+6.6 FIN DE SESSION, ÉVALUATION ET REPOS TOTAL
+---------------------------------------------
+
+[ACTUEL] Lorsque la session se termine, Yoridokoro calcule le temps WORK réel par
+sujet et les chapitres effectivement étudiés.
+
+Un chapitre n’est proposé à l’évaluation que s’il a reçu au moins une minute de
+travail réel. Cette règle évite de demander une note après une simple inspection
+ou une succession de blocs passés.
+
+Pour chaque chapitre éligible, l’utilisateur peut choisir :
+
+1. Oublié
+2. Difficile
+3. Bien
+4. Facile
+
+Ces choix décrivent l’accessibilité du souvenir à cet instant :
+
+- Oublié remet le chapitre au premier intervalle ;
+- Difficile recule d’une étape lorsque possible ;
+- Bien conserve l’avancement normal ;
+- Facile avance d’une étape supplémentaire.
+
+[LIMITE] Cette évaluation ne mesure ni intelligence, ni valeur, ni maîtrise
+globale. Elle sert uniquement à ajuster une prochaine occasion de rappel.
+
+Après la sauvegarde, l’écran Repos total propose dix minutes de récupération,
+des suggestions sans nouvelle stimulation et un choix entre terminer
+immédiatement ou poursuivre vers le bilan.
+
+Le bilan peut contenir :
+
+- les actions prévues après le repos ;
+- une « zone d’ombre » pour les concepts encore flous ;
+- les notes produites pendant la lecture ;
+- une copie en Markdown ou au format Obsidian ;
+- un retour vers le repos si la personne n’est pas prête à clôturer.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Une future version pourrait ajouter la question
+« Est-ce que mon cerveau est brûlé ? » au bilan.
+Cette expression est métaphorique. Elle désigne la sensation de saturation
+productive : le sentiment d’avoir réellement mobilisé son cerveau, d’avoir bien
+travaillé et que poursuivre maintenant aurait peu de valeur. Elle n’est pas à
+prendre comme un diagnostic ou nécessairement comme un état négatif.
+
+Cette donnée devrait permettre de distinguer au minimum :
+
+- absence de saturation, encore de la marge ;
+- saturation productive satisfaisante, bon moment pour arrêter ;
+- dépassement inconfortable, la limite a probablement été franchie ;
+- état impossible à déterminer.
+
+La formulation finale doit rester naturelle et fidèle au vocabulaire de
+l’utilisateur.
+
+6.7 HISTORIQUE — LA PREUVE FACTUELLE
+------------------------------------
+
+[ACTUEL] Historique regroupe le temps réellement enregistré sans imposer une
+série parfaite.
+
+Il reçoit automatiquement :
+
+- le temps WORK des sessions d’étude ;
+- les sessions chronométrées dans les fiches Objectifs ;
+- les chronomètres d’activités libres ;
+- les temps saisis manuellement ;
+- les changements de progression des objectifs, même sans chronomètre.
+
+Les activités peuvent représenter un sujet, un objectif, un projet, un loisir,
+du sport, de l’Art ou une activité générale. Elles peuvent être épinglées,
+archivées et associées à des ressources web qui s’ouvrent au démarrage.
+
+Un chronomètre d’activité accepte pause/reprise, arrêt et note facultative.
+Une entrée existante peut être modifiée ou supprimée.
+
+Les périodes disponibles sont : jour, semaine, deux semaines, mois, trimestre
+et année.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Lorsque plusieurs segments appartiennent à la
+même activité et sont
+séparés par de très courts redémarrages, l’Historique devrait les regrouper
+visuellement. Les données brutes doivent rester conservées pour l’exactitude,
+mais la vue quotidienne ne doit pas être polluée par une ligne pour chaque
+relance du chronomètre.
+
+6.8 LEARNING — APPRENDRE À APPRENDRE
+------------------------------------
+
+[ACTUEL] Learning est un curriculum interne consacré aux mécanismes et techniques
+d’apprentissage. Il est structuré en sections, chapitres, leçons et vérifications
+de compréhension.
+
+Le module suit :
+
+- les sections commencées ;
+- les révisions dues ;
+- les sections graduées ;
+- les contenus temporairement verrouillés ;
+- le niveau de progression.
+
+Les erreurs aux questions produisent un feedback. Le module emploie sa propre
+forme de répétition espacée afin de réexposer le contenu.
+
+La bibliothèque de techniques utilisée pendant les sessions inclut notamment :
+
+- exercices ;
+- Anki / répétition espacée ;
+- Stop & Recall ;
+- Feynman ;
+- feuille blanche ;
+- filtrage et synthèse ;
+- lecture d’un article scientifique en plusieurs passes ;
+- pratique musicale 30/30.
+
+6.9 OBJECTIFS — DIRECTIONS ANNUELLES ET PREUVES DE VIE
+------------------------------------------------------
+
+[ACTUEL] Objectifs organise des directions annuelles dans une grille. Une année
+peut utiliser les formats :
+
+- 2 × 2 : 4 objectifs ;
+- 3 × 3 : 9 objectifs ;
+- 3 × 3 moins le centre : 8 objectifs avec bloc central vide ;
+- 4 × 4 : 16 objectifs.
+
+Un format plus petit est refusé s’il cacherait des objectifs existants. Les
+années antérieures entièrement vides et situées avant la plus ancienne vraie
+grille sont nettoyées.
+
+La grille propose une « prochaine petite victoire ». Les cartes montrent le
+titre, une progression utile, le temps investi, un lien éventuel et une image de
+couverture. Les flèches permettent de naviguer entre les cases au clavier sans
+faire défiler la page.
+
+Une fiche objectif contient des étapes. Le modèle a été volontairement simplifié
+: l’utilisateur ne choisit plus entre Count, Metric, Amount et Manual.
+
+- Une étape est simple par défaut : faite ou non faite.
+- Une mesure est ajoutée seulement si elle aide réellement, par exemple 60 WPM
+  ou 500 euros.
+- La progression globale est déduite des étapes.
+- Une collection simple affiche un nombre d’étapes terminées.
+- Une étape mesurée unique affiche sa valeur exacte.
+- Un ensemble mixte peut afficher un pourcentage.
+
+La fiche propose deux vues principales : Focus et Overview. Elle contient :
+
+- le temps total investi ;
+- la dernière action ;
+- un chronomètre par étape ;
+- les préréglages 5, 15, 25, 45, 60, 90 et 120 minutes ;
+- une durée personnalisée ;
+- un chronomètre libre ;
+- un feedback visuel très visible lorsque le temps tourne ;
+- des contrôles de progression ;
+- des citations, images et liens comme souvenirs ;
+- l’import d’images depuis le disque, le presse-papiers ou une URL web ;
+- la possibilité de terminer ou rouvrir une étape.
+
+Les raccourcis de la fiche permettent de naviguer entre étapes, lancer ou
+arrêter le minuteur, modifier la progression, changer de vue, ajouter une étape,
+modifier l’objectif et revenir à la grille.
+
+Les progrès quantitatifs et les étapes terminées sont transmis à l’Historique,
+même lorsqu’aucun temps n’est chronométré.
+
+6.10 ART — COLLECTION, MÉMOIRE ET CLASSEMENT SUBJECTIF
+------------------------------------------------------
+
+[ACTUEL] Art conserve et classe des œuvres selon les préférences personnelles de
+l’utilisateur. Les catégories visibles sont :
+
+- Livres ;
+- Bandes dessinées ;
+- Films ;
+- Séries télévisées ;
+- Peintures ;
+- Architecture ;
+- Jeux vidéo ;
+- Albums ;
+- Photographies ;
+- Sculptures ;
+- Poèmes.
+
+L’ancienne catégorie Chansons reste lisible dans les sauvegardes mais n’est plus
+présentée dans la navigation.
+
+Les œuvres peuvent être ajoutées manuellement ou recherchées dans des catalogues
+selon la catégorie : Open Library, MusicBrainz et Cover Art Archive, TMDB, RAWG,
+Wikidata, Wikimedia Commons, Art Institute of Chicago, Metropolitan Museum of
+Art et PoetryDB.
+
+Les métadonnées peuvent inclure titre, créateur, année, image, genres, pays,
+série ou mouvement artistique. Une recherche web est accessible depuis les
+cartes et le volet d’une œuvre.
+
+La collection possède :
+
+- une vue par couvertures ;
+- une vue de classement ;
+- une recherche tolérante ;
+- des filtres par genre, pays et période ;
+- des statistiques ;
+- des mises en avant par année ou décennie ;
+- des listes virtualisées pour les très grandes collections.
+
+Le classement ne demande pas une note arbitraire. Deux œuvres sont présentées en
+duel et l’utilisateur choisit celle qu’il préfère. Un système Elo met à jour leur
+position. Le logiciel privilégie les éléments encore provisoires et évite autant
+que possible les adversaires trop récents. Le dernier choix peut être annulé.
+
+Le volet Carnet affiche :
+
+- à gauche, les citations ;
+- à droite, l’image et les informations ;
+- en bas de la colonne d’information, les actions de gestion.
+
+Chaque œuvre peut recevoir plusieurs citations. Chaque citation peut recevoir
+un commentaire personnel. Lorsque la hauteur disponible le permet, deux
+citations sont empilées verticalement sur une même page du carrousel ; sinon une
+seule citation est affichée. La pagination avance par page réellement calculée,
+et non par nombre fixe de citations.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Une section non-fiction pourrait transformer
+certains livres en
+objets de travail : idées centrales, affirmations, preuves, questions,
+désaccords, citations et applications possibles. Elle ne doit pas obliger
+l’utilisateur à produire une critique savante ou à se présenter comme reviewer.
+
+6.11 RELATIONS — MÉMOIRE RELATIONNELLE
+--------------------------------------
+
+[ACTUEL] Relations garde les personnes importantes dans le champ de vision.
+Chaque personne peut recevoir :
+
+- nom ;
+- type de relation ;
+- organisation et rôle ;
+- anniversaire ;
+- prochain suivi ;
+- notes ;
+- historique d’échanges.
+
+Un échange possède une date, un canal et un résumé. Le module calcule la date du
+dernier contact et le nombre d’interactions. Aujourd’hui peut faire remonter les
+personnes dont le contact est ancien.
+
+[LIMITE] Relations est un aide-mémoire personnel, pas un CRM professionnel ni un
+outil servant à noter la valeur d’une relation.
+
+6.12 ANALYSES — RELIRE LES FAITS
+--------------------------------
+
+[ACTUEL] Analyses transforme les sessions sauvegardées en vues descriptives :
+
+- temps de la semaine ;
+- comparaison avec la semaine précédente ;
+- nombre et durée moyenne des sessions ;
+- calendrier et chronologie ;
+- répartition entre sujets et tags ;
+- moments de la journée ;
+- types de focus ;
+- techniques utilisées ;
+- échéances ;
+- comparaison du rappel avant et après lorsque les données existent.
+
+Plusieurs densités de présentation existent, dont une vue de commande, une vue
+narrative et une vue minimale.
+
+[LIMITE] Une corrélation ne prouve pas qu’une technique cause un meilleur
+résultat. Les graphiques décrivent les données disponibles. Ils ne doivent pas
+transformer une période incomplète en conclusion psychologique.
+
+6.13 RÉFLEXION ET MÉTACOGNITION
+-------------------------------
+
+[ACTUEL] La réflexion actuelle est un pit-stop hebdomadaire d’environ quinze
+minutes. Il suit cinq étapes :
+
+1. Reset : prendre du recul avant de planifier.
+2. Priorités : nommer la pression principale et le temps disponible.
+3. Obstacles : identifier les frictions récurrentes et ce qui peut être sacrifié.
+4. Système : changer une seule règle mécanique.
+5. Boussole : noter les zones faibles en mentionnant éventuellement sujets et
+   chapitres.
+
+La complétion est suivie par semaine d’étude. Le jour préféré peut être vendredi,
+samedi ou dimanche.
+
+Les archives affichent les entrées par mois, quatre emplacements par mois, avec
+priorités, problèmes, règle système et boussole. Elles peuvent être copiées pour
+NotebookLM, ainsi qu’un rapport plus complet.
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Une future version pourrait expérimenter une
+cadence glissante 1 / 3 / 7 :
+
+- tous les jours : un check de quelques secondes ;
+- toutes les trois journées écoulées : une réflexion intermédiaire ;
+- tous les sept jours : une synthèse hebdomadaire.
+
+Sept n’étant pas divisible par trois, les cadences ne doivent pas être présentées
+comme trois cases fixes à l’intérieur d’une semaine. Elles sont indépendantes et
+se recroisent tous les 21 jours. Lorsqu’elles coïncident, Yoridokoro n’affiche pas
+trois journaux : la réflexion la plus profonde remplace les plus courtes.
+
+L’objectif n’est pas d’augmenter le volume d’introspection. Chaque niveau doit
+avoir une fonction différente : état immédiat, détection d’un motif, puis décision
+hebdomadaire.
+
+6.14 PARAMÈTRES, PERSONNALISATION ET DONNÉES
+--------------------------------------------
+
+[ACTUEL] Les paramètres couvrent :
+
+- thèmes visuels ;
+- langues ;
+- premier jour de la semaine ;
+- jour de métacognition ;
+- zoom de 50 à 200 % ;
+- démarrage automatique avec le système ;
+- ressources ouvertes au début d’une session ;
+- calendrier de répétition espacée ;
+- sons, profils audio, volumes et sons personnalisés ;
+- clés personnelles TMDB et RAWG ;
+- raccourcis du module Art ;
+- sauvegardes, imports et exports ;
+- données d’observation et export pour une IA ;
+- suppression séparée des données d’étude et des données Objectifs.
+
+Les thèmes utilisent des tokens communs afin que composants, contrastes,
+rayons, ombres et barres de défilement restent cohérents.
+
+===============================================================================
+7. BOUCLE D’UNE SÉANCE GUIDÉE, PAS À PAS
+===============================================================================
+
+Cette section décrit le chemin le plus court actuellement disponible.
+
+ÉTAPE 1 — OUVRIR YORIDOKORO
+
+L’application vérifie la durabilité des chapitres et évaluations, restaure les
+réglages, applique le thème et ouvre Aujourd’hui.
+
+ÉTAPE 2 — VOIR UNE SEULE PROPOSITION
+
+Le logiciel analyse les sujets et chapitres. Il choisit soit une progression,
+soit une révision suffisamment importante. Il explique pourquoi cette option est
+présentée.
+
+ÉTAPE 3 — ACCEPTER OU DEMANDER UNE AUTRE OPTION
+
+Entrée accepte la proposition. « Autre suggestion » fait tourner une petite
+liste de candidats. Le réglage complet de la session n’est pas exigé.
+
+ÉTAPE 4 — CRÉER LA SESSION
+
+Yoridokoro crée PREP 5 min → WORK 25 min → BREAK 5 min. Le bloc WORK reçoit le
+sujet, le chapitre, la technique et un objectif formulé.
+
+ÉTAPE 5 — PRÉPARATION
+
+La checklist aide à externaliser ce qui doit être prêt. L’utilisateur peut
+cocher, ajouter un élément ou ignorer la checklist. Il avance lorsqu’il se sent
+prêt.
+
+ÉTAPE 6 — PREMIER BLOC DE TRAVAIL
+
+Le minuteur visible fournit une pression stimulante. La technique réduit
+l’ambiguïté du travail à effectuer. Le logiciel conserve les secondes réellement
+écoulées.
+
+ÉTAPE 7 — TRANSITION
+
+Lorsque le minuteur atteint zéro, rien ne démarre automatiquement sans
+confirmation. L’utilisateur peut ajouter cinq minutes, avancer, faire une pause
+ou terminer.
+
+ÉTAPE 8 — PAUSE
+
+La pause encourage un changement d’état sans nouvelle charge cognitive. Le
+prochain bloc reste en attente jusqu’au retour explicite.
+
+ÉTAPE 9 — SAUVEGARDE
+
+À la fin, le logiciel calcule le temps WORK réel. Zéro seconde signifie session
+abandonnée plutôt qu’activité fictive. Une session partielle avec travail réel
+reste une session arrêtée et conserve ce travail.
+
+ÉTAPE 10 — ÉVALUATION DU RAPPEL
+
+Après au moins une minute sur un chapitre, l’utilisateur peut indiquer Oublié,
+Difficile, Bien ou Facile avec les touches 1 à 4. Ce signal modifie la prochaine
+révision.
+
+ÉTAPE 11 — REPOS TOTAL
+
+Le logiciel propose une vraie sortie de l’effort : dix minutes, stimulation
+réduite, yeux fermés ou mouvement léger. L’utilisateur peut fermer immédiatement
+ou continuer vers le bilan.
+
+ÉTAPE 12 — BILAN ET FERMETURE
+
+Les zones d’ombre et notes utiles sont conservées. La session est fermée. Le
+temps rejoint l’Historique, les statistiques du sujet et les Analyses.
+
+===============================================================================
+8. PROPOSITION FUTURE : BOUCLE D’ACTIVATION ET DE RELANCE
+   (NON IMPLÉMENTÉE)
+===============================================================================
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] La séance guidée actuelle choisit bien un
+chapitre, mais elle ne
+prend pas encore complètement en charge les transitions observées dans les
+expériences thérapeutiques.
+
+8.1 Démarrage assisté
+---------------------
+
+Le logiciel demande seulement une action produisant une preuve visible :
+
+- « Ouvre le PDF et reviens ici. »
+- « Lis uniquement les deux prochaines phrases. »
+- « Ouvre le terminal et exécute cette commande. »
+- « Écris uniquement le titre du document. »
+
+Le critère de réussite est l’action demandée, pas la poursuite spontanée. Si
+l’utilisateur continue, c’est un bonus et non une nouvelle obligation rétroactive.
+
+8.2 Maintien
+------------
+
+À une échéance consentie, par exemple après quelques minutes ou à la fin du
+bloc, Yoridokoro demande un état simple :
+
+- toujours engagé ;
+- passage difficile ;
+- distrait mais encore devant la tâche ;
+- parti sur une autre activité ;
+- fatigué ;
+- prêt à terminer.
+
+La question ne doit pas interrompre inutilement une période de concentration
+stable. Sa fréquence doit être testée plutôt que supposée.
+
+8.3 Relance après décrochage
+---------------------------
+
+Un rappel abstrait « reprendre l’étude » est insuffisant. La relance doit
+restaurer le prochain geste :
+
+    « Ferme YouTube. Retourne au PDF. Lis les deux prochaines phrases. »
+
+Si ce geste reste trop coûteux, la consigne est réduite :
+
+    « Ferme seulement YouTube. »
+
+Le logiciel traite une relance comme un nouveau démarrage, pas comme la suite
+évidente d’un état mental encore présent.
+
+8.4 Finition
+------------
+
+Avant le travail, la ligne d’arrivée est fixée. À la fin :
+
+- Yoridokoro rappelle ce qui avait été défini ;
+- les nouvelles tâches repérées sont distinguées du périmètre courant ;
+- le dernier petit élément peut recevoir une consigne spécifique ;
+- « terminé » ferme la tâche initiale sans absorber automatiquement tout ce qui
+  est devenu visible autour.
+
+===============================================================================
+9. BOUCLE JOURNALIÈRE : ÉTAT ACTUEL ET PISTE FUTURE
+===============================================================================
+
+MATIN OU PREMIÈRE OUVERTURE
+
+1. Aujourd’hui restaure une session en cours ou montre la prochaine étape.
+2. Les outils d’organisation restent repliés tant qu’ils ne sont pas demandés.
+3. Les échéances, relations et sujets négligés restent disponibles sans prendre
+   la place de l’action principale.
+
+PENDANT LA JOURNÉE
+
+1. Une session Pomodoro enregistre automatiquement le travail réel.
+2. Un objectif personnel peut être chronométré depuis sa fiche.
+3. Une activité hors ordinateur peut être enregistrée dans Historique avec un
+   chronomètre libre ou une saisie manuelle ultérieure.
+4. Une reprise ne cherche pas à rembourser une journée manquée.
+
+FIN DE JOURNÉE ACTUELLE
+
+L’utilisateur peut consulter le temps et les sessions dans Aujourd’hui ou
+Historique, sans obligation de remplir un journal.
+
+FIN DE JOURNÉE ENVISAGÉE — NON IMPLÉMENTÉE
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Un check quotidien de quelques secondes pourrait
+demander :
+
+- Qu’est-ce qui a réellement avancé ?
+- Quel est le prochain geste déjà connu ?
+- Le cerveau est-il encore disponible, saturé de façon productive ou dépassé ?
+
+Une réponse manquante reste « inconnue ». Elle ne brise aucune série.
+
+===============================================================================
+10. PROPOSITION FUTURE : BOUCLE 1 / 3 / 7 JOURS
+    (NON IMPLÉMENTÉE)
+===============================================================================
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Cette boucle reste une proposition. Elle
+remplacerait l’idée imprécise de trois journaux ajoutés les
+uns aux autres.
+
+TOUS LES JOURS — ÉTAT IMMÉDIAT
+
+Durée cible : quelques secondes.
+
+But : conserver la prochaine intention et un état subjectif minimal. Aucun essai
+long. Aucune analyse générale de la personnalité.
+
+TOUS LES 3 JOURS ÉCOULÉS — DÉTECTION D’UN MOTIF
+
+Durée cible : quelques minutes.
+
+But : regarder les trois derniers jours et repérer un seul motif observable :
+
+- qu’est-ce qui a facilité le démarrage ?
+- où les reprises ont-elles échoué ?
+- quelle friction revient ?
+- faut-il modifier une seule règle ?
+
+TOUS LES 7 JOURS — SYNTHÈSE ET DÉCISION
+
+Durée cible : le pit-stop actuel, raccourci si les données sont pauvres.
+
+But : relire la semaine, distinguer ressenti et faits, décider d’une seule
+expérience pour la semaine suivante et mettre à jour la boussole.
+
+COLLISIONS
+
+Le check journalier est remplacé par le check 3 jours lorsqu’ils coïncident. Le
+check hebdomadaire remplace les deux autres. Les cycles 3 et 7 se rencontrent
+tous les 21 jours, mais ne créent jamais trois formulaires le même jour.
+
+===============================================================================
+11. BOUCLES DE PLUS LONG TERME
+===============================================================================
+
+11.1 Apprentissage
+------------------
+
+Les sujets représentent les trajectoires. Les chapitres représentent les
+frontières concrètes. Les évaluations créent des occasions de retour. La règle
+de recommandation protège l’avancement vers de nouveaux chapitres.
+
+11.2 Objectifs annuels
+----------------------
+
+La grille rend visibles quelques directions de vie : création, accumulation de
+culture, expérience, santé, compétence ou projet concret. Les étapes transforment
+une ambition annuelle en preuves finies et souvenirs.
+
+11.3 Culture et Art
+-------------------
+
+Art garde une trace des œuvres rencontrées, des préférences et des citations.
+Il ne réduit pas la culture à une consommation quantitative : le classement est
+subjectif et les commentaires peuvent conserver ce qui a résonné.
+
+11.4 Relations
+--------------
+
+Relations compense la disparition des personnes hors du champ de vision. Il
+rappelle une présence sans transformer l’amitié ou la famille en score.
+
+11.5 Memento Mori — idée future non implémentée
+-----------------
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] L’utilisateur a survécu à un événement où il
+aurait pu mourir et
+considère sa vie actuelle comme une seconde chance. Il ressent pourtant qu’il est
+souvent vivant sans réellement vivre.
+
+Une présence Memento Mori sur Aujourd’hui peut aider si elle reste contemplative
+et orientée vers la vie. Elle ne doit pas devenir un compte à rebours morbide, une
+source de culpabilité ou une nouvelle obligation de « réussir sa journée ».
+
+Une forme possible :
+
+    « Qu’est-ce qui ferait que cette journée soit réellement vécue ? »
+
+Elle pourrait associer une citation choisie et une action minuscule liée à une
+valeur : relation, création, présence, pardon, curiosité ou expérience.
+
+Les thèmes inspirés de Tuesdays with Morrie incluent notamment : mort, peur,
+vieillissement, avidité, mariage, famille, société, pardon, vie pleine de sens,
+regrets et apitoiement sur soi.
+
+[LIMITE] Le logiciel ne doit pas recopier de longs passages protégés d’un livre.
+L’utilisateur peut saisir les courtes citations qu’il choisit ou travailler à
+partir de ses propres notes.
+
+===============================================================================
+12. DONNÉES D’OBSERVATION ET BOUCLE AVEC UNE IA
+===============================================================================
+
+[ACTUEL] Yoridokoro possède un journal d’observation local distinct des contenus
+personnels. Il peut enregistrer des événements fonctionnels comme :
+
+- proposition affichée ;
+- proposition acceptée ;
+- autre suggestion demandée ;
+- session créée ;
+- bloc commencé ;
+- pause et reprise ;
+- prolongation ;
+- bloc passé ou terminé ;
+- session sauvegardée ;
+- évaluation de rappel envoyée ou ignorée.
+
+Les payloads autorisés contiennent des durées, types de blocs, motifs de
+transition, agrégats de checklist et évaluations. Ils n’incluent pas les frappes,
+URL, notes libres, citations, relations ou données Art.
+
+L’utilisateur choisit une période de 30 jours, 90 jours ou toute la période. Les
+noms de sujets et chapitres peuvent être pseudonymisés.
+
+L’export produit :
+
+- un CSV d’événements ;
+- un Markdown expliquant Yoridokoro, les limites et un prompt conseillé.
+
+Le prompt demande à l’IA de vérifier qualité, doublons, données manquantes et
+limites avant de conclure. L’analyse doit distinguer description, corrélation,
+hypothèse et conclusion raisonnablement étayée.
+
+La boucle recherchée est :
+
+    usage réel
+        → données locales minimales
+        → export volontaire
+        → analyse prudente par ChatGPT ou NotebookLM
+        → au maximum quelques changements réversibles
+        → nouvelle période d’observation
+        → réévaluation.
+
+Le but n’est pas de produire toujours plus de métriques. Une donnée n’est utile
+que si elle aide à décider d’un changement du logiciel ou de l’environnement.
+
+===============================================================================
+13. PROPOSITION FUTURE : PARCOURS « CURIOSITY » ET RÉPONSE EN COURS
+    (NON IMPLÉMENTÉE)
+===============================================================================
+
+SOURCE EXAMINÉE
+
+Le PDF « Curiosity Journal — Version Zero », daté de mars 2022, comporte trente
+pages. Il propose un parcours d’enquête complet plutôt qu’un journal libre :
+
+1. formuler une question et vérifier qu’elle reste praticable ;
+2. découper une grande question en questions moyennes puis petites ;
+3. écrire une hypothèse réfutable servant de guide provisoire ;
+4. choisir et prioriser plusieurs sources ;
+5. rechercher avec une légende de notes et conserver trois enseignements par
+   source ;
+6. signaler les sources utiles ou abandonnées et relever les questions de
+   suivi ;
+7. raffiner les acquis sous la forme d’un chemin causal entre question et
+   réponse, puis combler les lacunes ;
+8. simplifier l’explication et produire une synthèse : acquis, surprise, message
+   au futur soi et prochaine curiosité.
+
+La majorité des pages sont des surfaces répétables consacrées à la recherche et
+aux enseignements tirés des sources. Le document conseille aussi de faire des
+pauses, d’éviter que la curiosité devienne une fixation et d’arrêter la collecte
+lorsque les nouvelles sources n’apportent plus rien.
+
+DÉCISION PRODUIT PROPOSÉE
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Yoridokoro ne devrait pas reproduire les trente
+pages ni créer une
+nouvelle entrée de navigation. Le parcours peut devenir un mode facultatif
+« Enquête » rattaché à un sujet ou à un chapitre. Il réutiliserait Aujourd’hui,
+Sujets, les sessions et l’Historique au lieu de constituer un système parallèle.
+
+Une enquête contiendrait seulement :
+
+- la question actuelle ;
+- éventuellement sa décomposition en questions plus petites ;
+- une « réponse en cours », explicitement provisoire et toujours visible ;
+- une pile de sources avec états à lire, en cours, utile ou abandonnée ;
+- jusqu’à trois enseignements par source et les questions apparues ;
+- une carte simple du raisonnement et de ses lacunes ;
+- une synthèse finale et la prochaine question éventuelle.
+
+L’hypothèse du PDF serait adaptée en « réponse en cours ». Elle pourrait être
+vide au démarrage, évoluer sans pénalité et rester contredite par les sources.
+Cette formulation diminue le coût d’entrée et limite le risque de transformer
+une intuition initiale en conclusion à défendre.
+
+INTÉGRATION DANS LES BOUCLES EXISTANTES
+
+- Aujourd’hui montre une seule enquête active et son prochain geste.
+- Une session peut utiliser la technique « Enquête de curiosité ».
+- Le prochain geste peut être aussi petit que : ouvrir une source, retourner au
+  PDF ou lire seulement les deux phrases suivantes.
+- Après une source, Yoridokoro demande au maximum trois enseignements, pas un
+  compte rendu complet.
+- La « réponse en cours » peut être corrigée après chaque source sans effacer son
+  évolution.
+- Le temps de recherche alimente l’Historique comme les autres activités.
+- Une enquête peut être mise en sommeil sans dette ni série brisée.
+- La clôture est possible lorsqu’une réponse utile existe, lorsque la collecte
+  n’apporte plus d’information ou lorsque la saturation productive indique qu’il
+  est préférable de s’arrêter.
+
+ADAPTATIONS NÉCESSAIRES
+
+[IDÉE FUTURE — NON IMPLÉMENTÉE] Si ce parcours est développé, les recommandations
+du PDF ne devront pas devenir des obligations
+universelles. Cinq à sept sources, la revue par les pairs ou une publication
+récente sont pertinentes pour certaines questions scientifiques, mais pas pour
+une étymologie, une œuvre, une technique artistique ou une question historique.
+Yoridokoro devrait proposer des critères dépendant du domaine et conserver un
+mode léger à une seule source.
+
+[LIMITE] Une IA peut aider à découper une question, interroger un raisonnement ou
+repérer une lacune. Elle ne doit pas écrire automatiquement la « réponse en
+cours » ni remplacer la lecture des sources : cet artefact doit rester la preuve
+du travail cognitif de l’utilisateur.
+
+[LIMITE] Le parcours ne doit pas imposer hypothèse, nombre minimal de sources,
+synthèse finale ou publication. Une curiosité abandonnée après une réponse
+suffisante n’est pas un échec.
+
+===============================================================================
+14. CE QUE YORIDOKORO NE DOIT PAS DEVENIR
+===============================================================================
+
+- Un outil de surveillance ou de contrôle imposé.
+- Un juge de productivité.
+- Un compteur de jours parfaits créant une dette après une interruption.
+- Un diagnostic de santé mentale, fatigue, burnout, TDAH ou CDS.
+- Un système affirmant qu’un oubli prouve l’absence de compétence.
+- Un assistant qui résout automatiquement tout ce que l’utilisateur voulait
+  apprendre à résoudre.
+- Une collection de formulaires métacognitifs plus coûteuse que l’action.
+- Un tableau de bord où construire le système remplace le travail réel.
+- Un réseau social ou un produit conçu pour la comparaison publique.
+- Une machine à recommandations opaques : les raisons doivent rester lisibles.
+- Un outil qui traite chaque nouvelle tâche visible comme une extension de la
+  tâche en cours.
+
+===============================================================================
+15. UTILISATION CONSEILLÉE DE CE FICHIER DANS NOTEBOOKLM
+===============================================================================
+
+Ce fichier doit être ajouté comme source de contexte stable. Les exports de
+métacognition, les exports d’observation et les futures notes thérapeutiques
+peuvent être ajoutés comme sources séparées et datées.
+
+Lors d’une question à NotebookLM ou ChatGPT, demander explicitement :
+
+1. de distinguer les fonctions [ACTUEL] des
+   [IDÉE FUTURE — NON IMPLÉMENTÉE] ;
+2. de citer les données ou passages utilisés ;
+3. de ne pas diagnostiquer ;
+4. de ne pas interpréter une donnée manquante comme un échec ;
+5. de tenir compte des préférences déclarées sur la préparation et le minuteur ;
+6. de proposer peu de changements, réversibles et testables ;
+7. de vérifier qu’un nouveau système ne coûte pas plus que l’action ;
+8. de favoriser le déclenchement et la relance sans faire le travail cognitif à
+   la place de l’utilisateur.
+
+Exemple de question :
+
+    « En utilisant Software.txt et mes données des 30 derniers jours, identifie
+    un seul point de friction entre l’affichage d’une proposition et le premier
+    bloc WORK. Distingue ce qui est observé de ce qui est supposé. Propose une
+    modification réversible de Yoridokoro et la donnée nécessaire pour vérifier
+    si elle aide. »
+
+===============================================================================
+16. GLOSSAIRE
+===============================================================================
+
+ACTIVATION
+    Passage de l’intention au premier geste observable.
+
+RÉACTIVATION
+    Nouveau démarrage nécessaire après une pause ou un décrochage.
+
+DÉCROCHAGE
+    Perte de l’engagement ou remplacement de l’intention courante par une autre
+    stimulation.
+
+SATURATION PRODUCTIVE / « CERVEAU BRÛLÉ » — CONCEPT NON IMPLÉMENTÉ
+    Sensation métaphorique d’avoir réellement et suffisamment mobilisé son
+    cerveau. Elle peut signaler un bon moment pour arrêter. Elle se distingue du
+    dépassement pénible et ne constitue pas un diagnostic.
+
+PREUVE DE PROGRESSION
+    Fait observable : exercice terminé, chapitre travaillé, laboratoire réalisé,
+    temps réel enregistré, étape finie ou production conservée.
+
+FRONTIÈRE DE PROGRESSION
+    Premier chapitre jamais étudié d’un sujet. Elle indique où avancer sans
+    exiger une perfection totale des chapitres précédents.
+
+RÉVISION CRITIQUE
+    Révision suffisamment en retard pour passer temporairement devant la
+    progression. Une seule peut prendre cette place à la fois.
+
+ESTIMATION DE RAPPEL
+    Heuristique temporelle dérivée de la dernière étude et du calendrier de
+    répétition. Ce n’est pas une mesure de mémoire.
+
+LIGNE D’ARRIVÉE
+    Définition du résultat qui fermera la tâche courante. Elle ne doit pas se
+    déplacer automatiquement lorsque de nouvelles tâches deviennent visibles.
+
+MODE GUIDÉ
+    Parcours où Yoridokoro choisit sujet, chapitre, technique et structure de
+    session afin de réduire les décisions.
+
+MODE AVANCÉ
+    Parcours où l’utilisateur construit et ajuste lui-même les blocs.
+
+MÉTACOGNITION 1 / 3 / 7 — CONCEPT NON IMPLÉMENTÉ
+    Cadences glissantes quotidienne, tous les trois jours et hebdomadaire, avec
+    remplacement des réflexions courtes par la plus profonde en cas de collision.
+
+===============================================================================
+17. BACKLOG D’IDÉES POUR DE FUTURES MISES À JOUR
+===============================================================================
+
+À l’exception de la documentation elle-même, les éléments ci-dessous ne sont
+pas annoncés comme disponibles. Ils restent à concevoir, prototyper, tester et
+éventuellement abandonner s’ils n’aident pas réellement.
+
+Priorité 1 — Documenter et partager le contexte
+    Le présent Software.txt fournit la source stable destinée à NotebookLM et
+    aux futures analyses.
+
+Priorité 2 — Réduire la pollution de l’Historique
+    Regrouper visuellement les redémarrages proches sans perdre les données
+    brutes.
+
+Priorité 3 — Capturer la saturation productive
+    Ajouter une question post-session fidèle au sens de « cerveau brûlé ».
+
+Priorité 4 — Construire le mode de reprise factuelle
+    Remplacer « rattraper son retard » par acquis / rouillé / manquant.
+
+Priorité 5 — Prototyper la consigne de démarrage minimale
+    Tester des instructions allant jusqu’à deux phrases seulement et mesurer si
+    elles augmentent l’accès au premier bloc WORK.
+
+Priorité 6 — Concevoir la relance et la finition
+    Restaurer un geste concret après décrochage et stabiliser la ligne d’arrivée.
+
+Priorité 7 — Introduire la métacognition 1 / 3 / 7
+    Une profondeur adaptée à chaque cadence, sans empiler les journaux.
+
+Priorité 8 — Étudier le Memento Mori et la non-fiction
+    Les intégrer seulement s’ils rapprochent l’utilisateur d’une action ou d’une
+    trace de vie, sans ajouter culpabilité ni obligation de produire une review.
+
+Priorité 9 — Prototyper une enquête de curiosité légère
+    Tester question, réponse en cours, prochaine source et prochain micro-geste
+    à l’intérieur des modules existants, sans ajouter une navigation ni imposer
+    le journal complet.
+
+===============================================================================
+18. CRITÈRE FINAL POUR UNE NOUVELLE FONCTION
+===============================================================================
+
+Avant d’ajouter une fonction à Yoridokoro, poser les questions suivantes :
+
+1. Quel verrou précis traite-t-elle : démarrage, maintien, reprise, finition ou
+   mémoire de travail ?
+2. Quelle action devient plus simple grâce à elle ?
+3. Peut-elle fonctionner un jour de faible énergie ?
+4. Produit-elle un feedback utile ou seulement une nouvelle statistique ?
+5. Demande-t-elle plus d’organisation que l’action elle-même ?
+6. Risque-t-elle de créer une dette, une honte ou une comparaison idéale ?
+7. L’utilisateur garde-t-il le contrôle et peut-il l’ignorer ?
+8. Le système aide-t-il à réfléchir, ou réfléchit-il à la place de l’utilisateur ?
+9. Comment vérifier avec des faits qu’elle aide réellement ?
+10. Peut-elle être retirée ou ajustée facilement si elle n’aide pas ?
+
+La bonne fonction n’est pas celle qui rend Yoridokoro plus impressionnant. C’est
+celle qui rend le prochain geste plus accessible et la progression plus réelle.
