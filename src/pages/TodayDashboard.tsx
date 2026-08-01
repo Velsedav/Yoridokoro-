@@ -69,11 +69,11 @@ function readAdhdSprint(): AdhdSprint | null {
   }
 }
 
-const QUADRANT_COPY: Record<EisenhowerQuadrant, { index: string; title: string; hint: string }> = {
-  do: { index: '01', title: 'Faire maintenant', hint: 'Urgent et important' },
-  schedule: { index: '02', title: 'Pomodoro', hint: 'Important, pas urgent' },
-  delegate: { index: '03', title: 'Déléguer', hint: 'Urgent, moins important' },
-  eliminate: { index: '04', title: 'Éliminer / plus tard', hint: 'Ni urgent ni important' },
+const QUADRANT_COPY: Record<EisenhowerQuadrant, { title: string; hint: string; urgency: string; importance: string }> = {
+  do: { title: 'Faire maintenant', hint: 'Agir en premier, sans organiser davantage.', urgency: 'Urgent', importance: 'Important' },
+  schedule: { title: 'Planifier', hint: 'Choisir un moment précis, puis sortir la tâche de votre tête.', urgency: 'Pas urgent', importance: 'Important' },
+  delegate: { title: 'Déléguer ou simplifier', hint: 'Faire porter moins de charge à cette tâche.', urgency: 'Urgent', importance: 'Moins important' },
+  eliminate: { title: 'Éliminer ou laisser', hint: 'Supprimer, refuser ou assumer de ne pas faire.', urgency: 'Pas urgent', importance: 'Moins important' },
 }
 
 export default function TodayDashboard() {
@@ -380,15 +380,18 @@ export default function TodayDashboard() {
         <div className="yd-section-heading">
           <div><span className="yd-eyebrow"><Target size={14} /> Décider avant de remplir sa journée</span><h2 id="eisenhower-title">Matrice d’Eisenhower</h2><p className="yd-section-description">Déposez chaque tâche dans une case. Vous pourrez la déplacer sans glisser-déposer.</p></div>
         </div>
-        <div className="yd-eisenhower-grid">
+        <div className="yd-eisenhower-grid" role="group" aria-label="Matrice avec l’urgence en colonnes et l’importance en lignes">
+          <div className="yd-matrix-axis yd-matrix-axis--urgent" aria-hidden="true"><strong>Urgent</strong><small>À traiter vite</small></div>
+          <div className="yd-matrix-axis yd-matrix-axis--not-urgent" aria-hidden="true"><strong>Pas urgent</strong><small>Peut être planifié</small></div>
+          <div className="yd-matrix-axis yd-matrix-axis--important" aria-hidden="true"><strong>Important</strong><small>Fort impact</small></div>
+          <div className="yd-matrix-axis yd-matrix-axis--less-important" aria-hidden="true"><strong>Moins important</strong><small>Impact limité</small></div>
           {EISENHOWER_QUADRANTS.map(quadrant => {
             const copy = QUADRANT_COPY[quadrant]
             const tasks = eisenhowerTasks.filter(task => task.quadrant === quadrant)
             return (
               <article className={`yd-quadrant yd-quadrant--${quadrant}`} key={quadrant} aria-labelledby={`quadrant-${quadrant}`}>
                 <header>
-                  <span aria-hidden="true">{copy.index}</span>
-                  <div><h3 id={`quadrant-${quadrant}`}>{copy.title}</h3><p>{copy.hint}</p></div>
+                  <div><p className="yd-quadrant-tags"><span>{copy.importance}</span><span>{copy.urgency}</span></p><h3 id={`quadrant-${quadrant}`}>{copy.title}</h3><p className="yd-quadrant-hint">{copy.hint}</p></div>
                   <strong aria-label={`${tasks.filter(task => !task.done).length} tâches non terminées`}>{tasks.filter(task => !task.done).length}</strong>
                 </header>
                 <ul className="yd-matrix-list">
