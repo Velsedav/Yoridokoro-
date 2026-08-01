@@ -2117,6 +2117,13 @@
     border-radius: 26px;
 }
 
+/* The post-session flow is a destination, not a translucent confirmation.
+   Hide the completed BREAK screen so it cannot compete with rest/review. */
+.modal-overlay--post-session {
+    background: var(--bg-color);
+    backdrop-filter: none;
+}
+
 .confirm-modal-content--review {
     width: min(940px, calc(100vw - 48px));
     max-width: 940px;
@@ -2159,23 +2166,15 @@
 
 .total-rest-visual {
     width: min(520px, 100%);
-    display: grid;
-    grid-template-columns: minmax(150px, 230px) minmax(190px, 1fr);
+    display: flex;
     align-items: center;
-    gap: 20px;
-}
-
-.total-rest-hero .total-rest-img {
-    width: 100%;
-    max-height: 260px;
-    margin: 0;
-    object-fit: contain;
-    -webkit-mask-image: none;
-    mask-image: none;
+    justify-content: center;
 }
 
 .total-rest-hero .total-rest-countdown {
+    width: 100%;
     margin: 0;
+    text-align: center;
     color: color-mix(in srgb, #6d8774 78%, var(--text-dark));
     font-size: clamp(4rem, 8vw, 6.1rem);
     font-weight: 620;
@@ -2368,15 +2367,6 @@
 
     .confirm-modal-content--rating .rate-chapters-buttons {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .total-rest-visual {
-        grid-template-columns: 1fr;
-    }
-
-    .total-rest-hero .total-rest-img {
-        width: min(230px, 70vw);
-        margin: 0 auto;
     }
 
     .confirm-modal-content--post,

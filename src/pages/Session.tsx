@@ -1798,7 +1798,7 @@ export default function Session() {
 
             {/* End Session Confirmation Modal */}
             {endConfirmStep !== 'none' && (
-                <div className="modal-overlay" onClick={() => {
+                <div className={`modal-overlay${endConfirmStep === 'total-rest' ? ' modal-overlay--post-session' : ''}`} onClick={() => {
                     if (endConfirmStep !== 'confirm-stop' && endConfirmStep !== 'confirm-save') return;
                     playSFX(SFX.CANCEL, theme);
                     closeEndDialog();
@@ -1965,7 +1965,6 @@ export default function Session() {
                                             )}
                                         </header>
                                         <div className="total-rest-visual">
-                                            <img src="/assets/images/learning center/01_mascot-diffuse-mode.png" alt="" className="total-rest-img" />
                                             <div className={`total-rest-countdown ${restCountdown === 0 ? 'done' : 'calm'}`} role="timer" aria-label={`${t('session.timer_label')} ${formatSecondsMMSS(restCountdown)}`}>
                                                 {String(Math.floor(restCountdown / 60)).padStart(2, '0')}<span className="timer-colon">:</span>{String(restCountdown % 60).padStart(2, '0')}
                                             </div>
