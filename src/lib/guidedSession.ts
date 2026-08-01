@@ -17,18 +17,19 @@ export function buildGuidedDraft(
   return [
     {
       id: crypto.randomUUID(), type: 'PREP', minutes: GUIDED_SESSION_SHAPE.prep,
-      subject_id: null, technique_id: null, chapter_name: null, objective: '',
+      subject_id: null, technique_id: null, chapter_id: null, chapter_name: null, objective: '',
     },
     {
       id: crypto.randomUUID(), type: 'WORK', minutes: GUIDED_SESSION_SHAPE.work,
       subject_id: recommendation.subjectId,
       technique_id: recommendation.suggestedTechniqueId,
+      chapter_id: recommendation.chapterId,
       chapter_name: recommendation.chapterName,
       objective,
     },
     {
       id: crypto.randomUUID(), type: 'BREAK', minutes: GUIDED_SESSION_SHAPE.break,
-      subject_id: null, technique_id: null, chapter_name: null, objective: '',
+      subject_id: null, technique_id: null, chapter_id: null, chapter_name: null, objective: '',
     },
   ]
 }

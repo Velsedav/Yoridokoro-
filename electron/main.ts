@@ -42,7 +42,9 @@ function applyMainSchema(db: Database.Database) {
       id TEXT PRIMARY KEY, name TEXT, cover_path TEXT NULL, pinned INT,
       created_at TEXT, last_studied_at TEXT NULL, total_minutes INT,
       deadline TEXT NULL, archived INT DEFAULT 0, focus_type TEXT NULL,
-      chapters TEXT NULL, result TEXT NULL, deleted_at TEXT NULL, subject_type TEXT NULL
+      chapters TEXT NULL, result TEXT NULL, deleted_at TEXT NULL, subject_type TEXT NULL,
+      importance_weight INTEGER NOT NULL DEFAULT 5, default_focus_type TEXT NULL,
+      default_spacing TEXT NULL, default_source_label TEXT NULL, default_source_url TEXT NULL
     );
     CREATE TABLE IF NOT EXISTS tags(id TEXT PRIMARY KEY, name TEXT UNIQUE);
     CREATE TABLE IF NOT EXISTS subject_tags(
@@ -64,7 +66,13 @@ function applyMainSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS session_blocks(
       id TEXT PRIMARY KEY, session_id TEXT, idx INT, type TEXT, minutes INT,
       subject_id TEXT NULL, technique_id TEXT NULL, started_at TEXT NULL, ended_at TEXT NULL,
-      chapter_name TEXT NULL, confidence_score INTEGER NULL,
+      chapter_id TEXT NULL, chapter_name TEXT NULL, confidence_score INTEGER NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS session_effects(
+      session_id TEXT NOT NULL, effect_type TEXT NOT NULL, target_id TEXT NOT NULL,
+      applied_at TEXT NULL, applied INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(session_id, effect_type, target_id),
       FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS quotes(
@@ -188,8 +196,15 @@ function applyMainSchema(db: Database.Database) {
     ensureColumn('subjects', 'result', 'TEXT NULL')
     ensureColumn('subjects', 'deleted_at', 'TEXT NULL')
     ensureColumn('subjects', 'subject_type', 'TEXT NULL')
+    ensureColumn('subjects', 'importance_weight', 'INTEGER NOT NULL DEFAULT 5')
+    ensureColumn('subjects', 'default_focus_type', 'TEXT NULL')
+    ensureColumn('subjects', 'default_spacing', 'TEXT NULL')
+    ensureColumn('subjects', 'default_source_label', 'TEXT NULL')
+    ensureColumn('subjects', 'default_source_url', 'TEXT NULL')
+    ensureColumn('session_blocks', 'chapter_id', 'TEXT NULL')
     ensureColumn('session_blocks', 'chapter_name', 'TEXT NULL')
     ensureColumn('session_blocks', 'confidence_score', 'INTEGER NULL')
+    ensureColumn('session_effects', 'applied', 'INTEGER NOT NULL DEFAULT 0')
     ensureColumn('metacognition_logs', 'free_time_hours', 'REAL NULL')
     ensureColumn('metacognition_logs', 'priority_subject_ids', 'TEXT NULL')
     ensureColumn('time_entries', 'source_ref', 'TEXT NULL')
@@ -197,8 +212,16 @@ function applyMainSchema(db: Database.Database) {
     ensureColumn('sessions', 'status', "TEXT NOT NULL DEFAULT 'completed'")
     ensureColumn('sessions', 'evaluated_at', 'TEXT NULL')
     db.exec("UPDATE sessions SET actual_seconds = actual_minutes * 60 WHERE actual_seconds = 0 AND actual_minutes > 0")
+    // Old retries could leave more than one row for the same logical block.
+    // Keep the first durable copy before enforcing the new idempotency key.
+    db.exec(`DELETE FROM session_blocks
+      WHERE rowid NOT IN (
+        SELECT MIN(rowid) FROM session_blocks GROUP BY session_id, idx
+      )`)
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_session_blocks_session_idx ON session_blocks(session_id, idx)')
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_source_ref ON time_entries(source_ref) WHERE source_ref IS NOT NULL')
-    db.pragma('user_version = 3')
+    db.exec('UPDATE subjects SET importance_weight = 5 WHERE importance_weight IS NULL OR importance_weight < 1 OR importance_weight > 10')
+    db.pragma('user_version = 4')
   })
   migrate()
 }

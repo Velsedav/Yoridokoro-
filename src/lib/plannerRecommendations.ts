@@ -16,12 +16,18 @@ export interface PlannerRecommendation {
   chapterCount: number
   daysOverdue: number
   suggestedTechniqueId: string
+  allocationInfluenced: boolean
+  allocationDeficit: number
 }
 
 type RecommendationSubject = Pick<
   Subject,
-  'id' | 'name' | 'pinned' | 'created_at' | 'last_studied_at' | 'deadline'
+  'id' | 'name' | 'pinned' | 'created_at' | 'last_studied_at' | 'deadline' | 'importance_weight' | 'archived'
 >
+
+export interface PlannerAllocationContext {
+  workSecondsBySubject?: Readonly<Record<string, number>>
+}
 
 const validTime = (value: string | null | undefined, fallback = Number.POSITIVE_INFINITY) => {
   if (!value) return fallback
@@ -36,12 +42,20 @@ function activeDeadline(value: string | null | undefined, at: Date) {
   return deadline >= today.getTime() ? deadline : Number.POSITIVE_INFINITY
 }
 
-function compareSubjects(a: RecommendationSubject, b: RecommendationSubject, at: Date) {
+function compareSubjectPriority(a: RecommendationSubject, b: RecommendationSubject, at: Date) {
   // A forgotten deadline must not silently keep a subject at the front forever.
   const aDeadline = activeDeadline(a.deadline, at)
   const bDeadline = activeDeadline(b.deadline, at)
   if (aDeadline !== bDeadline) return aDeadline - bDeadline
   if (a.pinned !== b.pinned) return b.pinned - a.pinned
+  return 0
+}
+
+function compareSubjects(a: RecommendationSubject, b: RecommendationSubject, at: Date, deficits: ReadonlyMap<string, number>) {
+  const priority = compareSubjectPriority(a, b, at)
+  if (priority !== 0) return priority
+  const deficitDelta = (deficits.get(b.id) ?? 0) - (deficits.get(a.id) ?? 0)
+  if (Math.abs(deficitDelta) > 1e-9) return deficitDelta
 
   // A subject that has never been touched should not remain invisible forever.
   const aLastStudied = validTime(a.last_studied_at, 0)
@@ -78,8 +92,10 @@ export function buildPlannerRecommendations(
   subjects: RecommendationSubject[],
   chapters: Chapter[],
   at = new Date(),
+  allocation: PlannerAllocationContext = {},
 ): PlannerRecommendation[] {
-  const subjectMap = new Map(subjects.map(subject => [subject.id, subject]))
+  const activeSubjects = subjects.filter(subject => !subject.archived)
+  const subjectMap = new Map(activeSubjects.map(subject => [subject.id, subject]))
   const chaptersBySubject = new Map<string, Chapter[]>()
 
   for (const chapter of chapters) {
@@ -90,10 +106,20 @@ export function buildPlannerRecommendations(
     ])
   }
 
+  const eligibleSubjects = activeSubjects.filter(subject => (chaptersBySubject.get(subject.id) ?? []).length > 0)
+  const totalWeight = eligibleSubjects.reduce((sum, subject) => sum + Math.max(1, Math.min(10, subject.importance_weight ?? 5)), 0)
+  const totalWorkSeconds = eligibleSubjects.reduce((sum, subject) => sum + Math.max(0, allocation.workSecondsBySubject?.[subject.id] ?? 0), 0)
+  const allocationDeficits = new Map(eligibleSubjects.map(subject => {
+    const weight = Math.max(1, Math.min(10, subject.importance_weight ?? 5))
+    const targetShare = totalWeight > 0 ? weight / totalWeight : 0
+    const actualShare = totalWorkSeconds > 0 ? Math.max(0, allocation.workSecondsBySubject?.[subject.id] ?? 0) / totalWorkSeconds : 0
+    return [subject.id, targetShare - actualShare] as const
+  }))
+
   const progress: Array<PlannerRecommendation & { subject: RecommendationSubject }> = []
   const reviews: Array<PlannerRecommendation & { subject: RecommendationSubject; critical: boolean }> = []
 
-  for (const subject of subjects) {
+  for (const subject of activeSubjects) {
     const subjectChapters = sortedChapters(chaptersBySubject.get(subject.id) ?? [])
     const frontierIndex = subjectChapters.findIndex(chapter => chapter.studyCount === 0)
 
@@ -111,6 +137,8 @@ export function buildPlannerRecommendations(
         chapterCount: subjectChapters.length,
         daysOverdue: 0,
         suggestedTechniqueId: techniqueFor('progress', chapter.focusType),
+        allocationInfluenced: false,
+        allocationDeficit: allocationDeficits.get(subject.id) ?? 0,
         subject,
       })
     }
@@ -131,17 +159,26 @@ export function buildPlannerRecommendations(
         chapterCount: subjectChapters.length,
         daysOverdue,
         suggestedTechniqueId: techniqueFor('review', chapter.focusType),
+        allocationInfluenced: false,
+        allocationDeficit: allocationDeficits.get(subject.id) ?? 0,
         subject,
         critical: daysOverdue >= Math.max(2, status.currentIntervalDays),
       })
     })
   }
 
-  progress.sort((a, b) => compareSubjects(a.subject, b.subject, at))
+  progress.sort((a, b) => compareSubjects(a.subject, b.subject, at, allocationDeficits))
+  for (const item of progress) {
+    item.allocationInfluenced = item.allocationDeficit > 0 && progress.some(peer =>
+      peer.subjectId !== item.subjectId
+      && compareSubjectPriority(item.subject, peer.subject, at) === 0
+      && Math.abs(item.allocationDeficit - peer.allocationDeficit) > 1e-9
+    )
+  }
   reviews.sort((a, b) => {
     if (a.critical !== b.critical) return Number(b.critical) - Number(a.critical)
     if (a.daysOverdue !== b.daysOverdue) return b.daysOverdue - a.daysOverdue
-    return compareSubjects(a.subject, b.subject, at)
+    return compareSubjects(a.subject, b.subject, at, new Map())
   })
 
   const critical = reviews.filter(item => item.critical)
@@ -173,5 +210,7 @@ export function buildPlannerRecommendations(
     chapterCount: item.chapterCount,
     daysOverdue: item.daysOverdue,
     suggestedTechniqueId: item.suggestedTechniqueId,
+    allocationInfluenced: item.allocationInfluenced,
+    allocationDeficit: item.allocationDeficit,
   }))
 }

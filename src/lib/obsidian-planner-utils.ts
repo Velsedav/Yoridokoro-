@@ -13,6 +13,7 @@ export interface PlannerBlock {
   minutes: number
   subject_id: string | null
   technique_id: string | null
+  chapter_id?: string | null
   chapter_name: string | null
   objective: string
   cycle_id?: string
@@ -40,6 +41,7 @@ export function generateBlocks(
       minutes: shape.prep,
       subject_id: null,
       technique_id: null,
+      chapter_id: null,
       chapter_name: null,
       objective: '',
     })
@@ -53,6 +55,7 @@ export function generateBlocks(
       minutes: shape.work,
       subject_id: prev?.subject_id ?? null,
       technique_id: prev?.technique_id ?? null,
+      chapter_id: prev?.chapter_id ?? null,
       chapter_name: prev?.chapter_name ?? null,
       objective: prev?.objective ?? '',
     })
@@ -62,6 +65,7 @@ export function generateBlocks(
       minutes: shape.break,
       subject_id: null,
       technique_id: null,
+      chapter_id: null,
       chapter_name: null,
       objective: '',
     })

@@ -75,7 +75,7 @@ function base64ToBytes(dataUrl: string): Uint8Array {
 
 async function dumpStudyBuddyDb() {
   const db = await getDb();
-  const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, quotes, metacognition_logs, error_log,
+  const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events] = await Promise.all([
     db.select<any[]>('SELECT * FROM subjects'),
     db.select('SELECT * FROM tags'),
@@ -83,6 +83,7 @@ async function dumpStudyBuddyDb() {
     db.select('SELECT * FROM subgoals'),
     db.select('SELECT * FROM sessions ORDER BY started_at'),
     db.select('SELECT * FROM session_blocks ORDER BY session_id, idx'),
+    db.select('SELECT * FROM session_effects ORDER BY session_id, effect_type, target_id'),
     db.select('SELECT * FROM quotes ORDER BY idx'),
     db.select('SELECT * FROM metacognition_logs ORDER BY created_at'),
     db.select('SELECT * FROM error_log ORDER BY created_at'),
@@ -112,7 +113,7 @@ async function dumpStudyBuddyDb() {
     } catch {}
   }
 
-  return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, quotes, metacognition_logs, error_log,
+  return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, subject_covers };
 }
 
@@ -351,10 +352,11 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
     try {
       await db.execute(
         `INSERT OR IGNORE INTO subjects
-         (id,name,cover_path,pinned,created_at,last_studied_at,total_minutes,deadline,result,archived,deleted_at,subject_type)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+         (id,name,cover_path,pinned,created_at,last_studied_at,total_minutes,deadline,result,archived,deleted_at,subject_type,importance_weight,default_focus_type,default_spacing,default_source_label,default_source_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
         [s.id, s.name, s.cover_path, s.pinned, s.created_at, s.last_studied_at,
-         s.total_minutes, s.deadline, s.result, s.archived, s.deleted_at, s.subject_type ?? null]
+         s.total_minutes, s.deadline, s.result, s.archived, s.deleted_at, s.subject_type ?? null, s.importance_weight ?? 5,
+         s.default_focus_type ?? null, s.default_spacing ?? null, s.default_source_label ?? null, s.default_source_url ?? null]
       );
     } catch {}
   }
@@ -378,8 +380,16 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
   for (const b of data.session_blocks ?? []) {
     try {
       await db.execute(
-        `INSERT OR IGNORE INTO session_blocks (id,session_id,idx,type,minutes,subject_id,technique_id,started_at,ended_at,chapter_name,confidence_score) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [b.id, b.session_id, b.idx, b.type, b.minutes, b.subject_id, b.technique_id, b.started_at ?? null, b.ended_at ?? null, b.chapter_name ?? null, b.confidence_score ?? null]
+        `INSERT OR IGNORE INTO session_blocks (id,session_id,idx,type,minutes,subject_id,technique_id,chapter_id,started_at,ended_at,chapter_name,confidence_score) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [b.id, b.session_id, b.idx, b.type, b.minutes, b.subject_id, b.technique_id, b.chapter_id ?? null, b.started_at ?? null, b.ended_at ?? null, b.chapter_name ?? null, b.confidence_score ?? null]
+      );
+    } catch {}
+  }
+  for (const effect of data.session_effects ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR IGNORE INTO session_effects(session_id,effect_type,target_id,applied_at,applied) VALUES ($1,$2,$3,$4,$5)`,
+        [effect.session_id, effect.effect_type, effect.target_id, effect.applied_at ?? null, effect.applied ?? 1]
       );
     } catch {}
   }

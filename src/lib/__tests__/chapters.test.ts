@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { applyMasteryRating, archiveChapter, getChapterSpacingIntervals, getChaptersForSubject, getRatings, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus, parseSpacing, saveRating, synchronizeStudyDataDurability, unarchiveChapter } from '../chapters'
+import { applyMasteryRating, applyMasteryRatingForSession, archiveChapter, getChapterSpacingIntervals, getChaptersForSubject, getRatings, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus, incrementStudyCountForSession, parseSpacing, replaceChaptersForSubject, saveRating, synchronizeStudyDataDurability, unarchiveChapter } from '../chapters'
 import type { Chapter } from '../chapters'
 
 // ── parseSpacing ──────────────────────────────────────────────────────────────
@@ -163,6 +163,28 @@ describe('chapter archives', () => {
   })
 })
 
+describe('idempotent session effects', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('increments a chapter only once for the same session', () => {
+    const chapter = makeChapter({ id: 'idempotent', studyCount: 0, lastStudiedAt: null })
+    replaceChaptersForSubject('sub-1', [chapter])
+
+    expect(incrementStudyCountForSession(chapter.id, 'session-1')).toBe(true)
+    expect(incrementStudyCountForSession(chapter.id, 'session-1')).toBe(false)
+    expect(getChaptersForSubject('sub-1')[0].studyCount).toBe(1)
+  })
+
+  it('applies a mastery rating only once for the same session', () => {
+    const chapter = makeChapter({ id: 'rated', studyCount: 1 })
+    replaceChaptersForSubject('sub-1', [chapter])
+
+    expect(applyMasteryRatingForSession(chapter.id, 'easy', 'session-1')).toBe(true)
+    expect(applyMasteryRatingForSession(chapter.id, 'easy', 'session-1')).toBe(false)
+    expect(getChaptersForSubject('sub-1')[0].studyCount).toBe(2)
+  })
+})
+
 describe('study data recovery', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -189,7 +211,7 @@ describe('study data recovery', () => {
     archiveChapter(chapter.id)
 
     expect(localStorage.getItem('study-buddy-chapters-recovery')).toBe(localStorage.getItem('study-buddy-chapters'))
-    expect(localStorage.getItem('study-buddy-chapters-storage-version')).toBe('1')
+    expect(localStorage.getItem('study-buddy-chapters-storage-version')).toBe('2')
   })
 
   it('restores mastery ratings and mirrors subsequent writes', () => {
@@ -210,7 +232,7 @@ describe('study data recovery', () => {
       rating: 'easy',
     })
     expect(localStorage.getItem('study-buddy-mastery-ratings-recovery')).toBe(localStorage.getItem('study-buddy-mastery-ratings'))
-    expect(localStorage.getItem('study-buddy-mastery-ratings-storage-version')).toBe('1')
+    expect(localStorage.getItem('study-buddy-mastery-ratings-storage-version')).toBe('2')
   })
 
   it('restores chapters from the durable SQLite snapshot when local copies are missing', async () => {
@@ -247,7 +269,7 @@ describe('study data recovery', () => {
       db: {
         select: vi.fn(async () => [{
           kind: 'chapters',
-          version: 1,
+          version: 2,
           payload_json: serialized,
           updated_at: '2026-07-21T12:00:00.000Z',
         }]),

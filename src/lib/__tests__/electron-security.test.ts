@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { normalizeExternalUrl, normalizeRemoteImageUrl } from '../../../electron/security'
 
@@ -32,5 +34,20 @@ describe('normalizeRemoteImageUrl', () => {
     expect(normalizeRemoteImageUrl('http://192.168.1.20/cover.jpg')).toBeNull()
     expect(normalizeRemoteImageUrl('http://10.0.0.2/cover.jpg')).toBeNull()
     expect(normalizeRemoteImageUrl('http://[::1]/cover.jpg')).toBeNull()
+  })
+})
+
+describe('study database migrations', () => {
+  const mainSource = readFileSync(resolve(process.cwd(), 'electron/main.ts'), 'utf8')
+
+  it('migrates existing subjects to a neutral importance coefficient', () => {
+    expect(mainSource).toContain("ensureColumn('subjects', 'importance_weight', 'INTEGER NOT NULL DEFAULT 5')")
+    expect(mainSource).toContain('UPDATE subjects SET importance_weight = 5')
+  })
+
+  it('adds stable chapter links and idempotent session effects', () => {
+    expect(mainSource).toContain("ensureColumn('session_blocks', 'chapter_id', 'TEXT NULL')")
+    expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS session_effects')
+    expect(mainSource).toContain('CREATE UNIQUE INDEX IF NOT EXISTS idx_session_blocks_session_idx')
   })
 })

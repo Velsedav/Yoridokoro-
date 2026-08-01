@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { formatSecondsMMSS } from '../lib/time';
-import { getSubjects, updateSubjectStats, saveSession, saveErrorLogEntry, markSessionEvaluated } from '../lib/db';
+import { getSubjects, saveSession, saveErrorLogEntry, markSessionEvaluated } from '../lib/db';
 import { TECHNIQUES } from '../lib/techniques';
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 const openPath = (path: string) => (window as any).electronAPI.shell.openPath(path);
@@ -10,7 +10,7 @@ import { playSFX, SFX } from '../lib/sounds';
 import { useSettings } from '../lib/settings';
 import { useTranslation } from '../lib/i18n';
 import { METACOGNITION_QUESTIONS } from '../lib/metacognitionQuestions';
-import { getChaptersForSubject, incrementStudyCount, applyMasteryRating, saveRating, clearPreRecalls, getPreRecall, type MasteryRating, type ChapterSource } from '../lib/chapters';
+import { getChaptersForSubject, incrementStudyCountForSession, applyMasteryRatingForSession, saveRating, clearPreRecalls, getPreRecall, type MasteryRating, type ChapterSource } from '../lib/chapters';
 import { isWorkoutMode } from '../lib/devMode';
 import { MUSCLE_GROUPS, CATEGORY_LABELS, loadWorkoutLog, markMuscleWorked, isMuscleEligible, loadWorkoutSets, saveWorkoutSet } from '../lib/workout';
 import type { WorkoutLog, WorkoutSets } from '../lib/workout';
@@ -24,6 +24,27 @@ import {
 } from '../lib/sessionProgress';
 import { recordBehaviorEvent } from '../lib/behaviorAnalytics';
 import './Session.css';
+
+function readActiveSession(): any | null {
+    const stored = localStorage.getItem('activeSession');
+    if (!stored) return null;
+    try {
+        const value = JSON.parse(stored);
+        if (!value || typeof value !== 'object'
+            || typeof value.sessionId !== 'string'
+            || typeof value.startedAt !== 'string'
+            || !Array.isArray(value.draft)
+            || !Number.isInteger(value.nowBlockIdx)
+            || value.nowBlockIdx < 0
+            || value.nowBlockIdx >= value.draft.length
+            || !Number.isFinite(value.remainingSeconds)) throw new Error('Invalid active session');
+        return value;
+    } catch {
+        try { localStorage.setItem('study-buddy-invalid-active-session', stored); } catch { /* best effort */ }
+        localStorage.removeItem('activeSession');
+        return null;
+    }
+}
 
 function openSource(src: ChapterSource) {
     if (src.type === 'file') openPath(src.url);
@@ -233,12 +254,23 @@ export default function Session() {
     const { t } = useTranslation();
 
     useEffect(() => {
-        const stored = localStorage.getItem('activeSession');
-        if (stored) {
-            const parsed = JSON.parse(stored);
+        const parsed = readActiveSession();
+        if (parsed) {
             setSession(parsed);
             setRemaining(parsed.remainingSeconds);
             setPaused(parsed.paused || false);
+            if (parsed.progressPersisted) persistedRef.current = true;
+            const post = parsed.postSession;
+            if (post && (post.step === 'rate-chapters' || post.step === 'total-rest')) {
+                setRateChapterList(Array.isArray(post.chapters) ? post.chapters : []);
+                setRateChapterIdx(Number.isInteger(post.index) ? post.index : 0);
+                setPendingCompletedAll(post.completedAll !== false);
+                setCompletedWorkMinutes(post.completedWorkMinutes ?? {});
+                setDisplayedWorkMins(Number(post.displayedWorkMins) || 0);
+                setRestCountdown(Number.isFinite(post.restCountdown) ? post.restCountdown : 600);
+                setPostStudyStage(post.stage === 'review' ? 'review' : 'rest');
+                setEndConfirmStep(post.step);
+            }
         }
     }, []);
 
@@ -260,6 +292,17 @@ export default function Session() {
             paused
         }));
     }, [remaining, paused, session]);
+
+    useEffect(() => {
+        if (!session || !persistedRef.current || endConfirmStep !== 'total-rest') return;
+        persistPostSessionCheckpoint({
+            step: 'total-rest', stage: postStudyStage, chapters: rateChapterList,
+            index: rateChapterIdx, completedAll: pendingCompletedAll,
+            completedWorkMinutes, displayedWorkMins, restCountdown,
+        });
+        // Persist the recovery checkpoint as the rest/review screen evolves.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [restCountdown, postStudyStage, endConfirmStep]);
 
     // Persist paper reading notes to localStorage
     useEffect(() => {
@@ -394,7 +437,8 @@ export default function Session() {
         const result: Array<{ id: string; name: string }> = [];
         for (const pair of pairs) {
             const chaps = getChaptersForSubject(pair.subject_id);
-            const chapter = chaps.find((item: { name: string; id: string }) => item.name === pair.chapter_name);
+            const chapter = chaps.find((item: { name: string; id: string }) => item.id === pair.chapter_id)
+                ?? chaps.find((item: { name: string; id: string }) => item.name === pair.chapter_name);
             if (chapter && !seen.has(chapter.id)) {
                 seen.add(chapter.id);
                 result.push({ id: chapter.id, name: chapter.name });
@@ -414,6 +458,7 @@ export default function Session() {
     }
 
     function chapterIdForBlock(block: any): string | null {
+        if (typeof block?.chapter_id === 'string') return block.chapter_id;
         if (!block?.subject_id || !block.chapter_name) return session?.analytics?.chapterId ?? null;
         return getChaptersForSubject(block.subject_id)
             .find((chapter: { id: string; name: string }) => chapter.name === block.chapter_name)?.id
@@ -454,11 +499,36 @@ export default function Session() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session?.sessionId, session?.nowBlockIdx]);
 
-    function openTotalRest() {
+    function persistPostSessionCheckpoint(postSession: Record<string, unknown>) {
+        if (!session) return;
+        const persisted = readActiveSession() ?? session;
+        const suppliedMinutes = postSession.completedWorkMinutes as Record<string, number> | undefined;
+        const enrichedPostSession = {
+            ...postSession,
+            completedWorkMinutes: suppliedMinutes && Object.keys(suppliedMinutes).length > 0
+                ? suppliedMinutes
+                : persisted.completedWorkMinutes ?? {},
+            displayedWorkMins: Math.max(Number(postSession.displayedWorkMins) || 0, Number(persisted.displayedWorkMins) || 0),
+        };
+        localStorage.setItem('activeSession', JSON.stringify({
+            ...persisted,
+            remainingSeconds: remaining,
+            paused: true,
+            progressPersisted: true,
+            postSession: enrichedPostSession,
+        }));
+    }
+
+    function openTotalRest(completedAll = pendingCompletedAll, chapters = rateChapterList) {
         clearPreRecalls();
         setRestCountdown(600);
         setPostStudyStage('rest');
         setEndConfirmStep('total-rest');
+        persistPostSessionCheckpoint({
+            step: 'total-rest', stage: 'rest', chapters,
+            index: rateChapterIdx, completedAll,
+            completedWorkMinutes, displayedWorkMins, restCountdown: 600,
+        });
     }
 
     function enterRatingStep(completedAll: boolean, chapters: Array<{ id: string; name: string }>) {
@@ -467,19 +537,23 @@ export default function Session() {
             setRateChapterIdx(0);
             setPendingCompletedAll(completedAll);
             setEndConfirmStep('rate-chapters');
+            persistPostSessionCheckpoint({
+                step: 'rate-chapters', chapters, index: 0, completedAll,
+                completedWorkMinutes, displayedWorkMins,
+            });
         } else {
-            openTotalRest();
+            openTotalRest(completedAll, chapters);
         }
     }
 
-    function rateCurrentChapter(rating: MasteryRating | null) {
+    async function rateCurrentChapter(rating: MasteryRating | null) {
         if (!session || ratingInFlightRef.current) return;
         const current = rateChapterList[rateChapterIdx];
         const isLast = rateChapterIdx >= rateChapterList.length - 1;
         ratingInFlightRef.current = true;
         setRatingSaving(true);
         if (current && rating) {
-            applyMasteryRating(current.id, rating);
+            applyMasteryRatingForSession(current.id, rating, session.sessionId);
             saveRating({
                 chapterId: current.id,
                 sessionId: session.sessionId,
@@ -500,13 +574,22 @@ export default function Session() {
                 chapterId: current.id,
             });
         }
-        ratingInFlightRef.current = false;
-        setRatingSaving(false);
-        if (isLast) {
-            void markSessionEvaluated(session.sessionId);
-            openTotalRest();
+        try {
+            if (isLast) {
+                await markSessionEvaluated(session.sessionId);
+                openTotalRest();
+            } else {
+                const nextIndex = rateChapterIdx + 1;
+                setRateChapterIdx(nextIndex);
+                persistPostSessionCheckpoint({
+                    step: 'rate-chapters', chapters: rateChapterList, index: nextIndex,
+                    completedAll: pendingCompletedAll, completedWorkMinutes, displayedWorkMins,
+                });
+            }
+        } finally {
+            ratingInFlightRef.current = false;
+            setRatingSaving(false);
         }
-        else setRateChapterIdx(index => index + 1);
     }
 
     useEffect(() => {
@@ -638,7 +721,7 @@ export default function Session() {
                 actual_seconds: snapshot.actualWorkSeconds,
                 status: classifySessionProgress(snapshot.actualWorkSeconds, completedAll),
                 evaluated_at: null,
-            }, timedBlocks, {});
+            }, timedBlocks, {}, snapshot.workMinutesBySubject);
 
             await recordBehaviorEvent({
                 eventType: 'session_persisted',
@@ -654,15 +737,19 @@ export default function Session() {
                 dedupeKey: `session-persisted:${session.sessionId}`,
             });
 
-            for (const [subjectId, minutes] of Object.entries(snapshot.workMinutesBySubject)) {
-                if (minutes > 0) await updateSubjectStats(subjectId, minutes, endedAt);
-            }
-            for (const chapter of chapters) incrementStudyCount(chapter.id);
+            for (const chapter of chapters) incrementStudyCountForSession(chapter.id, session.sessionId);
 
             setCompletedWorkMinutes(snapshot.workMinutesBySubject);
             setDisplayedWorkMins(snapshot.actualWorkMinutes);
             persistedRef.current = true;
-            localStorage.removeItem('activeSession');
+            localStorage.setItem('activeSession', JSON.stringify({
+                ...session,
+                remainingSeconds: remaining,
+                paused: true,
+                progressPersisted: true,
+                completedWorkMinutes: snapshot.workMinutesBySubject,
+                displayedWorkMins: snapshot.actualWorkMinutes,
+            }));
             return chapters;
         })();
 
@@ -891,7 +978,9 @@ export default function Session() {
         : [];
     const currentChapterSources = (() => {
         if (!currentBlock.subject_id || !currentBlock.chapter_name) return [];
-        const ch = getChaptersForSubject(currentBlock.subject_id).find(c => c.name === currentBlock.chapter_name);
+        const subjectChapters = getChaptersForSubject(currentBlock.subject_id);
+        const ch = subjectChapters.find(c => c.id === currentBlock.chapter_id)
+            ?? subjectChapters.find(c => c.name === currentBlock.chapter_name);
         return ch?.sources ?? [];
     })();
     const phaseId = currentBlock.type.toLowerCase() as 'prep' | 'work' | 'break';
@@ -1570,7 +1659,7 @@ export default function Session() {
                                                 key={r}
                                                 className={`btn rate-btn rate-btn-${r}`}
                                                 onMouseEnter={() => playSFX(SFX.HOVER, theme)}
-                                                onClick={() => rateCurrentChapter(r)}
+                                                onClick={() => void rateCurrentChapter(r)}
                                                 disabled={ratingSaving}
                                                 aria-keyshortcuts={String(index + 1)}
                                             >
@@ -1581,7 +1670,7 @@ export default function Session() {
                                         ))}
                                     </div>
                                     <footer className="rate-chapters-actions">
-                                        <button className="rate-chapters-skip" onClick={() => rateCurrentChapter(null)} disabled={ratingSaving}>
+                                        <button className="rate-chapters-skip" onClick={() => void rateCurrentChapter(null)} disabled={ratingSaving}>
                                             {isLast ? t('session.rating_done') : t('session.rating_next')}
                                         </button>
                                     </footer>
@@ -1618,7 +1707,14 @@ export default function Session() {
                                         <p className="total-rest-quote">{t('session.post_quote')}</p>
                                         <div className="total-rest-actions">
                                             <button className="btn btn-secondary" onClick={() => void finishSession(pendingCompletedAll, true)}>{t('session.post_finish_now')}</button>
-                                            <button className="btn btn-primary total-rest-btn" onClick={() => setPostStudyStage('review')}>{t('session.post_continue_review')}</button>
+                                            <button className="btn btn-primary total-rest-btn" onClick={() => {
+                                                setPostStudyStage('review');
+                                                persistPostSessionCheckpoint({
+                                                    step: 'total-rest', stage: 'review', chapters: rateChapterList,
+                                                    index: rateChapterIdx, completedAll: pendingCompletedAll,
+                                                    completedWorkMinutes, displayedWorkMins, restCountdown,
+                                                });
+                                            }}>{t('session.post_continue_review')}</button>
                                         </div>
                                     </section>
                                 ) : (

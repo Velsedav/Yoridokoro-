@@ -11,6 +11,7 @@ export interface QuickStartBlock {
   minutes: number
   subject_id: string | null
   technique_id: string | null
+  chapter_id?: string | null
   chapter_name: string | null
   objective: string
 }
@@ -68,6 +69,7 @@ export function buildQuickStartSession(
   subjectId: string,
   minutes: number,
   techniqueId: string | null,
+  chapterId: string | null,
   chapterName: string | null,
 ): QuickStartSession {
   const sessionId = crypto.randomUUID()
@@ -78,6 +80,7 @@ export function buildQuickStartSession(
       minutes: QUICK_START_PREP_MINUTES,
       subject_id: null,
       technique_id: null,
+      chapter_id: null,
       chapter_name: null,
       objective: '',
     },
@@ -87,6 +90,7 @@ export function buildQuickStartSession(
       minutes,
       subject_id: subjectId,
       technique_id: techniqueId,
+      chapter_id: chapterId,
       chapter_name: chapterName,
       objective: '',
     },

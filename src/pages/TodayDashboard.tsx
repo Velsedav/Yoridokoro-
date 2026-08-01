@@ -8,6 +8,7 @@ import { daysSinceContact, getPeople, type Person } from '../lib/relations'
 import { createEisenhowerTask, deleteEisenhowerTask, EISENHOWER_QUADRANTS, getEisenhowerTasks, moveEisenhowerTask, setEisenhowerTaskDone, type EisenhowerQuadrant, type EisenhowerTask } from '../lib/eisenhower'
 import { getAllChapters } from '../lib/chapters'
 import { buildPlannerRecommendations } from '../lib/plannerRecommendations'
+import { usePlannerAllocation } from '../lib/plannerAllocation'
 import { buildGuidedDraft, createActiveSession, guidedObjectiveKey } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
@@ -70,6 +71,7 @@ const QUADRANT_COPY: Record<EisenhowerQuadrant, { index: string; title: string; 
 }
 
 export default function TodayDashboard() {
+  const workSecondsBySubject = usePlannerAllocation()
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -125,8 +127,8 @@ export default function TodayDashboard() {
     .slice(0, 6), [subjects])
 
   const recommendations = useMemo(
-    () => buildPlannerRecommendations(subjects, getAllChapters()).slice(0, 3),
-    [subjects],
+    () => buildPlannerRecommendations(subjects, getAllChapters(), new Date(), { workSecondsBySubject }).slice(0, 3),
+    [subjects, workSecondsBySubject],
   )
   const recommendation = recommendations[Math.min(suggestionIndex, Math.max(0, recommendations.length - 1))]
 

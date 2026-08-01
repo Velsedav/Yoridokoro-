@@ -40,6 +40,94 @@ function chapter(id: string, subjectId: string, overrides: Partial<Chapter> = {}
 }
 
 describe('buildPlannerRecommendations', () => {
+  it('uses importance weights as the initial allocation when there is no recent work', () => {
+    const result = buildPlannerRecommendations(
+      [subject('python', { importance_weight: 2 }), subject('linux', { importance_weight: 8 })],
+      [chapter('python-1', 'python'), chapter('linux-1', 'linux')],
+      now,
+      { workSecondsBySubject: {} },
+    )
+
+    expect(result[0]).toMatchObject({ subjectId: 'linux', allocationInfluenced: true, allocationDeficit: 0.8 })
+  })
+
+  it('falls back to stable existing criteria when actual work matches the 80/20 target', () => {
+    const result = buildPlannerRecommendations(
+      [
+        subject('older', { importance_weight: 8, created_at: '2025-01-01T00:00:00.000Z' }),
+        subject('newer', { importance_weight: 2, created_at: '2026-01-01T00:00:00.000Z' }),
+      ],
+      [chapter('older-1', 'older'), chapter('newer-1', 'newer')],
+      now,
+      { workSecondsBySubject: { older: 80, newer: 20 } },
+    )
+
+    expect(result[0]).toMatchObject({ subjectId: 'older', allocationInfluenced: false, allocationDeficit: 0 })
+  })
+
+  it('raises an underallocated important subject after a 20/80 split', () => {
+    const result = buildPlannerRecommendations(
+      [subject('low', { importance_weight: 2 }), subject('high', { importance_weight: 8 })],
+      [chapter('low-1', 'low'), chapter('high-1', 'high')],
+      now,
+      { workSecondsBySubject: { high: 20, low: 80 } },
+    )
+
+    expect(result[0]).toMatchObject({ subjectId: 'high', allocationInfluenced: true })
+    expect(result[0].allocationDeficit).toBeCloseTo(0.6)
+  })
+
+  it('keeps a critical review ahead of a high-weight progression', () => {
+    const result = buildPlannerRecommendations(
+      [subject('review', { importance_weight: 2 }), subject('progress', { importance_weight: 8 })],
+      [
+        chapter('review-1', 'review', { studyCount: 1, lastStudiedAt: '2026-07-10T12:00:00.000Z' }),
+        chapter('progress-1', 'progress'),
+      ],
+      now,
+    )
+    expect(result[0]).toMatchObject({ subjectId: 'review', kind: 'review' })
+  })
+
+  it('keeps an active deadline ahead of allocation weight', () => {
+    const result = buildPlannerRecommendations(
+      [
+        subject('deadline', { importance_weight: 2, deadline: '2026-07-21' }),
+        subject('important', { importance_weight: 8 }),
+      ],
+      [chapter('deadline-1', 'deadline'), chapter('important-1', 'important')],
+      now,
+    )
+    expect(result[0]).toMatchObject({ subjectId: 'deadline', allocationInfluenced: false })
+  })
+
+  it('keeps a pinned subject ahead of allocation weight', () => {
+    const result = buildPlannerRecommendations(
+      [subject('pinned', { importance_weight: 1, pinned: 1 }), subject('important', { importance_weight: 10 })],
+      [chapter('pinned-1', 'pinned'), chapter('important-1', 'important')],
+      now,
+    )
+    expect(result[0]).toMatchObject({ subjectId: 'pinned', allocationInfluenced: false })
+  })
+
+  it('ignores archived subjects and subjects without an active chapter', () => {
+    const result = buildPlannerRecommendations(
+      [subject('archived', { archived: 1, importance_weight: 10 }), subject('empty', { importance_weight: 10 }), subject('active')],
+      [chapter('archived-1', 'archived'), chapter('active-1', 'active')],
+      now,
+    )
+    expect(result.map(item => item.subjectId)).toEqual(['active'])
+  })
+
+  it('uses stable criteria when allocation deficits are equal', () => {
+    const result = buildPlannerRecommendations(
+      [subject('b', { importance_weight: 5 }), subject('a', { importance_weight: 5 })],
+      [chapter('b-1', 'b'), chapter('a-1', 'a')],
+      now,
+    )
+    expect(result[0].subjectId).toBe('a')
+  })
+
   it('prefers the next untouched chapter over an ordinary review due today', () => {
     const result = buildPlannerRecommendations(
       [subject('biology')],

@@ -11,16 +11,14 @@ import { createSubject, updateSubject, renameChapterInDb } from '../lib/db';
 import { resizeImage } from '../lib/image';
 import type { Subject, Tag } from '../lib/db';
 import TagPicker from './TagPicker';
-import { X, Plus, Trash2, ChevronDown, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
+import { X, Plus, Trash2, ChevronDown, ChevronRight, Archive, ArchiveRestore, MoreHorizontal } from 'lucide-react';
 import { playSFX, SFX } from '../lib/sounds';
 import { useSettings } from '../lib/settings';
 import { useTranslation } from '../lib/i18n';
 import { useDialogFocus } from '../hooks/useDialogFocus';
 import {
-    getChaptersForSubject, addChapter, deleteChapter, renameChapter,
-    incrementStudyCount, updateChapterFocusType, updateChapterSpacing, updateChapterSources,
-    setChapterArchived,
-    getDefaultSpacing, getSpacedRepetitionStatus, getChapterSpacingIntervals, parseSpacing,
+    getChaptersForSubject, createChapterDraft, replaceChaptersForSubject,
+    getDefaultSpacing, getSpacedRepetitionStatus, parseSpacing,
     type Chapter, type ChapterSource, type FocusType, FOCUS_TYPE_LABELS, FOCUS_TYPE_COLORS
 } from '../lib/chapters';
 
@@ -32,10 +30,11 @@ type SubjectType = 'academic' | 'music';
 interface SubjectEditorModalProps {
     onClose: () => void;
     onSaved: () => void;
+    onCreatedAndStart?: (subjectId: string, subjectName: string, firstChapter: Chapter) => void | Promise<void>;
     editingSubject?: Subject & { tags: Tag[] };
 }
 
-export default function SubjectEditorModal({ onClose, onSaved, editingSubject }: SubjectEditorModalProps) {
+export default function SubjectEditorModal({ onClose, onSaved, onCreatedAndStart, editingSubject }: SubjectEditorModalProps) {
     const { theme } = useSettings();
     const { t } = useTranslation();
     const isEditing = !!editingSubject;
@@ -48,12 +47,17 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
     const [deadline, setDeadline] = useState<string>(editingSubject?.deadline ?? '');
     const [result, setResult] = useState<string>(editingSubject?.result ?? '');
     const [archived, setArchived] = useState<boolean>(editingSubject?.archived ?? false);
+    const [importanceWeight, setImportanceWeight] = useState<number>(editingSubject?.importance_weight ?? 5);
+    const [defaultFocusType, setDefaultFocusType] = useState<FocusType>((editingSubject?.default_focus_type as FocusType) ?? 'comprehension');
+    const [defaultSpacing, setDefaultSpacing] = useState<string>(editingSubject?.default_spacing ?? '');
+    const [defaultSourceLabel, setDefaultSourceLabel] = useState<string>(editingSubject?.default_source_label ?? '');
+    const [defaultSourceUrl, setDefaultSourceUrl] = useState<string>(editingSubject?.default_source_url ?? '');
     const [subjectType, setSubjectType] = useState<SubjectType>((editingSubject?.subject_type as SubjectType) ?? 'academic');
     const [coverExpanded, setCoverExpanded] = useState<boolean>(!!editingSubject?.cover_path);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [detailsExpanded, setDetailsExpanded] = useState(isEditing);
     const dialogRef = useRef<HTMLDivElement>(null);
-    const chapterInputRef = useRef<HTMLInputElement>(null);
+    const chapterInputRef = useRef<HTMLTextAreaElement>(null);
     useDialogFocus(dialogRef, handleClose, '.subject-editor-details-col input');
 
     // Convert bytes to data URL (helper similar to Home.tsx)
@@ -76,15 +80,17 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
     }, [coverPath]);
 
     // Chapter management
-    const [newSubjectId, setNewSubjectId] = useState(() => crypto.randomUUID());
+    const [newSubjectId] = useState(() => crypto.randomUUID());
     const effectiveSubjectId = editingSubject?.id ?? newSubjectId;
     const [chapters, setChapters] = useState<Chapter[]>([]);
+    const originalChaptersRef = useRef<Chapter[]>([]);
     const [newChapterName, setNewChapterName] = useState('');
     const [newChapterMeasures, setNewChapterMeasures] = useState('');
     const [renamingChapterId, setRenamingChapterId] = useState<string | null>(null);
     const [renamingChapterValue, setRenamingChapterValue] = useState('');
     const [editingSpacingId, setEditingSpacingId] = useState<string | null>(null);
     const [expandedSourcesId, setExpandedSourcesId] = useState<string | null>(null);
+    const [expandedChapterOptionsId, setExpandedChapterOptionsId] = useState<string | null>(null);
     const [newSourceLabel, setNewSourceLabel] = useState('');
     const [newSourceUrl, setNewSourceUrl] = useState('');
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -94,7 +100,11 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
         const val = newChapterName.trim();
         if (!val) return [];
 
-        if (subjectType === 'music') {
+        if (val.includes('\n')) {
+            val.split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach((line, index) => {
+                preview.push(subjectType === 'music' ? line : `Chapt. ${existingMain + index + 1} ${line}`);
+            });
+        } else if (subjectType === 'music') {
             const measures = parseInt(newChapterMeasures.trim());
             return [`${val}${!isNaN(measures) && measures > 0 ? ` (${measures} mesures)` : ''}`];
         }
@@ -145,7 +155,9 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
     }, [newChapterName, newChapterMeasures, subjectType, chapters]);
 
     function reloadEditorChapters() {
-        setChapters(getChaptersForSubject(effectiveSubjectId, { includeArchived: true }));
+        const loaded = getChaptersForSubject(effectiveSubjectId, { includeArchived: true }).map(chapter => ({ ...chapter, sources: chapter.sources ? [...chapter.sources] : undefined }));
+        originalChaptersRef.current = loaded;
+        setChapters(loaded);
     }
 
     useEffect(() => {
@@ -215,22 +227,26 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
     };
 
     function handleClose() {
-        if (!isEditing) {
-            // Clean up any chapters added before saving
-            getChaptersForSubject(newSubjectId, { includeArchived: true }).forEach(c => deleteChapter(c.id));
-        }
         onClose();
     }
 
-    async function handleSave() {
+    async function handleSave(startAfterCreate = false) {
         if (!name.trim()) { setNameError(true); return; }
-        // Auto-commit any pending source entry the user forgot to click "Add" on
+        let chaptersToSave = chapters;
         if (expandedSourcesId && newSourceUrl.trim()) {
-            handleAddSource(expandedSourcesId);
+            const url = newSourceUrl.trim();
+            const label = newSourceLabel.trim() || url;
+            chaptersToSave = chapters.map(chapter => chapter.id === expandedSourcesId && (chapter.sources?.length ?? 0) < MAX_SOURCES
+                ? { ...chapter, sources: [...(chapter.sources ?? []), { label, url, type: 'url' as const }] }
+                : chapter);
         }
         try {
+            replaceChaptersForSubject(effectiveSubjectId, chaptersToSave);
             if (isEditing) {
-                await updateSubject(editingSubject!.id, name.trim(), coverPath, selectedTags, deadline || null, result || null, archived, subjectType);
+                await updateSubject(editingSubject!.id, name.trim(), coverPath, selectedTags, deadline || null, result || null, archived, subjectType, importanceWeight, {
+                    focusType: defaultFocusType, spacing: defaultSpacing.trim() || null,
+                    sourceLabel: defaultSourceLabel.trim() || null, sourceUrl: defaultSourceUrl.trim() || null,
+                });
             } else {
                 const newSubj = {
                     id: newSubjectId,
@@ -245,24 +261,58 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                     archived,
                     deleted_at: null,
                     subject_type: subjectType,
+                    importance_weight: importanceWeight,
+                    default_focus_type: defaultFocusType,
+                    default_spacing: defaultSpacing.trim() || null,
+                    default_source_label: defaultSourceLabel.trim() || null,
+                    default_source_url: defaultSourceUrl.trim() || null,
                 };
                 await createSubject(newSubj, selectedTags);
             }
-            playSFX('glass_ui_check', theme);
-            onSaved();
-            onClose();
+            if (isEditing) {
+                const previousById = new Map(originalChaptersRef.current.map(chapter => [chapter.id, chapter]));
+                for (const chapter of chaptersToSave) {
+                    const previous = previousById.get(chapter.id);
+                    if (previous && previous.name !== chapter.name) {
+                        try { await renameChapterInDb(effectiveSubjectId, previous.name, chapter.name); }
+                        catch (error) { console.warn('Could not update the legacy chapter label', error); }
+                    }
+                }
+            }
         } catch (e: any) {
             console.error('Save error:', e);
-            // Regenerate ID so the next click doesn't hit a "already exists" error if the previous attempt 
-            // partially succeeded (e.g. subject created but tags failed)
-            if (!isEditing) setNewSubjectId(crypto.randomUUID());
-            
+            replaceChaptersForSubject(effectiveSubjectId, originalChaptersRef.current);
             const msg = typeof e === 'string' ? e : (e?.message || JSON.stringify(e));
             setSaveError(`${t('subject_editor.save_error')} (${msg})`);
+            return;
+        }
+        playSFX('glass_ui_check', theme);
+        const firstChapter = chaptersToSave.find(chapter => !chapter.archived);
+        if (!isEditing && startAfterCreate && firstChapter && onCreatedAndStart) {
+            try { await onCreatedAndStart(effectiveSubjectId, name.trim(), firstChapter); }
+            catch (error) {
+                console.error('Subject saved, but the session could not start', error);
+                onSaved();
+            }
+        } else {
+            onSaved();
+            onClose();
         }
     }
 
     // ── Chapter handlers ──
+    const makeChapterDraft = (chapterName: string, totalMeasures?: number): Chapter => {
+        const chapter = createChapterDraft(effectiveSubjectId, chapterName, totalMeasures);
+        chapter.focusType = defaultFocusType;
+        if (parseSpacing(defaultSpacing).length > 0) chapter.spacingOverride = defaultSpacing.trim();
+        if (defaultSourceUrl.trim()) chapter.sources = [{
+            label: defaultSourceLabel.trim() || defaultSourceUrl.trim(),
+            url: defaultSourceUrl.trim(),
+            type: 'url',
+        }];
+        return chapter;
+    };
+
     const handleAddChapter = () => {
         const val = newChapterName.trim();
         if (!val) return;
@@ -277,8 +327,14 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
         if (!isNaN(parsed) && parsed.toString() === val && parsed > 0 && parsed <= 50) {
             const newChaps = [];
             for (let i = 1; i <= parsed; i++) {
-                newChaps.push(addChapter(effectiveSubjectId, `Chapt. ${existingMain + i}`));
+                newChaps.push(makeChapterDraft(`Chapt. ${existingMain + i}`));
             }
+            setChapters([...chapters, ...newChaps]);
+        } else if (val.includes('\n')) {
+            const lines = val.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+            const newChaps = lines.map((line, index) => makeChapterDraft(
+                subjectType === 'music' ? line : `Chapt. ${existingMain + index + 1} ${line}`,
+            ));
             setChapters([...chapters, ...newChaps]);
         } else if (val.includes('(') && subjectType !== 'music') {
             const groups: { name: string; subs: string[] }[] = [];
@@ -306,16 +362,16 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
             let chapterNum = existingMain;
             for (const group of groups) {
                 chapterNum++;
-                newChaps.push(addChapter(effectiveSubjectId, `Chapt. ${chapterNum} ${group.name}`));
+                newChaps.push(makeChapterDraft(`Chapt. ${chapterNum} ${group.name}`));
                 group.subs.forEach((sub, idx) => {
                     const letter = idx < LETTERS.length ? LETTERS[idx] : `${idx + 1}`;
-                    newChaps.push(addChapter(effectiveSubjectId, `  ${letter}. ${sub}`));
+                    newChaps.push(makeChapterDraft(`  ${letter}. ${sub}`));
                 });
             }
             setChapters([...chapters, ...newChaps]);
         } else {
             const chName = subjectType === 'music' ? val : `Chapt. ${existingMain + 1} ${val}`;
-            const ch = addChapter(effectiveSubjectId, chName, totalMeasures);
+            const ch = makeChapterDraft(chName, totalMeasures);
             setChapters([...chapters, ch]);
         }
         setNewChapterName('');
@@ -344,42 +400,41 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
             }
         }
 
-        idsToDelete.forEach(cid => deleteChapter(cid));
         setChapters(chapters.filter(c => !idsToDelete.includes(c.id)));
     };
 
     const handleSetChapterArchived = (id: string, archived: boolean) => {
-        setChapterArchived(id, archived);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === id
+            ? { ...chapter, ...(archived ? { archived: true } : { archived: undefined }) }
+            : chapter));
     };
 
-    const handleCommitRename = async (id: string) => {
+    const handleCommitRename = (id: string) => {
         const newName = renamingChapterValue.trim();
         if (!newName) { setRenamingChapterId(null); return; }
         const ch = chapters.find(c => c.id === id);
         if (!ch || newName === ch.name) { setRenamingChapterId(null); return; }
-        await renameChapterInDb(effectiveSubjectId, ch.name, newName);
-        renameChapter(id, newName);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === id ? { ...chapter, name: newName } : chapter));
         setRenamingChapterId(null);
     };
 
     const handleStudyChapter = (id: string) => {
-        incrementStudyCount(id);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === id
+            ? { ...chapter, studyCount: chapter.studyCount + 1, lastStudiedAt: new Date().toISOString() }
+            : chapter));
         playSFX('glass_ui_check', theme);
     };
 
     const handleFocusTypeChange = (id: string, focusType: FocusType) => {
-        updateChapterFocusType(id, focusType);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === id ? { ...chapter, focusType } : chapter));
     };
 
     const handleSpacingCommit = (id: string, val: string) => {
         const trimmed = val.trim();
         const parsed = parseSpacing(trimmed);
-        updateChapterSpacing(id, parsed.length > 0 ? trimmed : null);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === id
+            ? { ...chapter, spacingOverride: parsed.length > 0 ? trimmed : undefined }
+            : chapter));
         setEditingSpacingId(null);
     };
 
@@ -393,8 +448,7 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
         if (!ch) return;
         if ((ch.sources?.length ?? 0) >= MAX_SOURCES) return;
         const updated: ChapterSource[] = [...(ch.sources ?? []), { label: label || url, url, type: 'url' }];
-        updateChapterSources(chapterId, updated);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === chapterId ? { ...chapter, sources: updated } : chapter));
         setNewSourceLabel('');
         setNewSourceUrl('');
     };
@@ -409,16 +463,14 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
             ...(ch.sources ?? []),
             { label: fileName, url: selected, type: 'file' }
         ];
-        updateChapterSources(chapterId, updated);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === chapterId ? { ...chapter, sources: updated } : chapter));
     };
 
     const handleRemoveSource = (chapterId: string, idx: number) => {
         const ch = chapters.find(c => c.id === chapterId);
         if (!ch) return;
         const updated = (ch.sources ?? []).filter((_, i) => i !== idx);
-        updateChapterSources(chapterId, updated);
-        reloadEditorChapters();
+        setChapters(current => current.map(chapter => chapter.id === chapterId ? { ...chapter, sources: updated.length ? updated : undefined } : chapter));
     };
 
     const activeChapters = chapters.filter(c => !c.archived);
@@ -496,6 +548,37 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                         </div>
                     </div>
 
+                    <div className="form-group subject-importance-field">
+                        <label htmlFor="subject-importance">{t('subject_editor.importance')} <output>{importanceWeight}</output></label>
+                        <input
+                            id="subject-importance"
+                            type="range"
+                            min="1"
+                            max="10"
+                            step="1"
+                            value={importanceWeight}
+                            onChange={event => setImportanceWeight(Number(event.target.value))}
+                        />
+                        <small>{t('subject_editor.importance_help')}</small>
+                    </div>
+
+                    <div className="form-group subject-defaults-field">
+                        <label>{t('subject_editor.chapter_defaults')}</label>
+                        <div className="subject-default-focus" role="group" aria-label={t('subject_editor.default_focus')}>
+                            {(['comprehension', 'memorisation', 'skill'] as const).map(focusType => (
+                                <button key={focusType} type="button" className={defaultFocusType === focusType ? 'active' : ''} onClick={() => setDefaultFocusType(focusType)}>
+                                    {FOCUS_TYPE_LABELS[focusType]}
+                                </button>
+                            ))}
+                        </div>
+                        <input value={defaultSpacing} onChange={event => setDefaultSpacing(event.target.value)} placeholder={`${t('subject_editor.default_schedule')} · ${getDefaultSpacing()}`} />
+                        <div className="subject-default-source">
+                            <input value={defaultSourceLabel} onChange={event => setDefaultSourceLabel(event.target.value)} placeholder={t('subject_editor.default_source_label')} />
+                            <input value={defaultSourceUrl} onChange={event => setDefaultSourceUrl(event.target.value)} placeholder={t('subject_editor.default_source_url')} />
+                        </div>
+                        <small>{t('subject_editor.defaults_help')}</small>
+                    </div>
+
                     {!isEditing && (
                         <div className="form-group">
                             <label className="checkbox-label">
@@ -540,8 +623,6 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                                 const isSubChapter = /^\s+[A-Z]\./.test(ch.name);
                                 const isArchived = Boolean(ch.archived);
                                 const repetitionStatus = getSpacedRepetitionStatus(ch);
-                                const spacingIntervals = getChapterSpacingIntervals(ch);
-                                const completedSpacingSteps = Math.min(ch.studyCount, spacingIntervals.length);
                                 return (
                                     <div key={ch.id} className={`chapter-item${isSubChapter ? ' sub-chapter' : ''}${isArchived ? ' archived' : ''}`}>
                                         <div className="chapter-item-header">
@@ -569,53 +650,19 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                                                     {t('subject_editor.chapter_archived') || 'Archived'}
                                                 </span>
                                             )}
-                                            <div
-                                                className="chapter-item-dots"
-                                                role="img"
-                                                aria-label={`SRS progress: ${completedSpacingSteps} of ${spacingIntervals.length} steps completed. Schedule: ${spacingIntervals.map(days => `+${days} days`).join(', ')}.`}
-                                            >
-                                                {ch.studyCount > 0 && (
-                                                    <span className="chapter-study-count-badge" aria-hidden="true">
-                                                        ×{ch.studyCount}
-                                                    </span>
-                                                )}
-                                                {spacingIntervals.map((days, i) => (
-                                                    <span
-                                                        key={`${i}-${days}`}
-                                                        className={`chapter-dot${i < completedSpacingSteps ? ' filled' : ''}`}
-                                                        title={`Step ${i + 1}: +${days} day${days === 1 ? '' : 's'}`}
-                                                        aria-hidden="true"
-                                                    />
-                                                ))}
-                                            </div>
+                                            <span className="chapter-item-summary">
+                                                {ch.focusType ? FOCUS_TYPE_LABELS[ch.focusType] : t('subject_editor.focus_unset')}
+                                                {' · '}{ch.studyCount > 0 ? `×${ch.studyCount}` : t('subject_editor.never_studied')}
+                                            </span>
                                             <button
-                                                onClick={() => handleStudyChapter(ch.id)}
-                                                onMouseEnter={() => playSFX(SFX.HOVER, theme)}
-                                                className="chapter-study-btn"
-                                                title={t('subject_editor.mark_studied')}
-                                            >+1</button>
-                                            <button
-                                                onClick={() => handleSetChapterArchived(ch.id, !isArchived)}
-                                                onMouseEnter={() => playSFX(SFX.HOVER, theme)}
-                                                className={`chapter-archive-btn${isArchived ? ' is-archived' : ''}`}
-                                                title={isArchived
-                                                    ? (t('subject_editor.restore_chapter') || 'Restore chapter')
-                                                    : (t('subject_editor.archive_chapter') || 'Archive chapter')}
-                                                aria-label={isArchived
-                                                    ? (t('subject_editor.restore_chapter') || 'Restore chapter')
-                                                    : (t('subject_editor.archive_chapter') || 'Archive chapter')}
-                                            >
-                                                {isArchived ? <ArchiveRestore size={12} /> : <Archive size={12} />}
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteChapter(ch.id)}
-                                                onMouseEnter={() => playSFX(SFX.HOVER, theme)}
-                                                className="chapter-delete-btn"
-                                                title={t('subject_editor.delete_chapter')}
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
+                                                type="button"
+                                                className={`chapter-options-toggle${expandedChapterOptionsId === ch.id ? ' is-open' : ''}`}
+                                                aria-expanded={expandedChapterOptionsId === ch.id}
+                                                aria-label={t('subject_editor.chapter_options')}
+                                                onClick={() => setExpandedChapterOptionsId(current => current === ch.id ? null : ch.id)}
+                                            ><MoreHorizontal size={17} /></button>
                                         </div>
+                                        {expandedChapterOptionsId === ch.id && <div className="chapter-options-panel">
                                         <div className="chapter-focus-types">
                                             {(['skill', 'comprehension', 'memorisation'] as const).map(ft => {
                                                 const isActive = ch.focusType === ft;
@@ -704,7 +751,7 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                                                             <span className="chapter-source-type-icon">{src.type === 'file' ? '📁' : '🔗'}</span>
                                                             <button
                                                                 className="chapter-source-label-btn"
-                                                                onClick={() => shellAPI().openPath(src.url)}
+                                                                onClick={() => src.type === 'file' ? shellAPI().openPath(src.url) : shellAPI().openExternal(src.url)}
                                                                 title={src.url}
                                                             >{src.label}</button>
                                                             <button
@@ -754,6 +801,16 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                                                 </div>
                                             )}
                                         </div>
+                                        <div className="chapter-secondary-actions">
+                                            <button type="button" onClick={() => handleStudyChapter(ch.id)} className="chapter-study-btn">+1 {t('subject_editor.mark_studied')}</button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSetChapterArchived(ch.id, !isArchived)}
+                                                className={`chapter-archive-btn${isArchived ? ' is-archived' : ''}`}
+                                            >{isArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />} {isArchived ? t('subject_editor.restore_chapter') : t('subject_editor.archive_chapter')}</button>
+                                            <button type="button" onClick={() => handleDeleteChapter(ch.id)} className="chapter-delete-btn"><Trash2 size={13} /> {t('subject_editor.delete_chapter')}</button>
+                                        </div>
+                                        </div>}
                                     </div>
                                 );
                             })}
@@ -761,13 +818,13 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
 
                         {/* Add chapter input */}
                         <div className={`chapter-add-row${subjectType === 'music' ? ' music' : ''}`}>
-                            <input
+                            <textarea
                                 ref={chapterInputRef}
-                                type="text"
+                                rows={3}
                                 placeholder={subjectType === 'music' ? t('subject_editor.music_piece_placeholder') : t('subject_editor.chapter_input_placeholder')}
                                 value={newChapterName}
                                 onChange={e => setNewChapterName(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') handleAddChapter(); }}
+                                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleAddChapter(); } }}
                                 aria-describedby="chapter-input-help"
                             />
                             {subjectType === 'music' && (
@@ -874,7 +931,10 @@ export default function SubjectEditorModal({ onClose, onSaved, editingSubject }:
                     )}
                     <div className="subject-editor-footer-actions">
                         <button className="btn btn-secondary" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={handleClose}>{t('subject_editor.cancel')}</button>
-                        <button className="btn btn-primary" aria-keyshortcuts="Control+Enter" title="Ctrl + Entrée" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={handleSave}>{isEditing ? t('subject_editor.save') : t('subject_editor.create')}</button>
+                        {!isEditing && activeChapters.length > 0 && onCreatedAndStart && (
+                            <button className="btn btn-secondary subject-create-start" onClick={() => void handleSave(true)}>{t('subject_editor.create_and_start')}</button>
+                        )}
+                        <button className="btn btn-primary" aria-keyshortcuts="Control+Enter" title="Ctrl + Entrée" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={() => void handleSave(false)}>{isEditing ? t('subject_editor.save') : t('subject_editor.create')}</button>
                     </div>
                 </div>
             </div>

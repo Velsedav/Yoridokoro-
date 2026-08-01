@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { JSDOM } from 'jsdom'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { buildReadableArtHtml, detectBackupKind, dumpPortableLocalStorage, escapeHtmlForExport, folderToArtHtmlFilePath, getExportConfig, validateBackupShape, YORIDOKORO_BACKUP_VERSION } from '../export'
 
 describe('Yoridokoro backup format', () => {
@@ -50,6 +52,14 @@ describe('Yoridokoro backup format', () => {
     expect(dump['study-buddy-workout-sets']).toBe('{"squat":3}')
     expect(dump['yoridokoro-new-setting']).toBe('yes')
     expect(dump).not.toHaveProperty('unrelated-extension-token')
+  })
+
+  it('exports and restores allocation, chapter links, and idempotency records', () => {
+    const exportSource = readFileSync(resolve(process.cwd(), 'src/lib/export.ts'), 'utf8')
+    expect(exportSource).toContain("db.select('SELECT * FROM session_effects")
+    expect(exportSource).toContain('s.importance_weight ?? 5')
+    expect(exportSource).toContain('b.chapter_id ?? null')
+    expect(exportSource).toContain('data.session_effects ?? []')
   })
 
   it('navigates directly between collections and combines Top, year, and decade filters', () => {

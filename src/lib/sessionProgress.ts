@@ -15,11 +15,13 @@ export interface SessionProgressBlock {
   type: SessionProgressBlockType
   minutes: number
   subject_id?: string | null
+  chapter_id?: string | null
   chapter_name?: string | null
 }
 
 export interface StudiedChapterPair {
   subject_id: string
+  chapter_id?: string
   chapter_name: string
 }
 
@@ -81,10 +83,11 @@ export function buildSessionProgressSnapshot(
     }
 
     if (block.subject_id && block.chapter_name) {
-      const key = JSON.stringify([block.subject_id, block.chapter_name])
+      const key = block.chapter_id ?? JSON.stringify([block.subject_id, block.chapter_name])
       const existing = chapterSeconds.get(key)
       chapterSeconds.set(key, {
         subject_id: block.subject_id,
+        ...(block.chapter_id ? { chapter_id: block.chapter_id } : {}),
         chapter_name: block.chapter_name,
         seconds: (existing?.seconds ?? 0) + blockSeconds,
       })
@@ -99,7 +102,7 @@ export function buildSessionProgressSnapshot(
   const ratingThreshold = Math.max(0, normalizeSeconds(minRatingSeconds))
   const studiedChapters = [...chapterSeconds.values()]
     .filter(chapter => chapter.seconds > 0 && chapter.seconds >= ratingThreshold)
-    .map(({ subject_id, chapter_name }) => ({ subject_id, chapter_name }))
+    .map(({ subject_id, chapter_id, chapter_name }) => ({ subject_id, ...(chapter_id ? { chapter_id } : {}), chapter_name }))
 
   return {
     elapsedSecondsByBlock: elapsed,

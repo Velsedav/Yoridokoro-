@@ -31,6 +31,11 @@ export interface Subject {
   result: string | null
   deleted_at: string | null
   subject_type: string | null
+  importance_weight?: number
+  default_focus_type?: string | null
+  default_spacing?: string | null
+  default_source_label?: string | null
+  default_source_url?: string | null
 }
 
 export async function getSubjects(): Promise<Subject[]> {
@@ -73,6 +78,28 @@ export async function getStudyTimeSummary(todayStart: string, weekStart: string)
     WHERE COALESCE(status, 'completed') <> 'abandoned' AND started_at >= $2
   `, [todayStart, weekStart])
   return rows[0] ?? { today_seconds: 0, week_seconds: 0 }
+}
+
+export type SubjectWorkAllocation = Record<string, number>
+
+export async function getSubjectWorkSecondsSince(since: string): Promise<SubjectWorkAllocation> {
+  const db = await getDb()
+  const rows = await db.select<Array<{ subject_id: string; work_seconds: number }>>(`
+    SELECT b.subject_id,
+      COALESCE(SUM(MAX(0, ROUND((
+        julianday(b.ended_at) - julianday(CASE WHEN b.started_at < $1 THEN $1 ELSE b.started_at END)
+      ) * 86400))), 0) AS work_seconds
+    FROM session_blocks b
+    JOIN sessions s ON s.id = b.session_id
+    WHERE b.type = 'WORK'
+      AND b.subject_id IS NOT NULL
+      AND b.started_at IS NOT NULL
+      AND b.ended_at IS NOT NULL
+      AND b.ended_at > $1
+      AND COALESCE(s.status, 'completed') <> 'abandoned'
+    GROUP BY b.subject_id
+  `, [since])
+  return Object.fromEntries(rows.map(row => [row.subject_id, Number(row.work_seconds) || 0]))
 }
 
 export interface StudyDataSnapshot {
@@ -153,24 +180,34 @@ export async function updateSubjectCover(id: string, path: string | null) {
   await db.execute(`UPDATE subjects SET cover_path = $1 WHERE id = $2`, [path, id])
 }
 
-export async function updateSubject(id: string, name: string, coverPath: string | null, tags: string[], deadline: string | null, result: string | null, archived: boolean, subjectType?: string | null) {
+async function resolveTagStatements(tags: string[]) {
   const db = await getDb()
-  await db.execute(
-    `UPDATE subjects SET name = $1, cover_path = $2, deadline = $3, result = $4, archived = $5, subject_type = $6 WHERE id = $7`,
-    [name, coverPath, deadline, result, archived ? 1 : 0, subjectType ?? null, id]
-  )
-  await db.execute(`DELETE FROM subject_tags WHERE subject_id = $1`, [id])
+  const resolved: Array<{ id: string; name: string }> = []
   for (const tName of tags) {
     const normalized = tName.trim().toLowerCase()
     if (!normalized) continue
-    let tagRows = await db.select<Tag[]>(`SELECT * FROM tags WHERE LOWER(name) = $1`, [normalized])
-    let tagId = tagRows[0]?.id
-    if (!tagId) {
-      tagId = crypto.randomUUID()
-      await db.execute(`INSERT INTO tags (id, name) VALUES ($1, $2)`, [tagId, normalized])
-    }
-    await db.execute(`INSERT OR IGNORE INTO subject_tags (subject_id, tag_id) VALUES ($1, $2)`, [id, tagId])
+    const rows = await db.select<Tag[]>(`SELECT * FROM tags WHERE LOWER(name) = $1`, [normalized])
+    resolved.push({ id: rows[0]?.id ?? crypto.randomUUID(), name: normalized })
   }
+  return resolved
+}
+
+export async function updateSubject(id: string, name: string, coverPath: string | null, tags: string[], deadline: string | null, result: string | null, archived: boolean, subjectType?: string | null, importanceWeight = 5, defaults: { focusType?: string | null; spacing?: string | null; sourceLabel?: string | null; sourceUrl?: string | null } = {}) {
+  const resolvedTags = await resolveTagStatements(tags)
+  const statements: Array<{ sql: string; params: unknown[] }> = [{
+    sql: `UPDATE subjects SET name = $1, cover_path = $2, deadline = $3, result = $4, archived = $5, subject_type = $6, importance_weight = $7, default_focus_type = $8, default_spacing = $9, default_source_label = $10, default_source_url = $11 WHERE id = $12`,
+    params: [name, coverPath, deadline, result, archived ? 1 : 0, subjectType ?? null, Math.max(1, Math.min(10, Math.round(importanceWeight))), defaults.focusType ?? null, defaults.spacing ?? null, defaults.sourceLabel ?? null, defaults.sourceUrl ?? null, id],
+  }, {
+    sql: `DELETE FROM subject_tags WHERE subject_id = $1`,
+    params: [id],
+  }]
+  for (const tag of resolvedTags) {
+    statements.push(
+      { sql: `INSERT OR IGNORE INTO tags (id, name) VALUES ($1, $2)`, params: [tag.id, tag.name] },
+      { sql: `INSERT OR IGNORE INTO subject_tags (subject_id, tag_id) VALUES ($1, $2)`, params: [id, tag.id] },
+    )
+  }
+  await (window as any).electronAPI.db.transaction('main', statements)
 }
 
 export async function archiveSubject(id: string) {
@@ -207,11 +244,11 @@ export async function updateSubjectStats(id: string, addMinutes: number, studied
 export async function saveSession(
   session: Omit<Session, 'id'> & { id: string },
   blocks: any[],
-  confidenceScores?: Record<string, number>
+  confidenceScores?: Record<string, number>,
+  subjectMinutes: Record<string, number> = {},
 ) {
-  const db = await getDb()
   const statements: Array<{ sql: string; params: unknown[] }> = [{
-    sql: `INSERT INTO sessions (id, started_at, ended_at, template, repeats, planned_minutes, actual_minutes, actual_seconds, status, evaluated_at)
+    sql: `INSERT OR IGNORE INTO sessions (id, started_at, ended_at, template, repeats, planned_minutes, actual_minutes, actual_seconds, status, evaluated_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     params: [session.id, session.started_at, session.ended_at, session.template, session.repeats, session.planned_minutes, session.actual_minutes, session.actual_seconds, session.status, session.evaluated_at],
   }]
@@ -219,10 +256,30 @@ export async function saveSession(
     const b = blocks[i]
     const confidence = confidenceScores?.[b.id] ?? null
     statements.push({
-      sql: `INSERT INTO session_blocks (id, session_id, idx, type, minutes, subject_id, technique_id, chapter_name, confidence_score, started_at, ended_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      params: [crypto.randomUUID(), session.id, i, b.type, b.minutes, b.subject_id ?? null, b.technique_id ?? null, b.chapter_name ?? null, confidence, b.started_at ?? null, b.ended_at ?? null],
+      sql: `INSERT OR IGNORE INTO session_blocks (id, session_id, idx, type, minutes, subject_id, technique_id, chapter_id, chapter_name, confidence_score, started_at, ended_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      params: [`${session.id}:block:${i}`, session.id, i, b.type, b.minutes, b.subject_id ?? null, b.technique_id ?? null, b.chapter_id ?? null, b.chapter_name ?? null, confidence, b.started_at ?? null, b.ended_at ?? null],
     })
+  }
+  for (const [subjectId, minutes] of Object.entries(subjectMinutes)) {
+    if (!(minutes > 0)) continue
+    statements.push(
+      {
+        sql: `INSERT OR IGNORE INTO session_effects(session_id,effect_type,target_id,applied_at,applied) VALUES ($1,'subject-stats',$2,$3,0)`,
+        params: [session.id, subjectId, session.ended_at ?? new Date().toISOString()],
+      },
+      {
+        sql: `UPDATE subjects SET total_minutes = total_minutes + $1, last_studied_at = $2
+              WHERE id = $3 AND EXISTS (
+                SELECT 1 FROM session_effects WHERE session_id = $4 AND effect_type = 'subject-stats' AND target_id = $3 AND applied = 0
+              )`,
+        params: [minutes, session.ended_at, subjectId, session.id],
+      },
+      {
+        sql: `UPDATE session_effects SET applied = 1 WHERE session_id = $1 AND effect_type = 'subject-stats' AND target_id = $2`,
+        params: [session.id, subjectId],
+      },
+    )
   }
   await (window as any).electronAPI.db.transaction('main', statements)
 }
@@ -269,23 +326,19 @@ export async function getSubjectTags(subjectId: string): Promise<Tag[]> {
 }
 
 export async function createSubject(subject: Omit<Subject, 'pinned' | 'archived'> & { pinned: boolean; archived: boolean }, tags: string[]) {
-  const db = await getDb()
-  await db.execute(
-    `INSERT INTO subjects (id, name, cover_path, pinned, created_at, last_studied_at, total_minutes, deadline, result, archived, subject_type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [subject.id, subject.name, subject.cover_path, subject.pinned ? 1 : 0, subject.created_at, subject.last_studied_at, subject.total_minutes, subject.deadline, subject.result, subject.archived ? 1 : 0, subject.subject_type ?? null]
-  )
-  for (const tName of tags) {
-    const normalized = tName.trim().toLowerCase()
-    if (!normalized) continue
-    let tagRows = await db.select<Tag[]>(`SELECT * FROM tags WHERE LOWER(name) = $1`, [normalized])
-    let tagId = tagRows[0]?.id
-    if (!tagId) {
-      tagId = crypto.randomUUID()
-      await db.execute(`INSERT INTO tags (id, name) VALUES ($1, $2)`, [tagId, normalized])
-    }
-    await db.execute(`INSERT OR IGNORE INTO subject_tags (subject_id, tag_id) VALUES ($1, $2)`, [subject.id, tagId])
+  const resolvedTags = await resolveTagStatements(tags)
+  const statements: Array<{ sql: string; params: unknown[] }> = [{
+    sql: `INSERT INTO subjects (id, name, cover_path, pinned, created_at, last_studied_at, total_minutes, deadline, result, archived, subject_type, importance_weight, default_focus_type, default_spacing, default_source_label, default_source_url)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+    params: [subject.id, subject.name, subject.cover_path, subject.pinned ? 1 : 0, subject.created_at, subject.last_studied_at, subject.total_minutes, subject.deadline, subject.result, subject.archived ? 1 : 0, subject.subject_type ?? null, Math.max(1, Math.min(10, Math.round(subject.importance_weight ?? 5))), subject.default_focus_type ?? null, subject.default_spacing ?? null, subject.default_source_label ?? null, subject.default_source_url ?? null],
+  }]
+  for (const tag of resolvedTags) {
+    statements.push(
+      { sql: `INSERT OR IGNORE INTO tags (id, name) VALUES ($1, $2)`, params: [tag.id, tag.name] },
+      { sql: `INSERT OR IGNORE INTO subject_tags (subject_id, tag_id) VALUES ($1, $2)`, params: [subject.id, tag.id] },
+    )
   }
+  await (window as any).electronAPI.db.transaction('main', statements)
 }
 
 export async function getTagsForSubject(subjectId: string): Promise<Tag[]> {
@@ -380,6 +433,7 @@ export interface SessionBlock {
   minutes: number
   subject_id: string | null
   technique_id: string | null
+  chapter_id?: string | null
   chapter_name: string | null
   confidence_score: number | null
   started_at: string | null
@@ -390,8 +444,8 @@ export async function saveSessionBlocks(sessionId: string, blocks: Omit<SessionB
   const db = await getDb()
   for (const b of blocks) {
     await db.execute(
-      `INSERT INTO session_blocks (id,session_id,idx,type,minutes,subject_id,technique_id,chapter_name,confidence_score,started_at,ended_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [crypto.randomUUID(), sessionId, b.idx, b.type, b.minutes, b.subject_id, b.technique_id, b.chapter_name ?? null, b.confidence_score ?? null, b.started_at ?? null, b.ended_at ?? null]
+      `INSERT INTO session_blocks (id,session_id,idx,type,minutes,subject_id,technique_id,chapter_id,chapter_name,confidence_score,started_at,ended_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [crypto.randomUUID(), sessionId, b.idx, b.type, b.minutes, b.subject_id, b.technique_id, b.chapter_id ?? null, b.chapter_name ?? null, b.confidence_score ?? null, b.started_at ?? null, b.ended_at ?? null]
     )
   }
 }
@@ -500,15 +554,16 @@ export async function resolveErrorLogEntry(id: string) {
 }
 
 export async function renameChapterInDb(subjectId: string, oldName: string, newName: string) {
-  const db = await getDb()
-  await db.execute(
-    `UPDATE session_blocks SET chapter_name = $1 WHERE subject_id = $2 AND chapter_name = $3`,
-    [newName, subjectId, oldName]
-  )
-  await db.execute(
-    `UPDATE error_log SET chapter_name = $1 WHERE subject_id = $2 AND chapter_name = $3`,
-    [newName, subjectId, oldName]
-  )
+  await (window as any).electronAPI.db.transaction('main', [
+    {
+      sql: `UPDATE session_blocks SET chapter_name = $1 WHERE subject_id = $2 AND chapter_name = $3`,
+      params: [newName, subjectId, oldName],
+    },
+    {
+      sql: `UPDATE error_log SET chapter_name = $1 WHERE subject_id = $2 AND chapter_name = $3`,
+      params: [newName, subjectId, oldName],
+    },
+  ])
 }
 
 export async function deleteAllData() {

@@ -16,9 +16,11 @@ interface NextStudyStepProps {
 export default function NextStudyStep({ recommendation, onStart, onOther, autoFocus = false, compact = false }: NextStudyStepProps) {
   const { t } = useTranslation()
   const technique = TECHNIQUES.find(item => item.id === recommendation.suggestedTechniqueId)
-  const reason = recommendation.reason === 'overdue'
-    ? t('planner.reason_overdue', { days: recommendation.daysOverdue })
-    : t(`planner.reason_${recommendation.reason.replace('-', '_')}`)
+  const reason = recommendation.allocationInfluenced
+    ? t('planner.reason_underallocated')
+    : recommendation.reason === 'overdue'
+      ? t('planner.reason_overdue', { days: recommendation.daysOverdue })
+      : t(`planner.reason_${recommendation.reason.replace('-', '_')}`)
 
   return (
     <article className={`next-study-step${compact ? ' is-compact' : ''}`} aria-labelledby="next-study-step-title">

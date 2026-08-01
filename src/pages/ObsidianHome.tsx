@@ -9,7 +9,8 @@ import { groupByTag, retentionColor } from '../lib/obsidian-utils'
 import ObsidianQuickStart from '../components/ObsidianQuickStart'
 import SubjectEditorModal from '../components/SubjectEditorModal'
 import NextStudyStep from '../components/NextStudyStep'
-import { buildPlannerRecommendations } from '../lib/plannerRecommendations'
+import { buildPlannerRecommendations, type PlannerRecommendation } from '../lib/plannerRecommendations'
+import { usePlannerAllocation } from '../lib/plannerAllocation'
 import { buildGuidedDraft, createActiveSession, guidedObjectiveKey } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
@@ -131,6 +132,7 @@ export default function ObsidianHome() {
   const [createOpen, setCreateOpen] = useState(false)
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   const opportunityIdRef = useRef(crypto.randomUUID())
+  const workSecondsBySubject = usePlannerAllocation()
 
   const todayHours = studyTime.today_seconds / 3600
   const weekHours = studyTime.week_seconds / 3600
@@ -159,8 +161,8 @@ export default function ObsidianHome() {
   }, [subjects, filter])
 
   const recommendations = useMemo(
-    () => buildPlannerRecommendations(subjects, allChapters).slice(0, 3),
-    [subjects, allChapters],
+    () => buildPlannerRecommendations(subjects, allChapters, new Date(), { workSecondsBySubject }).slice(0, 3),
+    [subjects, allChapters, workSecondsBySubject],
   )
   const recommendation = recommendations[Math.min(suggestionIndex, Math.max(0, recommendations.length - 1))]
 
@@ -211,13 +213,12 @@ export default function ObsidianHome() {
     setAllChapters(getAllChapters())
   }
 
-  async function startRecommendation() {
-    if (!recommendation) return
-    const draft = buildGuidedDraft(recommendation, t(guidedObjectiveKey(recommendation)))
+  async function launchRecommendation(target: PlannerRecommendation) {
+    const draft = buildGuidedDraft(target, t(guidedObjectiveKey(target)))
     const analytics = {
       opportunityId: opportunityIdRef.current,
-      recommendationId: recommendation.id,
-      chapterId: recommendation.chapterId,
+      recommendationId: target.id,
+      chapterId: target.chapterId,
       policyId: ANALYTICS_POLICY_ID,
       policyVersion: ANALYTICS_POLICY_VERSION,
       planningMode: 'guided' as const,
@@ -226,13 +227,13 @@ export default function ObsidianHome() {
       eventType: 'recommendation_accepted',
       opportunityId: analytics.opportunityId,
       recommendationId: analytics.recommendationId,
-      subjectId: recommendation.subjectId,
+      subjectId: target.subjectId,
       chapterId: analytics.chapterId,
       policyId: analytics.policyId,
       policyVersion: analytics.policyVersion,
       payload: {
-        recommendation_kind: recommendation.kind,
-        recommendation_reason: recommendation.reason,
+        recommendation_kind: target.kind,
+        recommendation_reason: target.reason,
         input_method: 'pointer',
       },
       dedupeKey: `recommendation-accepted:${analytics.opportunityId}`,
@@ -246,7 +247,7 @@ export default function ObsidianHome() {
       opportunityId: analytics.opportunityId,
       recommendationId: analytics.recommendationId,
       sessionId: nextSession.sessionId,
-      subjectId: recommendation.subjectId,
+      subjectId: target.subjectId,
       chapterId: analytics.chapterId,
       policyId: analytics.policyId,
       policyVersion: analytics.policyVersion,
@@ -260,6 +261,28 @@ export default function ObsidianHome() {
       dedupeKey: `session-created:${nextSession.sessionId}`,
     })
     navigate('/session')
+  }
+
+  async function startRecommendation() {
+    if (recommendation) await launchRecommendation(recommendation)
+  }
+
+  async function startCreatedSubject(subjectId: string, subjectName: string, chapter: Chapter) {
+    await launchRecommendation({
+      id: `progress:${chapter.id}`,
+      kind: 'progress',
+      reason: 'first-chapter',
+      subjectId,
+      subjectName,
+      chapterId: chapter.id,
+      chapterName: chapter.name,
+      chapterPosition: 1,
+      chapterCount: 1,
+      daysOverdue: 0,
+      suggestedTechniqueId: chapter.focusType === 'skill' ? 's6' : chapter.focusType === 'memorisation' ? 't1' : 'disc1',
+      allocationInfluenced: false,
+      allocationDeficit: 0,
+    })
   }
 
   function requestOtherRecommendation() {
@@ -371,6 +394,7 @@ export default function ObsidianHome() {
       {createOpen && (
         <SubjectEditorModal
           onClose={() => setCreateOpen(false)}
+          onCreatedAndStart={startCreatedSubject}
           onSaved={() => {
             setCreateOpen(false)
             reloadSubjects()

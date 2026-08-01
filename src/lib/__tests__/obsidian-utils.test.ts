@@ -84,7 +84,7 @@ describe('retentionColor', () => {
 
 describe('buildQuickStartSession', () => {
   it('starts with a 10-min PREP block then the WORK block', () => {
-    const session = buildQuickStartSession('sub-1', 25, 't1', 'Chapter 3')
+    const session = buildQuickStartSession('sub-1', 25, 't1', 'chapter-3', 'Chapter 3')
     expect(session.draft).toHaveLength(2)
     expect(session.draft[0].type).toBe('PREP')
     expect(session.draft[0].minutes).toBe(10)
@@ -97,7 +97,7 @@ describe('buildQuickStartSession', () => {
   })
 
   it('starts timer at PREP duration, not work duration', () => {
-    const session = buildQuickStartSession('sub-1', 25, null, null)
+    const session = buildQuickStartSession('sub-1', 25, null, null, null)
     expect(session.nowBlockIdx).toBe(0)
     expect(session.paused).toBe(false)
     expect(session.remainingSeconds).toBe(10 * 60)
@@ -105,13 +105,13 @@ describe('buildQuickStartSession', () => {
   })
 
   it('handles null technique and chapter', () => {
-    const session = buildQuickStartSession('sub-1', 50, null, null)
+    const session = buildQuickStartSession('sub-1', 50, null, null, null)
     expect(session.draft[1].technique_id).toBeNull()
     expect(session.draft[1].chapter_name).toBeNull()
   })
 
   it('sets template to Custom and repeats to 1', () => {
-    const session = buildQuickStartSession('sub-1', 25, null, null)
+    const session = buildQuickStartSession('sub-1', 25, null, null, null)
     expect(session.template).toBe('Custom')
     expect(session.repeats).toBe(1)
     expect(session.fiveMinAlert).toBe(false)

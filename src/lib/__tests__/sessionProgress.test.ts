@@ -11,12 +11,14 @@ function block(
   minutes: number,
   subjectId: string | null = null,
   chapterName: string | null = null,
+  chapterId?: string,
 ): SessionProgressBlock {
   return {
     id,
     type,
     minutes,
     subject_id: subjectId,
+    chapter_id: chapterId,
     chapter_name: chapterName,
   }
 }
@@ -104,6 +106,14 @@ describe('buildSessionProgressSnapshot', () => {
     expect(snapshot.workMinutesBySubject).toEqual({ math: 25 })
     expect(snapshot.studiedChapters).toEqual([
       { subject_id: 'math', chapter_name: 'Fractions' },
+    ])
+  })
+
+  it('keeps a stable chapter id in rating candidates', () => {
+    const draft = [block('work', 'WORK', 25, 'math', 'Fractions', 'chapter-42')]
+    const snapshot = buildSessionProgressSnapshot(draft, 0, 25 * 60 - 60, {})
+    expect(snapshot.studiedChapters).toEqual([
+      { subject_id: 'math', chapter_id: 'chapter-42', chapter_name: 'Fractions' },
     ])
   })
 

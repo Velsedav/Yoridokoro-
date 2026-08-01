@@ -126,6 +126,55 @@
     font-size: 0.85rem;
 }
 
+.chapter-item-summary {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.chapter-options-toggle {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.chapter-options-toggle:hover,
+.chapter-options-toggle.is-open {
+    color: var(--primary);
+    border-color: var(--glass-border);
+    background: rgba(var(--primary-rgb), 0.08);
+}
+
+.chapter-options-panel {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--glass-border);
+}
+
+.chapter-secondary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.chapter-secondary-actions button {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    background: transparent;
+}
+
 .chapter-archived-badge {
     flex-shrink: 0;
     padding: 1px 5px;
@@ -302,12 +351,39 @@
     gap: 6px;
 }
 
-.chapter-add-row input {
+.chapter-add-row input,
+.chapter-add-row textarea {
     flex: 1;
     padding: 6px 10px;
     font-size: 0.85rem;
     border-radius: 8px;
+    resize: vertical;
 }
+
+.subject-importance-field output {
+    float: right;
+    min-width: 2rem;
+    text-align: center;
+    color: var(--primary);
+    font-weight: 800;
+}
+
+.subject-importance-field input[type="range"] { width: 100%; }
+
+.subject-defaults-field { display: grid; gap: 8px; }
+.subject-default-focus { display: flex; flex-wrap: wrap; gap: 6px; }
+.subject-default-focus button {
+    min-height: 34px;
+    padding: 5px 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    background: transparent;
+}
+.subject-default-focus button.active { color: var(--primary); border-color: var(--primary); background: rgba(var(--primary-rgb), .1); }
+.subject-default-source { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 6px; }
+.subject-defaults-field small,
+.subject-importance-field small { color: var(--text-muted); line-height: 1.35; }
 
 .chapter-add-btn {
     background: var(--primary);

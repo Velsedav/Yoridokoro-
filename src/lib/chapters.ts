@@ -35,12 +35,14 @@ export interface Chapter {
     currentMeasure?: number;  // music: frontier measure (how far the student has reached)
     sources?: ChapterSource[]; // links/references attached to this chapter
     archived?: boolean;
+    appliedSessionIds?: string[];
+    appliedRatingSessionIds?: string[];
 }
 
 const LS_KEY = 'study-buddy-chapters';
 const LS_BACKUP_KEY = 'study-buddy-chapters-recovery';
 const LS_VERSION_KEY = 'study-buddy-chapters-storage-version';
-const STUDY_DATA_STORAGE_VERSION = '1';
+const STUDY_DATA_STORAGE_VERSION = '2';
 let durabilityTimer: ReturnType<typeof setTimeout> | null = null;
 let durabilitySync: Promise<void> | null = null;
 
@@ -75,6 +77,8 @@ function normalizeChapter(value: unknown): Chapter | null {
         ...(Number.isFinite(chapter.currentMeasure) ? { currentMeasure: Number(chapter.currentMeasure) } : {}),
         ...(Array.isArray(chapter.sources) ? { sources: chapter.sources } : {}),
         ...(chapter.archived ? { archived: true } : {}),
+        ...(Array.isArray(chapter.appliedSessionIds) ? { appliedSessionIds: chapter.appliedSessionIds.filter(id => typeof id === 'string') } : {}),
+        ...(Array.isArray(chapter.appliedRatingSessionIds) ? { appliedRatingSessionIds: chapter.appliedRatingSessionIds.filter(id => typeof id === 'string') } : {}),
     };
 }
 
@@ -197,7 +201,14 @@ export function getChaptersForSubject(subjectId: string, options?: ChapterQueryO
 
 export function addChapter(subjectId: string, name: string, totalMeasures?: number): Chapter {
     const all = loadAll();
-    const ch: Chapter = {
+    const ch = createChapterDraft(subjectId, name, totalMeasures);
+    all.push(ch);
+    saveAll(all);
+    return ch;
+}
+
+export function createChapterDraft(subjectId: string, name: string, totalMeasures?: number): Chapter {
+    return {
         id: crypto.randomUUID(),
         subjectId,
         name,
@@ -207,9 +218,12 @@ export function addChapter(subjectId: string, name: string, totalMeasures?: numb
         focusType: null,
         ...(totalMeasures && totalMeasures > 0 ? { totalMeasures, currentMeasure: 0 } : {}),
     };
-    all.push(ch);
-    saveAll(all);
-    return ch;
+}
+
+export function replaceChaptersForSubject(subjectId: string, chapters: Chapter[]): void {
+    const others = loadAll().filter(chapter => chapter.subjectId !== subjectId);
+    const staged = chapters.map(chapter => normalizeChapter({ ...chapter, subjectId })).filter((chapter): chapter is Chapter => chapter !== null);
+    saveAll([...others, ...staged]);
 }
 
 export function updateChapterMeasure(id: string, currentMeasure: number) {
@@ -335,6 +349,17 @@ function readRatings(raw: string | null): RatingEntry[] | null {
     }
 }
 
+export function incrementStudyCountForSession(id: string, sessionId: string): boolean {
+    const all = loadAll();
+    const ch = all.find(c => c.id === id);
+    if (!ch || ch.appliedSessionIds?.includes(sessionId)) return false;
+    ch.studyCount += 1;
+    ch.lastStudiedAt = new Date().toISOString();
+    ch.appliedSessionIds = [...(ch.appliedSessionIds ?? []), sessionId];
+    saveAll(all);
+    return true;
+}
+
 export function getRatings(): RatingEntry[] {
     const primary = readRatings(localStorage.getItem(RATINGS_KEY));
     if (primary) {
@@ -356,7 +381,9 @@ export function getRatings(): RatingEntry[] {
 
 export function saveRating(entry: RatingEntry): void {
     const all = getRatings();
-    all.push(entry);
+    const existing = all.findIndex(item => item.chapterId === entry.chapterId && item.sessionId === entry.sessionId);
+    if (existing >= 0) all[existing] = entry;
+    else all.push(entry);
     const serialized = JSON.stringify(all);
     localStorage.setItem(RATINGS_KEY, serialized);
     try { localStorage.setItem(RATINGS_BACKUP_KEY, serialized); } catch { /* The primary write already succeeded. */ }
@@ -491,6 +518,23 @@ export interface Recommendation {
     subjectName: string;
     daysOverdue: number;
     status: SpacedRepetitionStatus;
+}
+
+export function applyMasteryRatingForSession(id: string, rating: MasteryRating, sessionId: string): boolean {
+    const all = loadAll();
+    const ch = all.find(c => c.id === id);
+    if (!ch || ch.appliedRatingSessionIds?.includes(sessionId)) return false;
+    if (rating === 'forgot') {
+        ch.studyCount = 1;
+        ch.lastStudiedAt ||= new Date().toISOString();
+    } else if (rating === 'hard' && ch.studyCount > 1) {
+        ch.studyCount = Math.max(1, ch.studyCount - 1);
+    } else if (rating === 'easy') {
+        ch.studyCount += 1;
+    }
+    ch.appliedRatingSessionIds = [...(ch.appliedRatingSessionIds ?? []), sessionId];
+    saveAll(all);
+    return true;
 }
 
 export function getRecommendations(subjectNames: Record<string, string>): Recommendation[] {

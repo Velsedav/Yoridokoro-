@@ -9,6 +9,7 @@ import { TECHNIQUES, CATEGORY_LABELS, CATEGORY_COLORS, getTierColor, type TierTy
 import { useUndoRedo } from '../lib/undo'
 import { ANALYTICS_CATEGORY_COLORS } from '../lib/analytics-utils'
 import { buildPlannerRecommendations, type PlannerRecommendation } from '../lib/plannerRecommendations'
+import { usePlannerAllocation } from '../lib/plannerAllocation'
 import { buildGuidedDraft, guidedObjectiveKey } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
@@ -105,6 +106,7 @@ export default function ObsidianPlanner() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const guidedStartRef = useRef<HTMLButtonElement>(null)
   const opportunityIdRef = useRef(crypto.randomUUID())
+  const workSecondsBySubject = usePlannerAllocation()
 
   useEffect(() => {
     let mounted = true
@@ -122,8 +124,8 @@ export default function ObsidianPlanner() {
   }, [])
 
   const recommendations = useMemo(
-    () => buildPlannerRecommendations(subjects, chapters),
-    [subjects, chapters],
+    () => buildPlannerRecommendations(subjects, chapters, new Date(), { workSecondsBySubject }),
+    [subjects, chapters, workSecondsBySubject],
   )
   const visibleRecommendations = recommendations.slice(0, 3)
   const selectedRecommendation = visibleRecommendations[Math.min(suggestionIndex, Math.max(0, visibleRecommendations.length - 1))]
@@ -269,7 +271,7 @@ export default function ObsidianPlanner() {
   }
 
   async function startGuidedSession(inputMethod: 'keyboard' | 'pointer' = 'pointer') {
-    const fresh = buildPlannerRecommendations(subjects, getAllChapters())
+    const fresh = buildPlannerRecommendations(subjects, getAllChapters(), new Date(), { workSecondsBySubject })
     const recommendation = fresh.find(item => item.id === selectedRecommendation?.id) ?? fresh[0]
     if (!recommendation) return
     await recordBehaviorEvent({
@@ -367,6 +369,7 @@ export default function ObsidianPlanner() {
   }
 
   function recommendationReason(recommendation: PlannerRecommendation) {
+    if (recommendation.allocationInfluenced) return t('planner.reason_underallocated')
     if (recommendation.reason === 'overdue') {
       return t('planner.reason_overdue', { days: recommendation.daysOverdue })
     }
@@ -854,7 +857,7 @@ function PlanBlock({
     }
   }, [])
 
-  const currentChapter = chapters.find(c => c.name === block.chapter_name)
+  const currentChapter = chapters.find(c => c.id === block.chapter_id) ?? chapters.find(c => c.name === block.chapter_name)
   const suggestedCategory: TechCategory | null =
     currentChapter?.focusType ? (FOCUS_TO_CATEGORY[currentChapter.focusType] ?? null) : null
 
@@ -865,7 +868,7 @@ function PlanBlock({
   function selectSubject(s: Subject) {
     setSubjectQuery(s.name)
     setShowSubjectDropdown(false)
-    onUpdate({ ...block, subject_id: s.id, chapter_name: null })
+    onUpdate({ ...block, subject_id: s.id, chapter_id: null, chapter_name: null })
   }
 
   const typeLabel = { PREP: 'Prep', WORK: 'Work', BREAK: 'Break' }[block.type]
@@ -954,12 +957,15 @@ function PlanBlock({
             <label className="op-expand-label">Chapter</label>
             <select
               className="op-expand-select"
-              value={block.chapter_name ?? ''}
-              onChange={e => onUpdate({ ...block, chapter_name: e.target.value || null })}
+              value={block.chapter_id ?? currentChapter?.id ?? ''}
+              onChange={e => {
+                const chapter = chapters.find(item => item.id === e.target.value)
+                onUpdate({ ...block, chapter_id: chapter?.id ?? null, chapter_name: chapter?.name ?? null })
+              }}
               disabled={!block.subject_id}
             >
               <option value="">— none —</option>
-              {chapters.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              {chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
