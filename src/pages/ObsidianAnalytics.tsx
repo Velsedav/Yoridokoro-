@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { BarChart3, ChevronDown } from 'lucide-react'
 import { getAllSessionBlocks, getAllSessionContexts, getAllSubjectTagsMap, getSessionEvidence, getSessions, getSubjects, type Session, type SessionBlock, type SessionContext, type SessionEvidence, type Subject } from '../lib/db'
 import { getBehaviorEvents, type BehaviorEventRow } from '../lib/behaviorAnalytics'
-import { computeObservationMetrics, displayCount, type CountRow } from '../lib/observationMetrics'
+import { computeObservationMetrics, displayCount, displayEntrySourceSuccess, type CountRow, type EntrySourceSuccessRow } from '../lib/observationMetrics'
 import { TECHNIQUES } from '../lib/techniques'
 import './ObsidianAnalytics.css'
 
@@ -38,6 +38,14 @@ function Rows({ rows, total, labels = {} }: { rows: CountRow[]; total: number; l
   return <div className="ov2-rows">{rows.map(row => <div key={row.key}><span>{labels[row.key] ?? row.key}</span><strong>{displayCount(row.count, total)}</strong></div>)}</div>
 }
 
+function EntrySourceSuccessRows({ rows }: { rows: EntrySourceSuccessRow[] }) {
+  if (!rows.length) return <p className="ov2-empty">Pas encore de données utilisables.</p>
+  return <div className="ov2-rows">{rows.map(row => <div key={row.key}>
+    <span>{ENTRY_LABELS[row.key] ?? row.key}</span>
+    <strong>{displayEntrySourceSuccess(row.significantCount, row.startedCount)}</strong>
+  </div>)}</div>
+}
+
 export default function ObsidianAnalytics() {
   const [data, setData] = useState<Data | null>(null)
   useEffect(() => {
@@ -71,7 +79,7 @@ export default function ObsidianAnalytics() {
       <header><span>01</span><div><h2>Démarrer</h2><p>Comment les sessions commencent réellement.</p></div></header>
       <div className="ov2-grid">
         <article><h3>Entrées utilisées</h3><Rows rows={metrics.start.entrySources} total={metrics.start.total} labels={ENTRY_LABELS} /></article>
-        <article><h3>Sessions avec au moins 60 s de WORK</h3><Rows rows={metrics.start.significantEntrySources} total={metrics.start.significantTotal} labels={ENTRY_LABELS} /></article>
+        <article><h3>Sessions avec au moins 60 s de WORK</h3><EntrySourceSuccessRows rows={metrics.start.entrySourceSuccess} /></article>
         <article className="ov2-distribution"><h3>Durée réelle</h3><strong>{formatDuration(metrics.start.durations.median)}</strong><p>Médiane · n = {metrics.start.durations.n}</p><small>IQR {formatDuration(metrics.start.durations.q1)} — {formatDuration(metrics.start.durations.q3)}</small></article>
         <article><h3>Après les 5 minutes</h3><Rows rows={metrics.start.fiveMinuteDecisions} total={metrics.start.fiveMinuteDecisions.reduce((sum, row) => sum + row.count, 0)} labels={DECISION_LABELS} /></article>
       </div>

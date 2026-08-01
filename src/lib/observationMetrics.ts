@@ -13,6 +13,12 @@ export interface ObservationMetricsSource {
 
 export interface Distribution { n: number; median: number | null; q1: number | null; q3: number | null }
 export interface CountRow { key: string; count: number }
+export interface EntrySourceSuccessRow {
+  key: string
+  startedCount: number
+  significantCount: number
+  successRate: number
+}
 
 function payload(event: BehaviorEventRow): Record<string, unknown> {
   try { return JSON.parse(event.payload_json) as Record<string, unknown> } catch { return {} }
@@ -44,6 +50,12 @@ function localDay(value: string) {
 export function displayCount(count: number, denominator: number) {
   if (denominator < 5) return String(count)
   return `${count} · ${Math.round(count / Math.max(1, denominator) * 100)} %`
+}
+
+export function displayEntrySourceSuccess(significantCount: number, startedCount: number) {
+  const ratio = `${significantCount} / ${startedCount}`
+  if (startedCount < 5) return ratio
+  return `${ratio} · ${Math.round(significantCount / Math.max(1, startedCount) * 100)} %`
 }
 
 export function shouldAskReturnSupport(daysSincePreviousSignificant: number | null) {
@@ -80,6 +92,16 @@ export function computeObservationMetrics(source: ObservationMetricsSource) {
 
   const entrySources = source.contexts.map(context => context.entry_source)
   const significantEntrySources = significant.map(session => contextBySession.get(session.id)?.entry_source)
+  const significantCountsByEntrySource = new Map(countRows(significantEntrySources).map(row => [row.key, row.count]))
+  const entrySourceSuccess: EntrySourceSuccessRow[] = countRows(entrySources).map(row => {
+    const significantCount = significantCountsByEntrySource.get(row.key) ?? 0
+    return {
+      key: row.key,
+      startedCount: row.count,
+      significantCount,
+      successRate: significantCount / row.count,
+    }
+  })
   const durations = distribution(significant.map(session => actualSeconds(session.id)))
   const fiveMinuteDecisions = countRows(source.events
     .filter(event => event.event_type === 'five_minute_decision')
@@ -144,6 +166,7 @@ export function computeObservationMetrics(source: ObservationMetricsSource) {
       entrySources: countRows(entrySources),
       significantTotal: significant.length,
       significantEntrySources: countRows(significantEntrySources),
+      entrySourceSuccess,
       durations,
       fiveMinuteDecisions,
     },

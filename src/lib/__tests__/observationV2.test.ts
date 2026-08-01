@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import type { BehaviorEventRow, BehaviorEventType } from '../behaviorAnalytics'
 import { buildBehaviorExportBundle } from '../behaviorExport'
 import type { Session, SessionBlock, SessionContext } from '../db'
-import { clearedReturnSupportTag, computeObservationMetrics, inferSessionRecoveryStage, shouldAskReturnSupport } from '../observationMetrics'
+import { clearedReturnSupportTag, computeObservationMetrics, displayEntrySourceSuccess, inferSessionRecoveryStage, shouldAskReturnSupport } from '../observationMetrics'
 
 const session = (id: string, day: number, seconds: number, status: Session['status'] = 'completed'): Session => ({
   id, started_at: `2026-07-${String(day).padStart(2, '0')}T10:00:00.000Z`, ended_at: `2026-07-${String(day).padStart(2, '0')}T10:30:00.000Z`,
@@ -55,6 +55,24 @@ describe('Observation v2', () => {
     ))
     expect(metrics.start.significantTotal).toBe(1)
     expect(metrics.start.fiveMinuteDecisions).toEqual([{ key: 'stop', count: 1 }])
+  })
+
+  it('uses each entry source own started count as the success-rate denominator', () => {
+    const guidedSessions = Array.from({ length: 100 }, (_, index) => session(`guided-${index}`, 1, index < 8 ? 60 : 0))
+    const justFiveSessions = Array.from({ length: 2 }, (_, index) => session(`five-${index}`, 1, 60))
+    const sessions = [...guidedSessions, ...justFiveSessions]
+    const blocks = sessions.map(item => block(item.id, item.actual_seconds))
+    const contexts = [
+      ...guidedSessions.map(item => context(item.id, 1, 0, { entry_source: 'guided' })),
+      ...justFiveSessions.map(item => context(item.id, 1, 0, { entry_source: 'just_five' })),
+    ]
+    const metrics = computeObservationMetrics(source(sessions, blocks, contexts))
+    const rates = Object.fromEntries(metrics.start.entrySourceSuccess.map(row => [row.key, row]))
+
+    expect(rates.just_five).toMatchObject({ significantCount: 2, startedCount: 2, successRate: 1 })
+    expect(rates.guided).toMatchObject({ significantCount: 8, startedCount: 100, successRate: 0.08 })
+    expect(displayEntrySourceSuccess(2, 2)).toBe('2 / 2')
+    expect(displayEntrySourceSuccess(8, 100)).toBe('8 / 100 · 8 %')
   })
 
   it('records both extension decisions after the first five minutes', () => {
