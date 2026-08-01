@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BarChart3, BookOpen, Building2, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardCopy,
   Database, Feather, Film, Gamepad2, Grid3X3, Headphones, Image as ImageIcon, Landmark, Library, ListFilter, ListTodo, ListTree, LoaderCircle,
-  MoreHorizontal, Music2, PanelsTopLeft, Pencil, Plus, Search, Swords, Trash2, Tv, Undo2, Upload, X, Zap
+  MoreHorizontal, Music2, PanelsTopLeft, Pencil, Plus, ScrollText, Search, Swords, Trash2, Tv, Undo2, Upload, X, Zap
 } from 'lucide-react';
 import { db, prepareArtDatabase } from './lib/db';
 import { chooseOpponent, isProvisional, playMatch, reverseMatch } from './lib/elo';
@@ -34,6 +34,7 @@ function isEditingText(event: KeyboardEvent) {
 
 const categoryIcons = {
   books: BookOpen,
+  essays: ScrollText,
   comics: PanelsTopLeft,
   movies: Film,
   tv: Tv,
@@ -643,7 +644,7 @@ function EditItemModal({ item, existing, onClose, onSave }: {
         <p className="form-intro">{t('Start typing to choose an existing value, or finish typing to create a new one. Press Enter or Tab to advance.')}</p>
         <div className="field-grid">
           <label className="field field--wide"><span>{t('Title')} <i>{t('required')}</i></span><input required value={form.title} onChange={(event) => update('title', event.target.value)} /></label>
-          <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={item.category === 'books' ? t('Author') : item.category === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
+          <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={item.category === 'books' || item.category === 'essays' ? t('Author') : item.category === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
           <label className="field"><span>{t('Year')}</span><input list="edit-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} onChange={(event) => update('year', event.target.value)} /><datalist id="edit-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>
           <TagSuggestionField label={t('Genre / type')} value={form.genre} options={genres} onChange={(value) => update('genre', value)} placeholder={t('Add a genre or type')} />
           <TagSuggestionField label={t('Country')} value={form.country} options={countries} onChange={(value) => update('country', value)} placeholder={t('Add a country')} />
@@ -810,7 +811,7 @@ function AddModal({ category, existing, onClose, onSave }: {
               {mode === 'manual' && <label className="field field--wide"><span>{t('Category')} <i>{t('required')}</i></span><select value={itemCategory} onChange={(event) => setItemCategory(event.target.value as CategoryId)}>{categories.map((entry) => <option key={entry.id} value={entry.id}>{categoryCopy(entry.id, t).label}</option>)}</select></label>}
               <div className="field--wide"><CoverPicker value={form.imageUrl} onChange={(value) => update('imageUrl', value)} /></div>
               <label className="field field--wide"><span>{t('Title')} <i>{t('required')}</i></span><input data-add-primary required value={form.title} onChange={(e) => update('title', e.target.value)} /></label>
-              <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={itemCategory === 'books' || itemCategory === 'poems' ? t('Author') : itemCategory === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
+              <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={itemCategory === 'books' || itemCategory === 'essays' || itemCategory === 'poems' ? t('Author') : itemCategory === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
               <label className="field"><span>{t('Year')}</span><input list="add-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} onChange={(e) => update('year', e.target.value)} placeholder="1968" /><datalist id="add-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>
               <TagSuggestionField label={t('Genre / type')} value={form.genre} options={genres} onChange={(value) => update('genre', value)} placeholder={t('Add a genre or type')} />
               <TagSuggestionField label={t('Country')} value={form.country} options={countries} onChange={(value) => update('country', value)} placeholder={t('Add a country')} />

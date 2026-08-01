@@ -22,6 +22,7 @@ describe('collection tools', () => {
     expect(missingCompletionFields(item({ category: 'photographs', genres: [], countries: [], year: undefined, series: '' }))).toEqual(['year', 'genre', 'country', 'series']);
     expect(missingCompletionFields(item({ category: 'sculptures', genres: [], countries: [], year: undefined, movement: '' }))).toEqual(['year', 'genre', 'country', 'movement']);
     expect(missingCompletionFields(item({ category: 'poems', genres: [], countries: [], year: undefined, series: '' }))).toEqual(['year', 'genre', 'country', 'series']);
+    expect(missingCompletionFields(item({ category: 'essays', genres: [], countries: [], year: undefined, series: '' }))).toEqual(['year', 'genre', 'country', 'series']);
   });
 
   it('treats whitespace-only metadata as incomplete', () => {

@@ -1,6 +1,6 @@
 // `songs` remains a valid persisted id so older backups can still be restored,
 // but it is intentionally absent from the visible `categories` navigation.
-export const categoryIds = ['books', 'comics', 'movies', 'tv', 'paintings', 'architecture', 'games', 'songs', 'albums', 'photographs', 'sculptures', 'poems'] as const;
+export const categoryIds = ['books', 'essays', 'comics', 'movies', 'tv', 'paintings', 'architecture', 'games', 'songs', 'albums', 'photographs', 'sculptures', 'poems'] as const;
 export type CategoryId = (typeof categoryIds)[number];
 
 export interface CategoryDefinition {
@@ -13,6 +13,7 @@ export interface CategoryDefinition {
 
 export const categories: CategoryDefinition[] = [
   { id: 'books', label: 'Books', singular: 'book', eyebrow: 'Written worlds', accent: '#a64d35' },
+  { id: 'essays', label: 'Essays', singular: 'essay', eyebrow: 'Ideas in form', accent: '#745784' },
   { id: 'comics', label: 'Comics', singular: 'comic', eyebrow: 'Sequential art', accent: '#8f5a2f' },
   { id: 'movies', label: 'Movies', singular: 'movie', eyebrow: 'On screen', accent: '#426f85' },
   { id: 'tv', label: 'TV shows', singular: 'TV show', eyebrow: 'In episodes', accent: '#7960a8' },

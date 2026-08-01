@@ -4,6 +4,7 @@ export type CompletionField = 'year' | 'genre' | 'country' | 'series' | 'movemen
 
 const completionFieldsByCategory: Record<CategoryId, readonly CompletionField[]> = {
   books: ['year', 'genre', 'country', 'series'],
+  essays: ['year', 'genre', 'country', 'series'],
   comics: ['year', 'genre', 'country', 'series'],
   movies: ['year', 'genre', 'country'],
   tv: ['year', 'genre', 'country'],

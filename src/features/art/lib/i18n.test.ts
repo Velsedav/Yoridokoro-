@@ -13,5 +13,6 @@ describe('interface translations', () => {
     expect(categoryCopy('photographs', (key) => translate('fr', key)).label).toBe('Photographies');
     expect(categoryCopy('sculptures', (key) => translate('fr', key)).label).toBe('Sculptures');
     expect(categoryCopy('poems', (key) => translate('fr', key)).label).toBe('Poèmes');
+    expect(categoryCopy('essays', (key) => translate('fr', key))).toEqual({ label: 'Essais', singular: 'Essai', eyebrow: 'Pensées en forme' });
   });
 });

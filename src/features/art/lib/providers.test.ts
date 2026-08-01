@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { saveCatalogueCredentials } from './catalogCredentials';
-import { appleSongs, metMuseum, musicBrainz, poetryDb, rawg, tmdb, wikidataArchitecture, wikidataPaintings } from './providers';
+import { appleSongs, metMuseum, musicBrainz, openLibrary, poetryDb, providerFor, rawg, tmdb, wikidataArchitecture, wikidataPaintings } from './providers';
+
+describe('essay catalogue provider', () => {
+  it('uses Open Library for the separate Essays collection', () => {
+    expect(providerFor('essays')).toBe(openLibrary);
+  });
+});
 
 describe('TMDB catalogue provider', () => {
   beforeEach(() => {

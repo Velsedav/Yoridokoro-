@@ -213,7 +213,7 @@ const escapeHtml = escapeHtmlForExport;
 export function buildReadableArtHtml(art: { items?: any[]; matches?: any[] }): string {
   const artItems = art.items ?? [];
   const artCategoryNames: Record<string, string> = {
-    books: 'Livres', comics: 'Bandes dessinées', movies: 'Films', tv: 'Séries TV', paintings: 'Peintures',
+    books: 'Livres', essays: 'Essais', comics: 'Bandes dessinées', movies: 'Films', tv: 'Séries TV', paintings: 'Peintures',
     architecture: 'Architecture', games: 'Jeux vidéo', songs: 'Chansons', albums: 'Albums',
     photographs: 'Photographies', sculptures: 'Sculptures', poems: 'Poèmes',
   };

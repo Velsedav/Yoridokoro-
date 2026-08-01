@@ -22,7 +22,7 @@ async function catalogueJson<T>(url: string, signal?: AbortSignal): Promise<{ ok
 
 export const openLibrary: SearchProvider = {
   label: 'Open Library',
-  supports: ['books', 'comics'],
+  supports: ['books', 'essays', 'comics'],
   async search(query, _category, signal) {
     const fields = 'key,title,author_name,first_publish_year,cover_i,subject';
     const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=12&fields=${fields}`, { signal });
