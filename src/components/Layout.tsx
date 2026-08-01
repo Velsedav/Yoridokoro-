@@ -1,22 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, BrainCircuit, Calendar, Sparkles, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { getQuotes, addQuote, saveSession, updateSubjectStats } from '../lib/db';
+import { Home, BookOpen, BrainCircuit, Calendar, CalendarDays, Palette, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle, Heart, MoreHorizontal } from 'lucide-react';
+import { getQuotes, addQuote } from '../lib/db';
 import type { Quote } from '../lib/db';
 import QuoteEditorModal from './QuoteEditorModal';
 import { useTranslation } from '../lib/i18n';
-import { playSFX } from '../lib/sounds';
+import { playSFX, SFX } from '../lib/sounds';
 import { useSettings } from '../lib/settings';
-import { getChaptersForSubject, incrementStudyCount } from '../lib/chapters';
+import { SESSION_REVIEW_REQUEST_EVENT, SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress';
 import { isDevNavUnlocked, toggleDevNav } from '../lib/devMode';
 import { getLatestMetacognitionCompletion, getMetacognitionStatus, METACOGNITION_UPDATED_EVENT, type MetacognitionStatus } from '../lib/metacognitionStatus';
 import MetacognitionGate from './MetacognitionGate';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import './Layout.css';
 
 const MASCOT_DEFAULT_QUOTE = "The exam is won at home, not on exam day 🏠";
 const DEV_NAV_CLICKS = 4;
 
-interface PathEntry { path: string; status: 'saving' | 'ok' | 'error'; slot: 1 | 2; }
+interface PathEntry { path: string; status: 'saving' | 'ok' | 'error'; slot: 1 | 2 | 'art-html'; }
 
 
 function CloseOverlay() {
@@ -28,7 +29,7 @@ function CloseOverlay() {
         const onStart = () => { setPhase('saving'); setPaths([]); };
         const onDone = () => setPhase('done');
         const onPath = (e: Event) => {
-            const { path, status, slot } = (e as CustomEvent<{ path: string; status: PathEntry['status']; slot: 1 | 2 }>).detail;
+            const { path, status, slot } = (e as CustomEvent<PathEntry>).detail;
             setPaths(prev => {
                 const idx = prev.findIndex(p => p.slot === slot);
                 if (idx >= 0) {
@@ -54,14 +55,14 @@ function CloseOverlay() {
     const isDone = phase === 'done';
 
     return (
-        <div className="close-overlay">
-            <div className="close-overlay-card">
+        <div className="close-overlay" role="dialog" aria-modal="true" aria-labelledby="close-overlay-title">
+            <div className="close-overlay-card" aria-live="polite">
                 <div className="close-overlay-header">
                     {isDone
                         ? <CheckCircle2 size={28} className="close-overlay-check" />
                         : <Loader2 size={28} className="close-overlay-spinner" />
                     }
-                    <p className="close-overlay-label">
+                    <p className="close-overlay-label" id="close-overlay-title">
                         {isDone ? t('app.save_done') : t('app.saving')}
                     </p>
                 </div>
@@ -71,7 +72,7 @@ function CloseOverlay() {
                         {paths.map(({ path, status, slot }) => (
                             <li key={slot} className={`close-overlay-path-row close-overlay-path-${status}`}>
                                 <span className="close-overlay-path-label">
-                                    {slot === 1 ? t('app.backup_primary') : t('app.backup_secondary')}
+                                    {slot === 1 ? t('app.backup_primary') : slot === 2 ? t('app.backup_secondary') : 'Page HTML Art'}
                                 </span>
                                 {status === 'saving' && <Loader2 size={13} className="close-overlay-path-spinner" />}
                                 {status === 'ok' && <CheckCircle2 size={13} />}
@@ -105,12 +106,71 @@ export default function Layout() {
     const [editorOpen, setEditorOpen] = useState(false);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [navWarningStep, setNavWarningStep] = useState<'none' | 'confirm-stop' | 'confirm-save'>('none');
+    const navWarningRef = useRef<HTMLDivElement>(null);
     const [pendingNavPath, setPendingNavPath] = useState<string | null>(null);
     const [devNavVisible, setDevNavVisible] = useState(isDevNavUnlocked);
     const [mascotClickCount, setMascotClickCount] = useState(0);
     const mascotClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [learningReviewDue, setLearningReviewDue] = useState(false);
     const [metacognitionStatus, setMetacognitionStatus] = useState<MetacognitionStatus>('upcoming');
+
+    const closeNavWarning = useCallback(() => {
+        setNavWarningStep('none');
+        setPendingNavPath(null);
+    }, []);
+    useDialogFocus(navWarningRef, closeNavWarning, 'button', navWarningStep !== 'none');
+
+    // One listener covers every interactive surface, including portals and the
+    // Konomi Art shadow root (composedPath crosses its boundary). This also keeps
+    // newly added buttons from silently missing the shared interaction sound.
+    useEffect(() => {
+        const interactiveSelector = [
+            'button:not(:disabled):not([aria-disabled="true"])',
+            'a[href]:not([aria-disabled="true"])',
+            '[role="button"]:not([aria-disabled="true"])',
+            '[role="tab"]:not([aria-disabled="true"])',
+            '[role="menuitem"]:not([aria-disabled="true"])',
+            '[role="option"]:not([aria-disabled="true"])',
+            '[role="switch"]:not([aria-disabled="true"])',
+            '[tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])',
+            'summary',
+            'label[for]',
+            'label:has(input:not(:disabled))',
+            'select:not(:disabled)',
+            'input[type="button"]:not(:disabled)',
+            'input[type="submit"]:not(:disabled)',
+            'input[type="checkbox"]:not(:disabled)',
+            'input[type="radio"]:not(:disabled)',
+            'input[type="range"]:not(:disabled)',
+            'input[type="color"]:not(:disabled)',
+            'input[type="file"]:not(:disabled)',
+        ].join(',');
+        let activeControl: HTMLElement | null = null;
+
+        const controlFromEvent = (event: Event) => event.composedPath().find(
+            (node): node is HTMLElement => node instanceof HTMLElement && node.matches(interactiveSelector),
+        ) ?? null;
+
+        const handlePointerOver = (event: PointerEvent) => {
+            const control = controlFromEvent(event);
+            if (!control || control === activeControl) return;
+            activeControl = control;
+            playSFX(SFX.HOVER, theme);
+        };
+        const handlePointerOut = (event: PointerEvent) => {
+            const control = controlFromEvent(event);
+            if (!control || control !== activeControl) return;
+            const related = event.relatedTarget;
+            if (!(related instanceof Node) || !control.contains(related)) activeControl = null;
+        };
+
+        document.addEventListener('pointerover', handlePointerOver, true);
+        document.addEventListener('pointerout', handlePointerOut, true);
+        return () => {
+            document.removeEventListener('pointerover', handlePointerOver, true);
+            document.removeEventListener('pointerout', handlePointerOut, true);
+        };
+    }, [theme]);
 
     function handleMascotClick() {
         const next = mascotClickCount + 1;
@@ -126,18 +186,42 @@ export default function Layout() {
         }
     }
 
-    const baseNavItems = [
-        { path: '/', label: t('nav.subjects'), icon: BookOpen },
-        { path: '/plan', label: t('nav.planner'), icon: Calendar },
-        { path: '/learning', label: t('nav.learning'), icon: Lightbulb },
-        { path: '/analytics', label: t('nav.analytics'), icon: BarChart2 },
-        { path: '/bingoals', label: t('nav.bingoals'), icon: Target },
-        { path: '/metacognition-logs', label: t('nav.metacognition_logs'), icon: Wrench },
-        { path: '/settings', label: t('nav.settings'), icon: SettingsIcon },
+    const primaryNavItems = [
+        { path: '/', label: 'Aujourd’hui', icon: Home },
+        { path: '/calendar', label: 'Historique', icon: CalendarDays },
+        { path: '/study', label: 'Sujets', icon: BookOpen },
+        { path: '/plan', label: 'Pomodoro', icon: Calendar },
+        { path: '/bingoals', label: 'Objectifs', icon: Target },
+        { path: '/art', label: 'Art', icon: Palette },
     ];
-    const navItems = devNavVisible
-        ? [...baseNavItems, { path: '/dev', label: 'Dev', icon: FlaskConical }]
-        : baseNavItems;
+    const secondaryNavItems = [
+        { path: '/relations', label: 'Relations', icon: Heart },
+        { path: '/learning', label: t('nav.learning'), icon: Lightbulb },
+        { path: '/analytics', label: 'Analyses', icon: BarChart2 },
+        { path: '/metacognition-logs', label: t('nav.metacognition_logs'), icon: Wrench },
+        { path: '/metacognition', label: 'Réflexion', icon: BrainCircuit },
+    ];
+    if (devNavVisible) secondaryNavItems.push({ path: '/dev', label: 'Dev', icon: FlaskConical });
+    const secondaryActive = secondaryNavItems.some(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
+
+    useEffect(() => {
+        const handleShortcut = (event: KeyboardEvent) => {
+            if (!event.altKey || event.ctrlKey || event.metaKey || event.isComposing || event.repeat) return;
+            if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            const index = Number(event.key) - 1;
+            const destination = primaryNavItems[index]?.path;
+            if (!destination) return;
+            event.preventDefault();
+            if (localStorage.getItem('activeSession')) {
+                setPendingNavPath(destination);
+                setNavWarningStep('confirm-stop');
+            } else {
+                navigate(destination);
+            }
+        };
+        window.addEventListener('keydown', handleShortcut);
+        return () => window.removeEventListener('keydown', handleShortcut);
+    }, [navigate]);
 
     useEffect(() => {
         const check = () => {
@@ -171,7 +255,7 @@ export default function Layout() {
             window.removeEventListener('focus', check);
             window.removeEventListener(METACOGNITION_UPDATED_EVENT, check);
         };
-    }, [metacognitionDay, location.pathname]);
+    }, [metacognitionDay]);
 
     const loadQuotes = useCallback(async () => {
         try {
@@ -236,17 +320,31 @@ export default function Layout() {
                 localStorage.setItem('study-buddy-zoom', currentZoom.toString());
             }
         };
+        const handleReset = (event: KeyboardEvent) => {
+            if (!event.ctrlKey || event.key !== '0') return;
+            event.preventDefault();
+            currentZoom = 1;
+            document.documentElement.style.fontSize = '16px';
+            localStorage.setItem('study-buddy-zoom', '1');
+        };
 
         window.addEventListener('wheel', handleWheel, { passive: false });
+        window.addEventListener('keydown', handleReset);
 
         return () => {
             window.removeEventListener('wheel', handleWheel);
+            window.removeEventListener('keydown', handleReset);
         };
     }, []);
 
     const currentQuote = quotes.length > 0
         ? quotes[currentIdx % quotes.length]?.text
         : 'Let\'s do our best today! ✨';
+
+    const workspacePrefixes = ['/art', '/plan', '/learning', '/analytics', '/metacognition-logs', '/metacognition', '/settings', '/session', '/subject/', '/bingoals/objective/', '/dev'];
+    const routeLayout = workspacePrefixes.some(prefix => location.pathname === prefix || location.pathname.startsWith(prefix)) ? 'workspace' : 'standard';
+    const containedWorkspacePrefixes = ['/art', '/plan', '/learning', '/analytics', '/metacognition-logs', '/metacognition', '/settings'];
+    const isContainedWorkspace = containedWorkspacePrefixes.some(prefix => location.pathname === prefix || location.pathname.startsWith(prefix));
 
     function handleNavClick(e: React.MouseEvent, path: string) {
         playSFX('glass_enter_menu', theme);
@@ -257,88 +355,40 @@ export default function Layout() {
         }
     }
 
-    async function finishSessionFromLayout(saveProgress: boolean) {
-        const stored = localStorage.getItem('activeSession');
-        if (!stored) return;
-        const session = JSON.parse(stored);
-
-        if (saveProgress) {
-            const endedAt = new Date().toISOString();
-            const remaining = session.remainingSeconds || 0;
-
-            let actualMins = 0;
-            for (let i = 0; i <= session.nowBlockIdx; i++) {
-                if (i < session.nowBlockIdx) {
-                    actualMins += session.draft[i].minutes;
-                } else {
-                    actualMins += Math.floor((session.draft[i].minutes * 60 - remaining) / 60);
-                }
-            }
-
-            const workBySubject: Record<string, number> = {};
-            for (let i = 0; i <= session.nowBlockIdx; i++) {
-                const block = session.draft[i];
-                if (block.type === 'WORK' && block.subject_id) {
-                    const mins = i < session.nowBlockIdx
-                        ? block.minutes
-                        : Math.floor((block.minutes * 60 - remaining) / 60);
-                    if (mins > 0) {
-                        workBySubject[block.subject_id] = (workBySubject[block.subject_id] || 0) + mins;
-                    }
-                }
-            }
-
-            await saveSession({
-                id: session.sessionId,
-                started_at: session.startedAt,
-                ended_at: endedAt,
-                template: session.template,
-                repeats: session.repeats,
-                planned_minutes: session.plannedMinutes,
-                actual_minutes: actualMins
-            }, session.draft);
-
-            for (const [subjId, mins] of Object.entries(workBySubject)) {
-                await updateSubjectStats(subjId, mins as number, endedAt);
-            }
-
-            const completedChapterIds = new Set<string>();
-            for (let i = 0; i <= session.nowBlockIdx; i++) {
-                const block = session.draft[i];
-                if (block.type === 'WORK' && block.subject_id && block.chapter_name) {
-                    const mins = i < session.nowBlockIdx
-                        ? block.minutes
-                        : Math.floor((block.minutes * 60 - remaining) / 60);
-                    if (mins > 0) {
-                        const chaps = getChaptersForSubject(block.subject_id);
-                        const ch = chaps.find((c: any) => c.name === block.chapter_name);
-                        if (ch) completedChapterIds.add(ch.id);
-                    }
-                }
-            }
-            for (const id of completedChapterIds) {
-                incrementStudyCount(id);
-            }
-        }
-
+    function discardSessionFromLayout() {
+        if (!localStorage.getItem('activeSession')) return;
         localStorage.removeItem('activeSession');
+        localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY);
+        localStorage.removeItem(SESSION_RETURN_PATH_KEY);
         setNavWarningStep('none');
         navigate(pendingNavPath || '/');
         setPendingNavPath(null);
     }
 
+    function requestSessionReview() {
+        const returnPath = pendingNavPath || '/';
+        localStorage.setItem(SESSION_RETURN_PATH_KEY, returnPath);
+        localStorage.setItem(SESSION_REVIEW_REQUEST_KEY, 'true');
+        setNavWarningStep('none');
+        setPendingNavPath(null);
+
+        if (location.pathname === '/session') {
+            window.dispatchEvent(new Event(SESSION_REVIEW_REQUEST_EVENT));
+        } else {
+            navigate('/session');
+        }
+    }
+
     // ── Obsidian layout (unconditional — every theme is obsidian-*) ──────────
-    const starry = theme === 'obsidian-starry-night';
     return (
-        <div className={`layout obsidian-layout${starry ? ' obsidian-layout--starry' : ''}`}>
-                <nav className={`obsidian-sidebar${starry ? ' obsidian-sidebar--starry' : ''}`}>
-                    {starry && (
-                        <div className="obsidian-sb-logo">
-                            <Sparkles className="icon-gold" size={26} />
-                            <h2>Study Buddy</h2>
-                        </div>
-                    )}
-                    {navItems.map(item => {
+        <div className="layout obsidian-layout yoridokoro-layout">
+                <nav className="obsidian-sidebar yoridokoro-sidebar" aria-label="Navigation principale">
+                    <div className="yoridokoro-brand">
+                        <span className="yoridokoro-mark" aria-hidden="true">拠</span>
+                        <span className="yoridokoro-brand-copy"><strong>Yoridokoro</strong><small>拠り所</small></span>
+                    </div>
+                    <p className="yoridokoro-nav-label">Votre espace</p>
+                    {primaryNavItems.map((item, index) => {
                         const Icon = item.icon;
                         const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
                         return (
@@ -347,74 +397,52 @@ export default function Layout() {
                                 to={item.path}
                                 className={`obsidian-nav-link${active ? ' obsidian-nav-active' : ''}`}
                                 title={item.label}
+                                aria-keyshortcuts={`Alt+${index + 1}`}
                                 onMouseEnter={() => playSFX('glass_ui_hover', theme)}
                                 onClick={(e) => handleNavClick(e, item.path)}
                             >
                                 <Icon size={20} />
-                                {starry && <span className="obsidian-nav-label">{item.label}</span>}
+                                <span className="obsidian-nav-label">{item.label}</span>
                                 {item.path === '/learning' && learningReviewDue && (
                                     <span className="nav-review-dot" aria-label="Review available" />
                                 )}
                             </Link>
                         );
                     })}
-                    <Link
-                        to="/metacognition"
-                        className={`obsidian-nav-link obsidian-reflection-launch is-${metacognitionStatus}${location.pathname === '/metacognition' ? ' obsidian-nav-active' : ''}`}
-                        title={t(`metacog.status_${metacognitionStatus}`)}
-                        aria-label={t(`metacog.status_${metacognitionStatus}`)}
-                        onMouseEnter={() => playSFX('glass_ui_hover', theme)}
-                        onClick={(event) => handleNavClick(event, '/metacognition')}
-                    >
-                        <BrainCircuit size={20} aria-hidden="true" />
-                        {metacognitionStatus === 'complete' && (
-                            <CheckCircle2 className="metacognition-status-badge" size={14} aria-hidden="true" />
-                        )}
-                        {metacognitionStatus === 'due' && (
-                            <span className="metacognition-status-badge metacognition-status-due" aria-hidden="true">!</span>
-                        )}
-                        {starry && <span className="obsidian-nav-label">{t('metacog.prompt_start')}</span>}
-                        <span className="sr-only">{t(`metacog.status_${metacognitionStatus}`)}</span>
-                    </Link>
-                    {starry ? (
-                        <div className="obsidian-sb-mascot">
-                            <div className="mascot-bubble-wrapper">
-                                <div className={`mascot-bubble ${animClass}`} key={currentIdx}>
-                                    {currentQuote}
-                                </div>
-                                <button
-                                    className="quote-edit-btn"
-                                    onClick={() => setEditorOpen(true)}
-                                    title="Edit quotes"
-                                >
-                                    <Pencil size={12} />
-                                </button>
-                            </div>
-                            <img
-                                src="/mascot.png"
-                                alt="Study Buddy Mascot"
-                                className="mascot-img"
-                                onClick={handleMascotClick}
-                            />
+                    <details className="yoridokoro-more-nav" open={secondaryActive ? true : undefined}>
+                        <summary><MoreHorizontal size={20} aria-hidden="true" /><span className="obsidian-nav-label">Plus</span></summary>
+                        <div>
+                            {secondaryNavItems.map(item => {
+                                const Icon = item.icon;
+                                const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+                                const isReflection = item.path === '/metacognition';
+                                return (
+                                    <Link key={item.path} to={item.path} className={`obsidian-nav-link${isReflection ? ` obsidian-reflection-launch is-${metacognitionStatus}` : ''}${active ? ' obsidian-nav-active' : ''}`} title={item.label} onClick={(event) => handleNavClick(event, item.path)}>
+                                        <Icon size={20} aria-hidden="true" />
+                                        {isReflection && metacognitionStatus === 'complete' && <CheckCircle2 className="metacognition-status-badge" size={14} aria-hidden="true" />}
+                                        {isReflection && metacognitionStatus === 'due' && <span className="metacognition-status-badge metacognition-status-due" aria-hidden="true">!</span>}
+                                        <span className="obsidian-nav-label">{item.label}</span>
+                                        {item.path === '/learning' && learningReviewDue && <span className="nav-review-dot" aria-label="Révision disponible" />}
+                                    </Link>
+                                );
+                            })}
                         </div>
-                    ) : (
-                        <button
-                            type="button"
-                            className="obsidian-dev-tap"
-                            onClick={handleMascotClick}
-                            aria-label={devNavVisible ? 'Disable dev mode' : 'Activate dev mode'}
-                        />
-                    )}
+                    </details>
+                    <div className="yoridokoro-sidebar-bottom">
+                        <Link to="/settings" className={`obsidian-nav-link${location.pathname === '/settings' ? ' obsidian-nav-active' : ''}`} onClick={(event) => handleNavClick(event, '/settings')}>
+                            <SettingsIcon size={20} aria-hidden="true" /><span className="obsidian-nav-label">Paramètres</span>
+                        </Link>
+                        <button type="button" className="obsidian-dev-tap" onClick={handleMascotClick} aria-label={devNavVisible ? 'Désactiver le mode développeur' : 'Activer le mode développeur'} />
+                    </div>
                 </nav>
 
                 <div className="obsidian-main-wrapper">
-                    <main className="main-content">
-                        <div key={location.pathname} className="page-route-transition">
+                    <main className={`main-content${isContainedWorkspace ? ' main-content-contained' : ''}`}>
+                        <div key={location.pathname} className={`page-route-transition page-route-${routeLayout}`} data-route={location.pathname}>
                             <Outlet />
                         </div>
                     </main>
-                    {!starry && (
-                        <div className="obsidian-quote-bar">
+                    <div className="obsidian-quote-bar">
                             <span className={`obsidian-quote-text ${animClass}`}>
                                 {currentQuote}
                             </span>
@@ -426,8 +454,7 @@ export default function Layout() {
                             >
                                 <Pencil size={12} />
                             </button>
-                        </div>
-                    )}
+                    </div>
                 </div>
 
                 {editorOpen && (
@@ -441,8 +468,8 @@ export default function Layout() {
                 <MetacognitionGate />
 
                 {navWarningStep !== 'none' && (
-                    <div className="modal-overlay" onClick={() => { setNavWarningStep('none'); setPendingNavPath(null); }}>
-                        <div className="modal-content confirm-modal-content" role="dialog" aria-modal="true" aria-labelledby="obsidian-nav-confirm-title" onClick={e => e.stopPropagation()}>
+                    <div className="modal-overlay" onClick={closeNavWarning}>
+                        <div ref={navWarningRef} className="modal-content confirm-modal-content" role="dialog" aria-modal="true" aria-labelledby="obsidian-nav-confirm-title" tabIndex={-1} onClick={e => e.stopPropagation()}>
                             {navWarningStep === 'confirm-stop' && (
                                 <>
                                     <h2 id="obsidian-nav-confirm-title" className="confirm-modal-title">⏸️ Stop studying?</h2>
@@ -458,8 +485,8 @@ export default function Layout() {
                                     <h2 className="confirm-modal-title">💾 Save your progress?</h2>
                                     <p className="confirm-modal-text">Do you want to record the time you studied so far?</p>
                                     <div className="confirm-modal-actions">
-                                        <button className="btn btn-primary" onClick={() => finishSessionFromLayout(true)}>Save progress</button>
-                                        <button className="btn btn-secondary" onClick={() => finishSessionFromLayout(false)}>Discard</button>
+                                        <button className="btn btn-primary" onClick={requestSessionReview}>Save &amp; review</button>
+                                        <button className="btn btn-secondary" onClick={discardSessionFromLayout}>Discard</button>
                                     </div>
                                 </>
                             )}

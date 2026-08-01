@@ -1,5 +1,7 @@
 // Electron adapter — replaces Tauri SQL/FS with IPC calls
 import { DEFAULT_QUOTES } from "./defaultQuotes";
+import { isBingoGridLayout, type BingoGridLayout } from './layout'
+import { deriveSubobjectiveProgressEvent, deriveValueProgressEvent } from './progressEvents'
 
 const fsAPI = () => (window as any).electronAPI.fs
 const dbAPI = () => (window as any).electronAPI.db
@@ -12,6 +14,8 @@ export async function getBingoDb() {
       dbAPI().execute('bingo', sql, params ?? []) as Promise<{ lastInsertRowid: number; changes: number }>,
     select: <T>(sql: string, params?: unknown[]) =>
       dbAPI().select<T>('bingo', sql, params ?? []),
+    transaction: (statements: Array<{ sql: string; params?: unknown[] }>) =>
+      dbAPI().transaction('bingo', statements) as Promise<Array<{ lastInsertRowid: number; changes: number }>>,
   }
 }
 
@@ -93,28 +97,43 @@ export async function seedBingoDefaults() {
 
 export async function ensureYearSlots(year: number): Promise<void> {
   const db = await getBingoDb()
+  await db.execute(
+    `INSERT OR IGNORE INTO bingo_year_settings (year, layout) VALUES (?, '4x4')`,
+    [year]
+  )
   const existing = await db.select<{ c: number }[]>(
     `SELECT COUNT(*) as c FROM bingo_year_slots WHERE year = ?`, [year]
   )
   if ((existing?.[0]?.c ?? 0) >= 16) return
 
   const total = await db.select<{ c: number }[]>(`SELECT COUNT(*) as c FROM bingo_year_slots`)
-  if ((total?.[0]?.c ?? 0) === 0) {
-    const legacySlots = await db.select<SlotRow[]>(`SELECT * FROM slots ORDER BY slot_index ASC`)
-    for (const s of legacySlots) {
-      await db.execute(
-        `INSERT OR IGNORE INTO bingo_year_slots (slot_index, year, objective_id) VALUES (?, ?, ?)`,
-        [s.slot_index, year, s.objective_id ?? null]
-      )
-    }
-  }
+  const legacySlots = (total?.[0]?.c ?? 0) === 0
+    ? await db.select<SlotRow[]>(`SELECT * FROM slots ORDER BY slot_index ASC`)
+    : []
+  const legacyByIndex = new Map(legacySlots.map(slot => [slot.slot_index, slot.objective_id]))
+  const statements = Array.from({ length: 16 }, (_, slotIndex) => ({
+    sql: `INSERT OR IGNORE INTO bingo_year_slots (slot_index, year, objective_id) VALUES (?, ?, ?)`,
+    params: [slotIndex, year, legacyByIndex.get(slotIndex) ?? null],
+  }))
+  await db.transaction(statements)
+}
 
-  for (let i = 0; i < 16; i++) {
-    await db.execute(
-      `INSERT OR IGNORE INTO bingo_year_slots (slot_index, year, objective_id) VALUES (?, ?, NULL)`,
-      [i, year]
-    )
-  }
+export async function getYearGridLayout(year: number): Promise<BingoGridLayout> {
+  const db = await getBingoDb()
+  const rows = await db.select<{ layout: string }[]>(
+    `SELECT layout FROM bingo_year_settings WHERE year = ?`, [year]
+  )
+  return isBingoGridLayout(rows[0]?.layout) ? rows[0].layout : '4x4'
+}
+
+export async function setYearGridLayout(year: number, layout: BingoGridLayout): Promise<void> {
+  if (!isBingoGridLayout(layout)) throw new Error('Unsupported objective grid layout')
+  const db = await getBingoDb()
+  await db.execute(
+    `INSERT INTO bingo_year_settings (year, layout) VALUES (?, ?)
+     ON CONFLICT(year) DO UPDATE SET layout = excluded.layout`,
+    [year, layout]
+  )
 }
 
 export async function listBingoYears(): Promise<number[]> {
@@ -169,15 +188,25 @@ export async function updateObjective(id: string, patch: Partial<Objective>) {
   const existing = await db.select<Objective[]>(`SELECT * FROM objectives WHERE id = ?`, [id])
   if (!existing[0]) return
   const merged: Objective = { ...existing[0], ...patch, updated_at: t }
-  await db.execute(
-    `UPDATE objectives
-     SET title=?, goal_kind=?, goal_target=?, goal_unit=?, cover_data=?, current_value=?,
-         pin_bottom=?, frequency_days=?, updated_at=?
-     WHERE id=?`,
-    [merged.title, merged.goal_kind, merged.goal_target, merged.goal_unit,
-     merged.cover_data ?? null, merged.current_value, merged.pin_bottom ?? 0,
-     merged.frequency_days ?? null, merged.updated_at, id]
-  )
+  const statements: Array<{ sql: string; params: unknown[] }> = [{
+    sql: `UPDATE objectives
+          SET title=?, goal_kind=?, goal_target=?, goal_unit=?, cover_data=?, current_value=?,
+              pin_bottom=?, frequency_days=?, updated_at=?
+          WHERE id=?`,
+    params: [merged.title, merged.goal_kind, merged.goal_target, merged.goal_unit,
+      merged.cover_data ?? null, merged.current_value, merged.pin_bottom ?? 0,
+      merged.frequency_days ?? null, merged.updated_at, id],
+  }]
+  const event = Object.prototype.hasOwnProperty.call(patch, 'current_value')
+    ? deriveValueProgressEvent(existing[0].current_value ?? 0, merged.current_value ?? 0)
+    : null
+  if (event) statements.push({
+    sql: `INSERT INTO objective_progress_events
+          (id,objective_id,subobjective_id,occurred_at,event_kind,delta_value,value_after,unit,label)
+          VALUES (?,?,NULL,?,?,?,?,?,?)`,
+    params: [crypto.randomUUID(), id, t, event.eventKind, event.deltaValue, event.valueAfter, merged.goal_unit ?? null, merged.title],
+  })
+  await db.transaction(statements)
 }
 
 export async function getObjective(id: string) {
@@ -218,13 +247,62 @@ export async function updateSubobjective(id: string, patch: Partial<Subobjective
   const rows = await db.select<Subobjective[]>(`SELECT * FROM subobjectives WHERE id = ?`, [id])
   if (!rows[0]) return
   const merged = { ...rows[0], ...patch, updated_at: t }
-  await db.execute(
-    `UPDATE subobjectives
-     SET title=?, note=?, target_total=?, progress_current=?, unit=?, is_done=?, updated_at=?
-     WHERE id=?`,
-    [merged.title, merged.note ?? null, merged.target_total ?? null,
-     merged.progress_current ?? 0, merged.unit ?? null, merged.is_done ?? 0, merged.updated_at, id]
+  const statements: Array<{ sql: string; params: unknown[] }> = [{
+    sql: `UPDATE subobjectives
+          SET title=?, note=?, target_total=?, progress_current=?, unit=?, is_done=?, updated_at=?
+          WHERE id=?`,
+    params: [merged.title, merged.note ?? null, merged.target_total ?? null,
+      merged.progress_current ?? 0, merged.unit ?? null, merged.is_done ?? 0, merged.updated_at, id],
+  }]
+  const changesProgress = Object.prototype.hasOwnProperty.call(patch, 'progress_current') || Object.prototype.hasOwnProperty.call(patch, 'is_done')
+  const event = changesProgress ? deriveSubobjectiveProgressEvent(rows[0], merged) : null
+  if (event) statements.push({
+    sql: `INSERT INTO objective_progress_events
+          (id,objective_id,subobjective_id,occurred_at,event_kind,delta_value,value_after,unit,label)
+          VALUES (?,?,?,?,?,?,?,?,?)`,
+    params: [crypto.randomUUID(), merged.objective_id, id, t, event.eventKind, event.deltaValue, event.valueAfter, merged.unit ?? null, merged.title],
+  })
+  await db.transaction(statements)
+}
+
+/**
+ * Removes only empty annual grids that precede the oldest grid containing an
+ * objective. Older builds created a new empty year as soon as it was visited,
+ * which made the year navigator grow backwards forever.
+ *
+ * Objectives are deliberately never deleted here: only empty slot/settings
+ * containers are removed.
+ */
+export async function cleanupEmptyYearsBeforeOldestGrid(fallbackYear = new Date().getFullYear()): Promise<number> {
+  const db = await getBingoDb()
+  const populated = await db.select<{ year: number | null }[]>(
+    `SELECT MIN(year) AS year
+       FROM bingo_year_slots
+      WHERE objective_id IS NOT NULL`
   )
+  const oldestYear = populated[0]?.year ?? fallbackYear
+  await db.transaction([
+    {
+      sql: `DELETE FROM bingo_year_slots
+             WHERE year < ?
+               AND NOT EXISTS (
+                 SELECT 1 FROM bingo_year_slots occupied
+                  WHERE occupied.year = bingo_year_slots.year
+                    AND occupied.objective_id IS NOT NULL
+               )`,
+      params: [oldestYear],
+    },
+    {
+      sql: `DELETE FROM bingo_year_settings
+             WHERE year < ?
+               AND NOT EXISTS (
+                 SELECT 1 FROM bingo_year_slots slots
+                  WHERE slots.year = bingo_year_settings.year
+               )`,
+      params: [oldestYear],
+    },
+  ])
+  return oldestYear
 }
 
 export async function deleteSubobjective(id: string) {
@@ -384,6 +462,7 @@ export async function deleteAllBingoData() {
   await db.execute(`DELETE FROM objectives`)
   await db.execute(`DELETE FROM slots`)
   await db.execute(`DELETE FROM bingo_year_slots`)
+  await db.execute(`DELETE FROM bingo_year_settings`)
   await db.execute(`DELETE FROM bingo_quotes`)
 }
 
@@ -407,29 +486,45 @@ export async function listDashboardMediaSummaries(
 ): Promise<ObjectiveMediaSummary[]> {
   if (objectiveIds.length === 0) return []
   const db = await getBingoDb()
-  const rows = await db.select<{ objective_id: string; kind: string; data: string; created_at: number }[]>(
-    `SELECT so.objective_id, mi.kind, mi.data, mi.created_at
-     FROM subobjectives so
-     JOIN media_items mi ON mi.subobjective_id = so.id
-     WHERE so.objective_id IN (${objectiveIds.map(() => '?').join(',')})
-     AND mi.kind IN ('link', 'image')
-     ORDER BY mi.created_at ASC`,
-    objectiveIds
-  )
+  const placeholders = objectiveIds.map(() => '?').join(',')
+  const [links, images] = await Promise.all([
+    db.select<{ objective_id: string; data: string; created_at: number }[]>(
+      `SELECT so.objective_id, mi.data, mi.created_at
+       FROM subobjectives so
+       JOIN media_items mi ON mi.subobjective_id = so.id
+       WHERE so.objective_id IN (${placeholders}) AND mi.kind = 'link'
+       ORDER BY mi.created_at ASC`,
+      objectiveIds
+    ),
+    db.select<{ objective_id: string; data: string }[]>(
+      `SELECT objective_id, data
+       FROM (
+         SELECT so.objective_id, mi.data,
+                ROW_NUMBER() OVER (
+                  PARTITION BY so.objective_id
+                  ORDER BY mi.created_at DESC, mi.id DESC
+                ) AS image_rank
+         FROM subobjectives so
+         JOIN media_items mi ON mi.subobjective_id = so.id
+         WHERE so.objective_id IN (${placeholders}) AND mi.kind = 'image'
+       )
+       WHERE image_rank = 1`,
+      objectiveIds
+    ),
+  ])
 
   const map = new Map<string, { links: Array<{ url: string; label: string }>; lastImageDataUrl: string | null }>()
   for (const id of objectiveIds) map.set(id, { links: [], lastImageDataUrl: null })
 
-  for (const r of rows) {
+  for (const r of links) {
     const entry = map.get(r.objective_id)
     if (!entry) continue
-    if (r.kind === 'link') {
-      const parsed = (() => { try { return JSON.parse(r.data) } catch { return { url: r.data, label: '' } } })()
-      entry.links.push({ url: String(parsed.url ?? r.data), label: String(parsed.label ?? '') })
-    } else {
-      // images are ordered ASC so last one wins
-      entry.lastImageDataUrl = r.data
-    }
+    const parsed = (() => { try { return JSON.parse(r.data) } catch { return { url: r.data, label: '' } } })()
+    entry.links.push({ url: String(parsed.url ?? r.data), label: String(parsed.label ?? '') })
+  }
+  for (const image of images) {
+    const entry = map.get(image.objective_id)
+    if (entry) entry.lastImageDataUrl = image.data
   }
 
   return objectiveIds.map(id => {

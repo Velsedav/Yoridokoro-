@@ -1,8 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, Maximize, Minimize, Pencil, Plus, Trash2 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, Clock3, ExternalLink, Maximize, Minimize, Minus, Pencil, Plus, Target, Trash2 } from "lucide-react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import "../../styles/bingoals.css";
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 import BingoModal from "../../components/bingoals/BingoModal";
+import ImageImportModal from "../../components/bingoals/ImageImportModal";
 import type { MediaItem, Objective, Subobjective } from "../../lib/bingoals/db";
 import {
   addImage,
@@ -22,8 +24,7 @@ import {
   updateSubobjective
 } from "../../lib/bingoals/db";
 import { clamp01, daysAgo, formatDuration } from "../../lib/bingoals/format";
-import { fileToCompressedDataUrl } from "../../lib/bingoals/image";
-import { computeObjectivePercent, progressLabel, computeTotalMs, computeLastStudiedTs } from "../../lib/bingoals/progress";
+import { computeObjectivePercent, objectiveProgressLabel, computeTotalMs, computeLastStudiedTs } from "../../lib/bingoals/progress";
 import { titleToHue } from "../../lib/bingoals/color";
 import { sortStripsForMemoriesView } from "../../lib/bingoals/sortStrips";
 import { useTranslation } from "../../lib/i18n";
@@ -44,10 +45,30 @@ function formatDaysAgo(d: number | null, t: (k: string) => string) {
   return t('bingoals.days_ago').replace('{n}', String(d));
 }
 
+type RunningTimer = { subId: string; startedAt: number; durationMs: number | null }
+
+const OBJECTIVE_TIMER_KEY = 'bingoals.timerMinutes'
+const OBJECTIVE_TIMER_PRESETS = [5, 15, 25, 45, 60, 90, 120] as const
+function getObjectiveTimerMinutes() {
+  const parsed = Math.floor(Number(localStorage.getItem(OBJECTIVE_TIMER_KEY) ?? 25))
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 720 ? parsed : 25
+}
+
+function beginObjectiveTimer(subId: string): RunningTimer {
+  const minutes = getObjectiveTimerMinutes()
+  return { subId, startedAt: Date.now(), durationMs: minutes > 0 ? minutes * 60_000 : null }
+}
+
+function isKeyboardInput(target: EventTarget | null) {
+  return target instanceof HTMLElement && !!target.closest('input, textarea, select, [contenteditable="true"]')
+}
+
 export default function BingoObjectivePage() {
   const { id } = useParams<{ id: string }>();
   const objectiveId = id!;
   const { t } = useTranslation();
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [obj, setObj] = useState<Objective | null>(null);
   const [subs, setSubs] = useState<Subobjective[]>([]);
@@ -55,14 +76,32 @@ export default function BingoObjectivePage() {
   const [timeMap, setTimeMap] = useState<Map<string, { total_ms: number; last_end: number | null }>>(new Map());
   const [playingSubId, setPlayingSubId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [running, setRunning] = useState<{ subId: string; startedAt: number } | null>(null);
+  const [running, setRunning] = useState<RunningTimer | null>(null);
+  const runningRef = useRef<RunningTimer | null>(null)
+  const stoppingRef = useRef(false)
   const [activeSubId, setActiveSubId] = useState<string | null>(null)
-  const [listView, setListView] = useState<'memories' | 'grid' | 'full'>(() => {
+  const [listView, setListView] = useState<'overview' | 'focus'>(() => {
     const raw = localStorage.getItem('bingoals.listView')
-    if (raw === 'grid' || raw === 'full' || raw === 'memories') return raw
-    return 'memories'  // also covers legacy 'compact'
+    if (raw === 'memories' || raw === 'overview') return 'overview'
+    return 'focus'
   })
   const [pendingAddLinkSubId, setPendingAddLinkSubId] = useState<string | null>(null)
+  const [keyboardFocusSubId, setKeyboardFocusSubId] = useState<string | null>(null)
+  const [editingObjective, setEditingObjective] = useState(() => searchParams.get('edit') === '1')
+  const subListRef = useRef<HTMLDivElement>(null)
+  const hasAutofocusedSubobjective = useRef(false)
+
+  useEffect(() => {
+    if (searchParams.get('edit') === '1') setEditingObjective(true)
+  }, [searchParams])
+
+  function closeObjectiveEditor() {
+    setEditingObjective(false)
+    if (!searchParams.has('edit')) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('edit')
+    setSearchParams(next, { replace: true })
+  }
 
   async function reload() {
     const o = await getObjective(objectiveId)
@@ -91,17 +130,32 @@ export default function BingoObjectivePage() {
     localStorage.setItem('bingoals.listView', listView)
   }, [listView])
 
+  useEffect(() => {
+    runningRef.current = running
+  }, [running])
+
   async function stopTimerIfRunning() {
-    if (!running) return;
-    const endedAt = Date.now();
-    await addTimeSession(running.subId, running.startedAt, endedAt);
-    setRunning(null);
-    await reload();
+    const active = runningRef.current ?? running
+    if (!active || stoppingRef.current) return
+    stoppingRef.current = true
+    runningRef.current = null
+    setRunning(null)
+    try {
+      await addTimeSession(active.subId, active.startedAt, Date.now())
+      await reload()
+    } finally {
+      stoppingRef.current = false
+    }
   }
 
   useEffect(() => {
-    return () => { void stopTimerIfRunning(); };
-  }, [running?.subId]);
+    return () => {
+      const active = runningRef.current
+      if (!active) return
+      runningRef.current = null
+      void addTimeSession(active.subId, active.startedAt, Date.now())
+    }
+  }, [])
 
   const percent = useMemo(() => {
     if (!obj) return null;
@@ -123,6 +177,8 @@ export default function BingoObjectivePage() {
     },
   ), [subs, running])
 
+  const navigationSubs = listView === 'overview' ? sortedSubs : subs
+
   const mediaBySub = useMemo(() => {
     const map = new Map<string, MediaItem[]>();
     for (const item of media) {
@@ -133,9 +189,134 @@ export default function BingoObjectivePage() {
     return map;
   }, [media]);
 
+  useEffect(() => {
+    setKeyboardFocusSubId((previous) => {
+      if (previous && navigationSubs.some(sub => sub.id === previous)) return previous
+      return activeSubId ?? navigationSubs[0]?.id ?? null
+    })
+  }, [activeSubId, navigationSubs])
+
+  function focusSubobjective(index: number) {
+    const boundedIndex = Math.max(0, Math.min(index, navigationSubs.length - 1))
+    const sub = navigationSubs[boundedIndex]
+    if (!sub) return
+    setKeyboardFocusSubId(sub.id)
+    setActiveSubId(sub.id)
+    window.requestAnimationFrame(() => {
+      subListRef.current
+        ?.querySelector<HTMLElement>(`[data-subobjective-id="${sub.id}"]`)
+        ?.focus()
+    })
+  }
+
+  useEffect(() => {
+    if (hasAutofocusedSubobjective.current || navigationSubs.length === 0) return
+    hasAutofocusedSubobjective.current = true
+    const preferredIndex = Math.max(0, navigationSubs.findIndex(sub => sub.id === activeSubId))
+    focusSubobjective(preferredIndex)
+  }, [activeSubId, navigationSubs])
+
+  function handleSubobjectiveKeyDown(event: React.KeyboardEvent, currentIndex: number) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+
+    if (event.key === 'Home') return focusSubobjective(0)
+    if (event.key === 'End') return focusSubobjective(navigationSubs.length - 1)
+
+    if (listView === 'overview') {
+      return focusSubobjective(currentIndex + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1))
+    }
+
+    const grid = subListRef.current?.querySelector<HTMLElement>('.subGrid')
+    const columns = Math.max(1, grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length : 1)
+    const row = Math.floor(currentIndex / columns)
+    const column = currentIndex % columns
+    let nextIndex = currentIndex
+    if (event.key === 'ArrowLeft' && column > 0) nextIndex -= 1
+    if (event.key === 'ArrowRight' && column < columns - 1) nextIndex += 1
+    if (event.key === 'ArrowUp' && row > 0) nextIndex -= columns
+    if (event.key === 'ArrowDown') nextIndex += columns
+    if (nextIndex >= 0 && nextIndex < navigationSubs.length) focusSubobjective(nextIndex)
+  }
+
+  async function toggleActiveTimerFromKeyboard() {
+    const subId = activeSubId ?? navigationSubs[0]?.id
+    if (!subId) return
+    setActiveSubId(subId)
+    if (runningRef.current?.subId === subId || running?.subId === subId) {
+      playSFX(SFX.CANCEL)
+      await stopTimerIfRunning()
+      return
+    }
+    playSFX(SFX.SESSION_START)
+    await stopTimerIfRunning()
+    const nextTimer = beginObjectiveTimer(subId)
+    runningRef.current = nextTimer
+    setRunning(nextTimer)
+  }
+
+  async function adjustActiveProgressFromKeyboard(delta: -1 | 1) {
+    const subId = activeSubId ?? navigationSubs[0]?.id
+    const sub = subs.find(item => item.id === subId)
+    if (!sub || (sub.target_total ?? 0) <= 0) return
+    const next = Math.max(0, (sub.progress_current ?? 0) + delta)
+    const { autoDone } = computeAutoDone({ ...sub, progress_current: next })
+    playSFX(autoDone ? SFX.BINGO_COMPLETE : SFX.BINGO_CHECK)
+    setSubs(previous => previous.map(item => item.id === sub.id
+      ? { ...item, progress_current: next, is_done: autoDone ? 1 : 0 }
+      : item))
+    await updateSubobjective(sub.id, { progress_current: next, is_done: autoDone ? 1 : 0 })
+    await reload()
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return
+      if (document.querySelector('[role="dialog"]')) return
+      if (isKeyboardInput(event.target)) {
+        if (event.key === 'Escape' && event.target instanceof HTMLElement) event.target.blur()
+        return
+      }
+      const key = event.key.toLowerCase()
+
+      if (key === 'j' || key === 'k') {
+        event.preventDefault()
+        const currentIndex = Math.max(0, navigationSubs.findIndex(sub => sub.id === (keyboardFocusSubId ?? activeSubId)))
+        focusSubobjective(currentIndex + (key === 'j' ? 1 : -1))
+      } else if (key === 's') {
+        if (event.repeat) return
+        event.preventDefault()
+        void toggleActiveTimerFromKeyboard()
+      } else if (event.key === '+' || event.key === '=' || event.key === '-') {
+        if (event.repeat) return
+        event.preventDefault()
+        void adjustActiveProgressFromKeyboard(event.key === '-' ? -1 : 1)
+      } else if (key === 'v') {
+        if (event.repeat) return
+        event.preventDefault()
+        setListView(view => view === 'focus' ? 'overview' : 'focus')
+      } else if (key === 'n') {
+        if (event.repeat) return
+        event.preventDefault()
+        setAddOpen(true)
+      } else if (key === 'e') {
+        if (event.repeat) return
+        event.preventDefault()
+        setEditingObjective(true)
+      } else if (key === 'b') {
+        if (event.repeat) return
+        event.preventDefault()
+        navigate('/bingoals')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  })
+
   if (!obj) {
     return (
-      <div className="bingoals-root fade-in">
+      <div className="bingoals-root bingo-objective-page fade-in">
         <div className="page-header">
           <div className="page-title-group">
             <Link to="/bingoals" className="btn btn-icon" aria-label={t('bingoals.back')}>
@@ -150,63 +331,97 @@ export default function BingoObjectivePage() {
   }
 
   return (
-    <div className="bingoals-root fade-in">
-      <div className="objPage-header">
+    <div className="bingoals-root bingo-objective-page fade-in">
+      <header className="objPage-header">
         <div className="objPage-headerTitleRow">
           <Link to="/bingoals" className="btn btn-icon" aria-label={t('bingoals.back')}>
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="objPage-headerTitleText">{obj.title}</h1>
-          {(obj.goal_kind === 'metric' || obj.goal_kind === 'amount' || obj.goal_kind === 'manual') && (
-            <input
-              type="number"
-              className="numInput"
-              style={{ width: 60 }}
-              value={obj.current_value ?? 0}
-              onChange={async (e) => {
-                const v = Number(e.target.value)
-                setObj({ ...obj, current_value: v })
-                await updateObjective(obj.id, { current_value: v })
-              }}
-            />
-          )}
-        </div>
-        <div className="objPage-headerProgressRow">
-          <span className="objPage-headerProgressLabel">
-            {progressLabel(percent, obj.goal_kind, obj.goal_target, obj.goal_unit)}
-          </span>
-          <div className="objPage-headerBar">
-            <div className="objPage-headerBarFill" style={{ width: `${(percent ?? 0) * 100}%` }} />
+          <div className="objPage-headerIdentity">
+            <span className="objPage-eyebrow"><Target size={13} aria-hidden="true" /> {t('bingoals.detail_eyebrow')}</span>
+            <div className="objPage-titleEditRow">
+              <h1 className="objPage-headerTitleText">{obj.title}</h1>
+              <button
+                type="button"
+                className="btn btn-icon objPage-editObjectiveBtn"
+                onClick={() => setEditingObjective(true)}
+                aria-label={t('bingoals.edit_objective')}
+                title={`${t('bingoals.edit_objective')} (E)`}
+              >
+                <Pencil size={15} aria-hidden="true" />
+              </button>
+            </div>
+            <p>{t('bingoals.objective_subtitle')}</p>
           </div>
         </div>
-        <div className="objPage-headerMeta">
-          <span>Last: {formatDaysAgo(lastStudiedDays, t)}</span>
-          <span>Total: {formatDuration(totalMs)}</span>
-        </div>
-        <div className="objPage-controls">
-          <div className="objPage-viewToggle">
-            {(['memories', 'grid', 'full'] as const).map(v => (
+        <div className="objPage-commandbar">
+          <div className="objPage-progressCard">
+            <span className="objPage-headerProgressLabel">{t('bingoals.progress_label')} · {percentText}</span>
+            <strong>{objectiveProgressLabel(obj, subs)}</strong>
+            <div className="objPage-headerBar" role="progressbar" aria-label="Progression de l’objectif" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((percent ?? 0) * 100)}>
+              <div className="objPage-headerBarFill" style={{ width: `${(percent ?? 0) * 100}%` }} />
+            </div>
+          </div>
+          <div className="objPage-headerMeta">
+            <span><Target size={14} aria-hidden="true" /><small>{t('bingoals.last_action')}</small><strong>{formatDaysAgo(lastStudiedDays, t)}</strong></span>
+            <span><Clock3 size={14} aria-hidden="true" /><small>{t('bingoals.invested_time')}</small><strong>{formatDuration(totalMs)}</strong></span>
+          </div>
+          <div className="objPage-controls">
+            <div className="objPage-viewToggle" role="group" aria-label="Affichage de l’objectif">
+            {([['focus', t('bingoals.focus_view')], ['overview', t('bingoals.overview_view')]] as const).map(([v, label]) => (
               <button
                 key={v}
                 className={`objPage-viewBtn${listView === v ? ' objPage-viewBtn--active' : ''}`}
                 onClick={() => setListView(v)}
+                aria-pressed={listView === v}
               >
-                {v}
+                {label}
               </button>
             ))}
+            </div>
+            <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER)} onClick={() => setAddOpen(true)}>
+              {t('bingoals.add_subobjective')}
+            </button>
           </div>
-          <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER)} onClick={() => setAddOpen(true)}>
-            {t('bingoals.add_subobjective')}
-          </button>
         </div>
-      </div>
+      </header>
+
+      {editingObjective && (
+        <ObjectiveInlineEditor
+          objective={obj}
+          onCancel={closeObjectiveEditor}
+          onSaved={async () => {
+            closeObjectiveEditor()
+            await reload()
+          }}
+        />
+      )}
+
+      <p className="bingo-keyboard-help objPage-keyboard-help" id="objective-keyboard-help">
+        <kbd>← ↑ ↓ →</kbd> {t('bingoals.keyboard_navigate')} <span>·</span>
+        <kbd>J</kbd>/<kbd>K</kbd> {t('bingoals.keyboard_previous_next')} <span>·</span>
+        <kbd>S</kbd> {t('bingoals.keyboard_timer')} <span>·</span>
+        <kbd>−</kbd>/<kbd>+</kbd> {t('bingoals.keyboard_progress')} <span>·</span>
+        <kbd>V</kbd> {t('bingoals.keyboard_view')} <span>·</span>
+        <kbd>N</kbd> {t('bingoals.keyboard_add')} <span>·</span>
+        <kbd>E</kbd> {t('bingoals.keyboard_edit')} <span>·</span>
+        <kbd>B</kbd> {t('bingoals.keyboard_back')}
+      </p>
 
       {/* ── Responsive layout ── */}
-      <div className={`objPage-layout${listView === 'full' ? ' objPage-layout--full' : ''}${listView === 'memories' ? ' objPage-layout--memories' : ''}`}>
+      <div className={`objPage-layout${listView === 'overview' ? ' objPage-layout--memories' : ' objPage-layout--focus'}`}>
 
         {/* List column */}
-        <div className="objPage-listCol">
-          {listView === 'memories' && sortedSubs.map(s => (
+        <div className="objPage-listCol" ref={subListRef} role="group" aria-label={t('bingoals.steps_aria')} aria-describedby="objective-keyboard-help">
+          {subs.length === 0 && (
+            <div className="objPage-empty">
+              <Target size={28} aria-hidden="true" />
+              <h2>{t('bingoals.empty_objective_title')}</h2>
+              <p>{t('bingoals.empty_objective_desc')}</p>
+              <button className="btn btn-primary" onClick={() => setAddOpen(true)}>{t('bingoals.add_subobjective')}</button>
+            </div>
+          )}
+          {listView === 'overview' && sortedSubs.map((s, index) => (
             <SubobjectiveMemoryStrip
               key={s.id}
               s={s}
@@ -221,11 +436,15 @@ export default function BingoObjectivePage() {
               setActiveSubId={setActiveSubId}
               reload={reload}
               onAddLink={() => setPendingAddLinkSubId(s.id)}
+              navigationIndex={index}
+              isKeyboardTabStop={keyboardFocusSubId === s.id}
+              onKeyboardFocus={() => setKeyboardFocusSubId(s.id)}
+              onKeyboardNavigate={(event) => handleSubobjectiveKeyDown(event, index)}
             />
           ))}
-          {listView === 'grid' && (
+          {listView === 'focus' && (
             <div className="subGrid">
-              {subs.map(s => (
+              {subs.map((s, index) => (
                 <SubobjectiveTile
                   key={s.id}
                   s={s}
@@ -234,27 +453,10 @@ export default function BingoObjectivePage() {
                   activeSubId={activeSubId}
                   setActiveSubId={setActiveSubId}
                   onAddLink={() => setPendingAddLinkSubId(s.id)}
-                />
-              ))}
-            </div>
-          )}
-          {listView === 'full' && (
-            <div className="subFullGrid">
-              {subs.map(s => (
-                <SubobjectiveFullCard
-                  key={s.id}
-                  s={s}
-                  timeStats={timeMap.get(s.id) ?? { total_ms: 0, last_end: null }}
-                  subs={subs}
-                  setSubs={setSubs}
-                  running={running}
-                  setRunning={setRunning}
-                  stopTimerIfRunning={stopTimerIfRunning}
-                  playingSubId={playingSubId}
-                  setPlayingSubId={setPlayingSubId}
-                  subMedia={mediaBySub.get(s.id) ?? []}
-                  reload={reload}
-                  onAddLink={() => setPendingAddLinkSubId(s.id)}
+                  navigationIndex={index}
+                  isKeyboardTabStop={keyboardFocusSubId === s.id}
+                  onKeyboardFocus={() => setKeyboardFocusSubId(s.id)}
+                  onKeyboardNavigate={(event) => handleSubobjectiveKeyDown(event, index)}
                 />
               ))}
             </div>
@@ -266,8 +468,7 @@ export default function BingoObjectivePage() {
           const activeSub = subs.find(x => x.id === activeSubId)
           if (!activeSub) return null
           return (
-            <>
-              <div className="objPage-activeCol">
+            <div className="objPage-activeCol">
                 <ActiveTimerSection
                   s={activeSub}
                   timeStats={timeMap.get(activeSubId) ?? { total_ms: 0, last_end: null }}
@@ -281,20 +482,7 @@ export default function BingoObjectivePage() {
                   playingSubId={playingSubId}
                   setPlayingSubId={setPlayingSubId}
                 />
-              </div>
-              {/* 4K: memories in separate column */}
-              <div className="objPage-memoriesCol">
-                <SubobjectiveMemories
-                  s={activeSub}
-                  subs={subs}
-                  subMedia={mediaBySub.get(activeSubId) ?? []}
-                  playingSubId={playingSubId}
-                  setPlayingSubId={setPlayingSubId}
-                  reload={reload}
-                  stopTimerIfRunning={stopTimerIfRunning}
-                />
-              </div>
-            </>
+            </div>
           )
         })()}
       </div>
@@ -359,6 +547,124 @@ export default function BingoObjectivePage() {
   );
 }
 
+function ObjectiveInlineEditor(props: {
+  objective: Objective
+  onCancel: () => void
+  onSaved: () => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [title, setTitle] = useState(props.objective.title)
+  const [target, setTarget] = useState(props.objective.goal_target == null ? '' : String(props.objective.goal_target))
+  const [unit, setUnit] = useState(props.objective.goal_unit ?? '')
+  const [coverData, setCoverData] = useState<string | null>(props.objective.cover_data ?? null)
+  const [frequencyDays, setFrequencyDays] = useState(props.objective.frequency_days == null ? '' : String(props.objective.frequency_days))
+  const [imageImportOpen, setImageImportOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    const fd = frequencyDays.trim().length === 0
+      ? null
+      : Math.max(1, Math.floor(Number(frequencyDays)))
+    const parsedTarget = target.trim().length === 0 ? null : Number(target)
+    const plannedSteps = parsedTarget !== null && Number.isFinite(parsedTarget) && parsedTarget > 0
+      ? parsedTarget
+      : null
+    setBusy(true)
+    try {
+      await updateObjective(props.objective.id, {
+        title: title.trim() || props.objective.title,
+        goal_kind: 'count',
+        goal_target: plannedSteps,
+        goal_unit: unit.trim() || null,
+        current_value: 0,
+        cover_data: coverData,
+        frequency_days: fd,
+      })
+      await props.onSaved()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="objPage-inlineEditor" aria-labelledby="objective-inline-editor-title">
+      <div className="objPage-inlineEditorHeading">
+        <div>
+          <span>{t('bingoals.edit_essentials_eyebrow')}</span>
+          <h2 id="objective-inline-editor-title">{t('bingoals.edit_modal_title')}</h2>
+        </div>
+        <p>{t('bingoals.edit_essentials_helper')}</p>
+      </div>
+
+      <form
+        className="objPage-inlineEditorForm"
+        onSubmit={(event) => { event.preventDefault(); void save() }}
+      >
+        <div className="objPage-inlineEditorMain">
+          <div>
+            <label htmlFor="bingo-edit-title">{t('bingoals.title_label')}</label>
+            <input
+              id="bingo-edit-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="objPage-coverEditor">
+            {coverData
+              ? <img src={coverData} alt="" />
+              : <span className="muted">{t('bingoals.no_cover')}</span>}
+            <div>
+              <button type="button" className="btn" onClick={() => setImageImportOpen(true)}>{t('bingoals.choose_image')}</button>
+              {coverData && <button type="button" className="btn" onClick={() => setCoverData(null)}>{t('bingoals.remove_cover')}</button>}
+            </div>
+          </div>
+        </div>
+
+        <details className="bingo-form-options">
+          <summary>{t('bingoals.organization_optional')}</summary>
+          <p>{t('bingoals.organization_helper')}</p>
+          <div className="bingo-create-goal-row">
+            <div>
+              <label htmlFor="bingo-edit-target">{t('bingoals.planned_steps_label')}</label>
+              <input id="bingo-edit-target" type="number" min="1" step="any" value={target} onChange={(event) => setTarget(event.target.value)} placeholder="12" />
+            </div>
+            <div>
+              <label htmlFor="bingo-edit-unit">{t('bingoals.result_name_label')}</label>
+              <input id="bingo-edit-unit" value={unit} onChange={(event) => setUnit(event.target.value)} placeholder={t('bingoals.create_unit_placeholder')} />
+            </div>
+          </div>
+          <label htmlFor="bingo-edit-freq">{t('bingoals.review_rhythm_label')}</label>
+          <input
+            id="bingo-edit-freq"
+            type="number"
+            min="1"
+            value={frequencyDays}
+            onChange={(event) => setFrequencyDays(event.target.value)}
+            placeholder={t('bingoals.frequency_placeholder')}
+          />
+        </details>
+
+        <div className="row objPage-inlineEditorActions">
+          <button type="button" className="btn" onClick={props.onCancel}>{t('bingoals.cancel')}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy || title.trim().length === 0}>
+            {busy ? t('bingoals.saving') : t('bingoals.save')}
+          </button>
+        </div>
+      </form>
+
+      <ImageImportModal
+        open={imageImportOpen}
+        multiple={false}
+        maxSide={600}
+        quality={0.75}
+        onClose={() => setImageImportOpen(false)}
+        onAdd={async ([dataUrl]) => { if (dataUrl) setCoverData(dataUrl) }}
+      />
+    </section>
+  )
+}
+
 function AddSubobjectiveModal(props: {
   open: boolean;
   onClose: () => void;
@@ -368,12 +674,12 @@ function AddSubobjectiveModal(props: {
   const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [unit, setUnit] = useState("");
-  const [total, setTotal] = useState<number>(1);
+  const [total, setTotal] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (props.open) { setTitle(""); setUnit(props.objective.goal_unit ?? ""); setTotal(1); }
-  }, [props.open, props.objective.goal_unit]);
+    if (props.open) { setTitle(""); setUnit(""); setTotal(""); }
+  }, [props.open]);
 
   return (
     <BingoModal open={props.open} title={t('bingoals.add_sub_modal_title')} onClose={props.onClose}>
@@ -381,11 +687,22 @@ function AddSubobjectiveModal(props: {
         <label htmlFor="bingo-sub-title">{t('bingoals.title_label')}</label>
         <input id="bingo-sub-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Book: The Stranger" />
 
-        <label htmlFor="bingo-sub-total">{t('bingoals.sub_total_label')}</label>
-        <input id="bingo-sub-total" type="number" value={total} onChange={(e) => setTotal(Number(e.target.value))} />
+        <p className="bingo-step-default-hint">{t('bingoals.simple_step_helper')}</p>
 
-        <label htmlFor="bingo-sub-unit">{t('bingoals.unit_label')}</label>
-        <input id="bingo-sub-unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="chapters / lessons / etc." />
+        <details className="bingo-form-options">
+          <summary>{t('bingoals.measured_step_optional')}</summary>
+          <p>{t('bingoals.measured_step_helper')}</p>
+          <div className="bingo-create-goal-row">
+            <div>
+              <label htmlFor="bingo-sub-total">{t('bingoals.step_target_label')}</label>
+              <input id="bingo-sub-total" type="number" min="0.01" step="any" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="60" />
+            </div>
+            <div>
+              <label htmlFor="bingo-sub-unit">{t('bingoals.unit_label')}</label>
+              <input id="bingo-sub-unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="WPM, km, €…" />
+            </div>
+          </div>
+        </details>
 
         <div className="row">
           <button className="btn" onClick={props.onClose}>{t('bingoals.cancel')}</button>
@@ -395,7 +712,13 @@ function AddSubobjectiveModal(props: {
             onClick={async () => {
               setBusy(true);
               try {
-                await createSubobjective(props.objective.id, title.trim(), unit.trim() || null, total || null);
+                const parsedTotal = total.trim().length > 0 ? Number(total) : null;
+                await createSubobjective(
+                  props.objective.id,
+                  title.trim(),
+                  parsedTotal !== null && Number.isFinite(parsedTotal) && parsedTotal > 0 ? unit.trim() || null : null,
+                  parsedTotal !== null && Number.isFinite(parsedTotal) && parsedTotal > 0 ? parsedTotal : null,
+                );
                 playSFX(SFX.BINGO_ADD);
                 props.onAdded();
               } finally { setBusy(false); }
@@ -578,12 +901,19 @@ function QuoteLightbox(props: {
 function SubobjectiveTile(props: {
   s: Subobjective
   subMedia: MediaItem[]
-  running: { subId: string; startedAt: number } | null
+  running: RunningTimer | null
   activeSubId: string | null
   setActiveSubId: (id: string | null) => void
   onAddLink: () => void
+  navigationIndex: number
+  isKeyboardTabStop: boolean
+  onKeyboardFocus: () => void
+  onKeyboardNavigate: (event: React.KeyboardEvent<HTMLButtonElement>) => void
 }) {
-  const { s, subMedia, running, activeSubId, setActiveSubId, onAddLink } = props
+  const {
+    s, subMedia, activeSubId, setActiveSubId, onAddLink,
+    navigationIndex, isKeyboardTabStop, onKeyboardFocus, onKeyboardNavigate,
+  } = props
   const { t } = useTranslation()
   const { autoDone, hasTarget } = computeAutoDone(s)
   const isDone = autoDone || (!hasTarget && !!s.is_done)
@@ -611,11 +941,18 @@ function SubobjectiveTile(props: {
     <div
       className={['subGridTile', isActive && 'subGridTile--active', isDone && 'subGridTile--done'].filter(Boolean).join(' ')}
       style={tileStyle}
-      onClick={() => setActiveSubId(s.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveSubId(s.id) }}
     >
+      <button
+        type="button"
+        className="subGridOpen"
+        data-subobjective-id={s.id}
+        data-subobjective-index={navigationIndex}
+        tabIndex={isKeyboardTabStop ? 0 : -1}
+        aria-label={`${t('bingoals.open_subobjective')}: ${s.title}`}
+        onFocus={onKeyboardFocus}
+        onKeyDown={onKeyboardNavigate}
+        onClick={() => setActiveSubId(s.id)}
+      />
       <div className="subGridDoneOverlay">✓</div>
       {progressText && <div className="subGridProgress">{progressText}</div>}
       <button
@@ -651,25 +988,30 @@ const SubobjectiveMemoryStrip = memo(function SubobjectiveMemoryStrip(props: {
   subs: Subobjective[]
   setSubs: React.Dispatch<React.SetStateAction<Subobjective[]>>
   timeStats: { total_ms: number; last_end: number | null }
-  running: { subId: string; startedAt: number } | null
-  setRunning: React.Dispatch<React.SetStateAction<{ subId: string; startedAt: number } | null>>
+  running: RunningTimer | null
+  setRunning: React.Dispatch<React.SetStateAction<RunningTimer | null>>
   stopTimerIfRunning: () => Promise<void>
   subMedia: MediaItem[]
   activeSubId: string | null
   setActiveSubId: (id: string | null) => void
   reload: () => Promise<void>
   onAddLink: () => void
+  navigationIndex: number
+  isKeyboardTabStop: boolean
+  onKeyboardFocus: () => void
+  onKeyboardNavigate: (event: React.KeyboardEvent<HTMLButtonElement>) => void
 }) {
   const {
     s, subs, setSubs, running, setRunning, stopTimerIfRunning,
     subMedia, activeSubId, setActiveSubId, reload, onAddLink,
+    navigationIndex, isKeyboardTabStop, onKeyboardFocus, onKeyboardNavigate,
   } = props
   const { t } = useTranslation()
   const [lightboxImageId, setLightboxImageId] = useState<string | null>(null)
   const [lightboxQuoteId, setLightboxQuoteId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [quoteOpen, setQuoteOpen] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [imageOpen, setImageOpen] = useState(false)
 
   const { autoDone, hasTarget } = computeAutoDone(s)
   const isDone = autoDone || (!hasTarget && !!s.is_done)
@@ -715,7 +1057,7 @@ const SubobjectiveMemoryStrip = memo(function SubobjectiveMemoryStrip(props: {
 
   const triggerImageUpload = () => {
     setPickerOpen(false)
-    fileInputRef.current?.click()
+    setImageOpen(true)
   }
   const triggerAddQuote = () => {
     setPickerOpen(false)
@@ -732,16 +1074,19 @@ const SubobjectiveMemoryStrip = memo(function SubobjectiveMemoryStrip(props: {
       <div className="memStrip-header">
         <div className="memStrip-headerTop">
           <span className={dotClass} aria-hidden="true" />
-          <span
+          <button
+            type="button"
             className="memStrip-title"
             onClick={() => setActiveSubId(s.id)}
-            role="button"
-            tabIndex={0}
-            aria-label={t('bingoals.sub_title_aria')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveSubId(s.id) }}
+            data-subobjective-id={s.id}
+            data-subobjective-index={navigationIndex}
+            tabIndex={isKeyboardTabStop ? 0 : -1}
+            aria-label={`${t('bingoals.open_subobjective')}: ${s.title}`}
+            onFocus={onKeyboardFocus}
+            onKeyDown={onKeyboardNavigate}
           >
             {s.title}
-          </span>
+          </button>
           <span className="memStrip-progress">{progressText}</span>
         </div>
         <div className="memStrip-headerActions">
@@ -760,7 +1105,7 @@ const SubobjectiveMemoryStrip = memo(function SubobjectiveMemoryStrip(props: {
               onClick={async () => {
                 playSFX(SFX.SESSION_START)
                 await stopTimerIfRunning()
-                setRunning({ subId: s.id, startedAt: Date.now() })
+                setRunning(beginObjectiveTimer(s.id))
               }}
               onMouseEnter={() => playSFX(SFX.HOVER)}
             >
@@ -849,23 +1194,14 @@ const SubobjectiveMemoryStrip = memo(function SubobjectiveMemoryStrip(props: {
               )
             })}
           {!hasMemories ? (
-            <>
-              <button
-                className="memStrip-card memStrip-card--placeholder"
-                onClick={triggerImageUpload}
-                aria-label={t('bingoals.add_images')}
-              >+ image</button>
-              <button
-                className="memStrip-card memStrip-card--placeholder"
-                onClick={triggerAddQuote}
-                aria-label={t('bingoals.add_quote')}
-              >+ quote</button>
-              <button
-                className="memStrip-card memStrip-card--placeholder"
-                onClick={triggerAddLink}
-                aria-label={t('bingoals.add_link')}
-              >+ link</button>
-            </>
+            <div className="memStrip-empty">
+              <span>{t('bingoals.no_memories')}</span>
+              <div>
+                <button className="btn" onClick={triggerImageUpload}>{t('bingoals.add_images')}</button>
+                <button className="btn" onClick={triggerAddQuote}>{t('bingoals.add_quote')}</button>
+                <button className="btn" onClick={triggerAddLink}>{t('bingoals.add_link')}</button>
+              </div>
+            </div>
           ) : (
             <div className="memStrip-card memStrip-card--placeholder memStrip-card--addTrigger" style={{ position: 'relative' }}>
               <button
@@ -884,22 +1220,12 @@ const SubobjectiveMemoryStrip = memo(function SubobjectiveMemoryStrip(props: {
           )}
         </div>
       </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="memStrip-fileInput"
-        onChange={async (e) => {
-          const files = Array.from(e.target.files ?? [])
-          if (files.length === 0) return
+      <ImageImportModal
+        open={imageOpen}
+        onClose={() => setImageOpen(false)}
+        onAdd={async (dataUrls) => {
           await stopTimerIfRunning()
-          for (const file of files) {
-            const dataUrl = await fileToCompressedDataUrl(file)
-            await addImage(s.id, dataUrl)
-            await new Promise((r) => setTimeout(r, 0))
-          }
-          e.currentTarget.value = ''
+          for (const dataUrl of dataUrls) await addImage(s.id, dataUrl)
           await reload()
         }}
       />
@@ -941,6 +1267,8 @@ const SubobjectiveMemoryStrip = memo(function SubobjectiveMemoryStrip(props: {
   && prev.subMedia === next.subMedia
   && prev.running === next.running
   && prev.activeSubId === next.activeSubId
+  && prev.isKeyboardTabStop === next.isKeyboardTabStop
+  && prev.navigationIndex === next.navigationIndex
 )
 
 const SubobjectiveTimerPanel = memo(function SubobjectiveTimerPanel(props: {
@@ -948,12 +1276,12 @@ const SubobjectiveTimerPanel = memo(function SubobjectiveTimerPanel(props: {
   timeStats: { total_ms: number; last_end: number | null }
   subs: Subobjective[]
   setSubs: React.Dispatch<React.SetStateAction<Subobjective[]>>
-  running: { subId: string; startedAt: number } | null
+  running: RunningTimer | null
   playingSubId: string | null
   setPlayingSubId: React.Dispatch<React.SetStateAction<string | null>>
   reload: () => Promise<void>
   stopTimerIfRunning: () => Promise<void>
-  setRunning: React.Dispatch<React.SetStateAction<{ subId: string; startedAt: number } | null>>
+  setRunning: React.Dispatch<React.SetStateAction<RunningTimer | null>>
 }) {
   const { s, timeStats, subs, setSubs, running, playingSubId, setPlayingSubId, reload, stopTimerIfRunning, setRunning } = props
   const { t } = useTranslation()
@@ -962,6 +1290,23 @@ const SubobjectiveTimerPanel = memo(function SubobjectiveTimerPanel(props: {
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [isEditingCount, setIsEditingCount] = useState(false)
+  const [measurementTarget, setMeasurementTarget] = useState('')
+  const [measurementUnit, setMeasurementUnit] = useState('')
+  const [timerMinutes, setTimerMinutes] = useState(getObjectiveTimerMinutes)
+  const [customMinutes, setCustomMinutes] = useState(() => {
+    const initial = getObjectiveTimerMinutes()
+    return initial > 0 && !OBJECTIVE_TIMER_PRESETS.includes(initial as typeof OBJECTIVE_TIMER_PRESETS[number]) ? String(initial) : ''
+  })
+
+  const chooseTimerMinutes = (minutes: number) => {
+    setTimerMinutes(minutes)
+    localStorage.setItem(OBJECTIVE_TIMER_KEY, String(minutes))
+  }
+
+  useEffect(() => {
+    setMeasurementTarget('')
+    setMeasurementUnit(s.unit ?? '')
+  }, [s.id, s.unit])
 
   const last = Math.max(timeStats.last_end ?? 0, s.updated_at ?? 0) || null
   const d = daysAgo(last)
@@ -986,114 +1331,116 @@ const SubobjectiveTimerPanel = memo(function SubobjectiveTimerPanel(props: {
 
   return (
     <div className="bingo-panel-left">
-      <div className="bingo-instrument-face">
-        <TimerDisplay
-          totalMs={initialTotalMs}
-          isRunning={isRunning}
-          startedAt={isRunning ? running!.startedAt : null}
-          className="bingo-instrument-timer"
-        />
-        <button
-          className="btn btn-icon bingo-instrument-edit"
-          onMouseEnter={() => playSFX(SFX.HOVER)}
-          onClick={async (e) => {
-            e.stopPropagation()
-            await stopTimerIfRunning()
-            const ms = (timeStats.total_ms ?? 0) + (running?.subId === s.id ? Math.max(0, Date.now() - running.startedAt) : 0)
-            setTimeEditMs(ms)
-            setTimeEditOpen(true)
-          }}
-          title={t('bingoals.time_edit_title')}
-          aria-label={t('bingoals.time_edit_title')}
-        >
-          <Pencil size={12} />
-        </button>
-        <button
-          className="btn btn-icon bingo-instrument-quick-add"
-          onMouseEnter={() => playSFX(SFX.HOVER)}
-          onClick={(e) => { e.stopPropagation(); setQuickAddOpen(true) }}
-          title={t('bingoals.quick_add_title')}
-          aria-label={t('bingoals.quick_add_title')}
-        >
-          <Plus size={12} />
-        </button>
-      </div>
-
-      {isRunning ? (
-        <button className="btn btn-danger bingo-start-btn" onClick={() => { playSFX(SFX.CANCEL); stopTimerIfRunning() }} onMouseEnter={() => playSFX(SFX.HOVER)} title={t('bingoals.stop')}>
-          <span className="bingo-stop-square" aria-hidden="true" />
-          {t('bingoals.stop')}
-        </button>
-      ) : (
-        <button className="btn btn-primary bingo-start-btn" onClick={async () => { playSFX(SFX.SESSION_START); await stopTimerIfRunning(); setRunning({ subId: s.id, startedAt: Date.now() }) }} onMouseEnter={() => playSFX(SFX.HOVER)}>
-          <span className="bingo-rec-dot" aria-hidden="true" />
-          {t('bingoals.start')}
-        </button>
+      {!isRunning && (
+        <div className="bingo-timer-presets" aria-label={t('bingoals.timer_duration')}>
+          <span>{t('bingoals.timer_duration')}</span>
+          {OBJECTIVE_TIMER_PRESETS.map(minutes => (
+            <button
+              type="button"
+              key={minutes}
+              className={timerMinutes === minutes ? 'is-active' : ''}
+              aria-pressed={timerMinutes === minutes}
+              onClick={() => {
+                setCustomMinutes('')
+                chooseTimerMinutes(minutes)
+              }}
+            >{minutes} min</button>
+          ))}
+          <label className={`bingo-timer-custom${customMinutes ? ' is-active' : ''}`}>
+            <input
+              type="number"
+              min={1}
+              max={720}
+              step={1}
+              value={customMinutes}
+              placeholder={t('bingoals.timer_custom')}
+              aria-label={t('bingoals.timer_custom_aria')}
+              onChange={(event) => {
+                const nextText = event.target.value
+                setCustomMinutes(nextText)
+                if (!nextText) { chooseTimerMinutes(25); return }
+                const next = Math.floor(Number(nextText))
+                if (nextText && Number.isFinite(next) && next >= 1 && next <= 720) chooseTimerMinutes(next)
+              }}
+            />
+            {customMinutes && <span>min</span>}
+          </label>
+          <button
+            type="button"
+            className={timerMinutes === 0 ? 'is-active' : ''}
+            aria-pressed={timerMinutes === 0}
+            onClick={() => { setCustomMinutes(''); chooseTimerMinutes(0) }}
+          >{t('bingoals.timer_free')}</button>
+        </div>
       )}
 
-      <div className="bingo-count-block">
-        {isEditingCount ? (
-          <input
-            className="numInput bingo-count-input"
-            type="number"
-            autoFocus
-            aria-label={t('bingoals.aria_current')}
-            value={s.progress_current ?? 0}
-            onChange={(e) => { const v = Number(e.target.value); setSubs((prev) => prev.map((x) => (x.id === s.id ? { ...x, progress_current: v } : x))) }}
-            onBlur={async () => {
-              setIsEditingCount(false)
-              const fresh = subs.find((x) => x.id === s.id)
-              if (!fresh) return
-              const { hasTarget, autoDone } = computeAutoDone(fresh)
-              await updateSubobjective(s.id, { progress_current: fresh.progress_current, is_done: hasTarget ? (autoDone ? 1 : 0) : fresh.is_done })
-              await reload()
-            }}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
-          />
-        ) : (
-          <div
-            className="bingo-count-value"
-            onClick={() => setIsEditingCount(true)}
-            role="button"
-            tabIndex={0}
-            aria-label={t('bingoals.aria_current')}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsEditingCount(true) }}
-          >
-            {s.progress_current ?? 0}
+      <div className={`bingo-recording-shell${isRunning ? ' bingo-recording-shell--active' : ''}`}>
+        <div className="bingo-instrument-face">
+          <div className="bingo-recording-status">
+            <span className="bingo-recording-status-dot" aria-hidden="true" />
+            {isRunning ? t('bingoals.recording_active') : t('bingoals.time_invested')}
           </div>
-        )}
-        <div className="bingo-count-caption">
-          <span>/</span>
-          <input
-            className="numInput bingo-target-caption"
-            type="number"
-            aria-label={t('bingoals.aria_target')}
-            value={s.target_total ?? 0}
-            onChange={(e) => { const v = Number(e.target.value); setSubs((prev) => prev.map((x) => (x.id === s.id ? { ...x, target_total: v } : x))) }}
-            onBlur={async () => {
-              const fresh = subs.find((x) => x.id === s.id)
-              if (!fresh) return
-              const { hasTarget, autoDone } = computeAutoDone(fresh)
-              await updateSubobjective(s.id, { target_total: fresh.target_total, is_done: hasTarget ? (autoDone ? 1 : 0) : fresh.is_done })
-              await reload()
-            }}
+          <TimerDisplay
+            totalMs={initialTotalMs}
+            isRunning={isRunning}
+            startedAt={isRunning ? running!.startedAt : null}
+            durationMs={isRunning ? running!.durationMs : null}
+            onComplete={() => { playSFX(SFX.BINGO_COMPLETE); void stopTimerIfRunning() }}
+            className="bingo-instrument-timer"
           />
-          <input
-            className="unitInput bingo-unit-caption"
-            aria-label={t('bingoals.unit_label')}
-            value={s.unit ?? ''}
-            placeholder={t('bingoals.unit_placeholder')}
-            onChange={(e) => setSubs((prev) => prev.map((x) => (x.id === s.id ? { ...x, unit: e.target.value } : x)))}
-            onBlur={async () => {
-              const fresh = subs.find((x) => x.id === s.id)
-              if (fresh) await updateSubobjective(s.id, { unit: fresh.unit?.trim() || null })
-              await reload()
-            }}
-          />
+          {isRunning && (
+            <div className="bingo-recording-context">
+              {running!.durationMs ? t('bingoals.time_remaining') : t('bingoals.timer_free_running')}
+              <span>·</span>
+              {t('bingoals.time_invested')} {formatDuration(timeStats.total_ms ?? 0)}
+            </div>
+          )}
+          {!isRunning && (
+            <>
+              <button
+                className="btn btn-icon bingo-instrument-edit"
+                onMouseEnter={() => playSFX(SFX.HOVER)}
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  await stopTimerIfRunning()
+                  const ms = (timeStats.total_ms ?? 0) + (running?.subId === s.id ? Math.max(0, Date.now() - running.startedAt) : 0)
+                  setTimeEditMs(ms)
+                  setTimeEditOpen(true)
+                }}
+                title={t('bingoals.time_edit_title')}
+                aria-label={t('bingoals.time_edit_title')}
+              >
+                <Pencil size={12} />
+              </button>
+              <button
+                className="btn btn-icon bingo-instrument-quick-add"
+                onMouseEnter={() => playSFX(SFX.HOVER)}
+                onClick={(e) => { e.stopPropagation(); setQuickAddOpen(true) }}
+                title={t('bingoals.quick_add_title')}
+                aria-label={t('bingoals.quick_add_title')}
+              >
+                <Plus size={12} />
+              </button>
+            </>
+          )}
         </div>
+
+        {isRunning ? (
+          <button className="btn bingo-start-btn bingo-start-btn--recording" onClick={() => { playSFX(SFX.CANCEL); void stopTimerIfRunning() }} onMouseEnter={() => playSFX(SFX.HOVER)} title={t('bingoals.stop')}>
+            <span className="bingo-stop-square" aria-hidden="true" />
+            {t('bingoals.stop_recording')}
+          </button>
+        ) : (
+          <button className="btn btn-primary bingo-start-btn" onClick={async () => { playSFX(SFX.SESSION_START); await stopTimerIfRunning(); setRunning(beginObjectiveTimer(s.id)) }} onMouseEnter={() => playSFX(SFX.HOVER)}>
+            <span className="bingo-rec-dot" aria-hidden="true" />
+            {timerMinutes > 0 ? t('bingoals.start_timer').replace('{minutes}', String(timerMinutes)) : t('bingoals.start_free')}
+          </button>
+        )}
       </div>
 
-      <div className="bingo-tap-strip">
+      {hasTarget ? <>
+      <div className="bingo-progress-control">
+        <span className="bingo-progress-control-label">{t('bingoals.progress_label')}</span>
         <button
           className="bingo-tap-btn"
           aria-label={t('bingoals.decrement')}
@@ -1108,7 +1455,61 @@ const SubobjectiveTimerPanel = memo(function SubobjectiveTimerPanel(props: {
             await updateSubobjective(s.id, { progress_current: next, is_done: ht ? (ad ? 1 : 0) : fresh.is_done })
             await reload()
           }}
-        >−</button>
+        ><Minus size={21} /></button>
+        <div className="bingo-count-block">
+          <div className="bingo-count-fraction">
+            {isEditingCount ? (
+              <input
+                className="numInput bingo-count-input"
+                type="number"
+                autoFocus
+                aria-label={t('bingoals.aria_current')}
+                value={s.progress_current ?? 0}
+                onChange={(e) => { const v = Number(e.target.value); setSubs((prev) => prev.map((x) => (x.id === s.id ? { ...x, progress_current: v } : x))) }}
+                onBlur={async () => {
+                  setIsEditingCount(false)
+                  const fresh = subs.find((x) => x.id === s.id)
+                  if (!fresh) return
+                  const { hasTarget, autoDone } = computeAutoDone(fresh)
+                  await updateSubobjective(s.id, { progress_current: fresh.progress_current, is_done: hasTarget ? (autoDone ? 1 : 0) : fresh.is_done })
+                  await reload()
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+              />
+            ) : (
+              <button type="button" className="bingo-count-value" onClick={() => setIsEditingCount(true)} aria-label={t('bingoals.aria_current')}>
+                {s.progress_current ?? 0}
+              </button>
+            )}
+            <span className="bingo-count-separator">/</span>
+            <input
+              className="numInput bingo-target-caption"
+              type="number"
+              aria-label={t('bingoals.aria_target')}
+              value={s.target_total ?? 0}
+              onChange={(e) => { const v = Number(e.target.value); setSubs((prev) => prev.map((x) => (x.id === s.id ? { ...x, target_total: v } : x))) }}
+              onBlur={async () => {
+                const fresh = subs.find((x) => x.id === s.id)
+                if (!fresh) return
+                const { hasTarget, autoDone } = computeAutoDone(fresh)
+                await updateSubobjective(s.id, { target_total: fresh.target_total, is_done: hasTarget ? (autoDone ? 1 : 0) : fresh.is_done })
+                await reload()
+              }}
+            />
+          </div>
+          <input
+            className="unitInput bingo-unit-caption"
+            aria-label={t('bingoals.unit_label')}
+            value={s.unit ?? ''}
+            placeholder={t('bingoals.unit_placeholder')}
+            onChange={(e) => setSubs((prev) => prev.map((x) => (x.id === s.id ? { ...x, unit: e.target.value } : x)))}
+            onBlur={async () => {
+              const fresh = subs.find((x) => x.id === s.id)
+              if (fresh) await updateSubobjective(s.id, { unit: fresh.unit?.trim() || null })
+              await reload()
+            }}
+          />
+        </div>
         <button
           className="bingo-tap-btn"
           aria-label={t('bingoals.increment')}
@@ -1123,12 +1524,53 @@ const SubobjectiveTimerPanel = memo(function SubobjectiveTimerPanel(props: {
             await updateSubobjective(s.id, { progress_current: next, is_done: ht ? (ad ? 1 : 0) : fresh.is_done })
             await reload()
           }}
-        >+</button>
+        ><Plus size={21} /></button>
       </div>
 
       <div className="bingo-tick-bar" style={{ '--bingo-ticks': tickCount } as React.CSSProperties}>
         <div className="bingo-tick-fill" style={{ '--bingo-fill': `${ratio * 100}%` } as React.CSSProperties} />
       </div>
+      </> : (
+        <div className="bingo-simple-step-progress">
+          <div>
+            <span>{t('bingoals.progress_label')}</span>
+            <strong>{s.is_done ? t('bingoals.simple_step_complete') : t('bingoals.simple_step_status')}</strong>
+            <p>{t('bingoals.simple_step_no_number')}</p>
+          </div>
+          <details>
+            <summary>{t('bingoals.measured_step_optional')}</summary>
+            <div className="bingo-simple-step-measureFields">
+              <label>
+                <span>{t('bingoals.step_target_label')}</span>
+                <input type="number" min="0.01" step="any" value={measurementTarget} onChange={(event) => setMeasurementTarget(event.target.value)} placeholder="60" />
+              </label>
+              <label>
+                <span>{t('bingoals.unit_label')}</span>
+                <input value={measurementUnit} onChange={(event) => setMeasurementUnit(event.target.value)} placeholder="WPM, km, €…" />
+              </label>
+              <button
+                type="button"
+                className="btn"
+                disabled={!Number.isFinite(Number(measurementTarget)) || Number(measurementTarget) <= 0}
+                onClick={async () => {
+                  const nextTarget = Number(measurementTarget)
+                  if (!Number.isFinite(nextTarget) || nextTarget <= 0) return
+                  setSubs((previous) => previous.map((item) => item.id === s.id
+                    ? { ...item, target_total: nextTarget, unit: measurementUnit.trim() || null, progress_current: 0, is_done: 0 }
+                    : item))
+                  await updateSubobjective(s.id, {
+                    target_total: nextTarget,
+                    unit: measurementUnit.trim() || null,
+                    progress_current: 0,
+                    is_done: 0,
+                  })
+                  await reload()
+                }}
+              >{t('bingoals.add_measurement')}</button>
+            </div>
+          </details>
+        </div>
+      )}
 
       <div className="bingo-instrument-footer">
         <span className="muted">{formatDaysAgo(d, t)}</span>
@@ -1197,6 +1639,7 @@ const SubobjectiveMemories = memo(function SubobjectiveMemories(props: {
   const { t } = useTranslation()
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
+  const [imageOpen, setImageOpen] = useState(false)
   const isPlaying = playingSubId === s.id
   const linkItems = subMedia.filter(m => m.kind === 'link')
   const slideItems = subMedia.filter(m => m.kind !== 'link')
@@ -1208,27 +1651,9 @@ const SubobjectiveMemories = memo(function SubobjectiveMemories(props: {
         <div className="memories-actions">
           <button className="btn bingo-memory-action-btn" onMouseEnter={() => playSFX(SFX.HOVER)} onClick={() => setQuoteOpen(true)}>{t('bingoals.add_quote')}</button>
           <button className="btn bingo-memory-action-btn" onMouseEnter={() => playSFX(SFX.HOVER)} onClick={() => setLinkOpen(true)}>{t('bingoals.add_link')}</button>
-          <label className="btn bingo-memory-action-btn" onMouseEnter={() => playSFX(SFX.HOVER)}>
+          <button className="btn bingo-memory-action-btn" onMouseEnter={() => playSFX(SFX.HOVER)} onClick={() => setImageOpen(true)}>
             {t('bingoals.add_images')}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="bingo-file-input"
-              onChange={async (e) => {
-                const files = Array.from(e.target.files ?? [])
-                if (files.length === 0) return
-                await stopTimerIfRunning()
-                for (const file of files) {
-                  const dataUrl = await fileToCompressedDataUrl(file)
-                  await addImage(s.id, dataUrl)
-                  await new Promise((r) => setTimeout(r, 0))
-                }
-                e.currentTarget.value = ''
-                await reload()
-              }}
-            />
-          </label>
+          </button>
           {(() => {
             const slideCount = slideItems.length
             return (
@@ -1272,6 +1697,15 @@ const SubobjectiveMemories = memo(function SubobjectiveMemories(props: {
         onClose={() => setQuoteOpen(false)}
         onAdd={async (quote) => { setQuoteOpen(false); await addQuote(s.id, quote); await reload() }}
       />
+      <ImageImportModal
+        open={imageOpen}
+        onClose={() => setImageOpen(false)}
+        onAdd={async (dataUrls) => {
+          await stopTimerIfRunning()
+          for (const dataUrl of dataUrls) await addImage(s.id, dataUrl)
+          await reload()
+        }}
+      />
       <AddLinkModal
         open={linkOpen}
         onClose={() => setLinkOpen(false)}
@@ -1288,13 +1722,13 @@ const SubobjectivePanel = memo(function SubobjectivePanel(props: {
   timeStats: { total_ms: number; last_end: number | null }
   subs: Subobjective[]
   setSubs: React.Dispatch<React.SetStateAction<Subobjective[]>>
-  running: { subId: string; startedAt: number } | null
+  running: RunningTimer | null
   playingSubId: string | null
   setPlayingSubId: React.Dispatch<React.SetStateAction<string | null>>
   subMedia: MediaItem[]
   reload: () => Promise<void>
   stopTimerIfRunning: () => Promise<void>
-  setRunning: React.Dispatch<React.SetStateAction<{ subId: string; startedAt: number } | null>>
+  setRunning: React.Dispatch<React.SetStateAction<RunningTimer | null>>
 }) {
   const { s, timeStats, subs, setSubs, running, playingSubId, setPlayingSubId, subMedia, reload, stopTimerIfRunning, setRunning } = props
   const { t } = useTranslation()
@@ -1363,8 +1797,8 @@ const SubobjectiveFullCard = memo(function SubobjectiveFullCard(props: {
   timeStats: { total_ms: number; last_end: number | null }
   subs: Subobjective[]
   setSubs: React.Dispatch<React.SetStateAction<Subobjective[]>>
-  running: { subId: string; startedAt: number } | null
-  setRunning: React.Dispatch<React.SetStateAction<{ subId: string; startedAt: number } | null>>
+  running: RunningTimer | null
+  setRunning: React.Dispatch<React.SetStateAction<RunningTimer | null>>
   stopTimerIfRunning: () => Promise<void>
   playingSubId: string | null
   setPlayingSubId: React.Dispatch<React.SetStateAction<string | null>>
@@ -1491,8 +1925,8 @@ function ActiveTimerSection(props: {
   timeStats: { total_ms: number; last_end: number | null }
   subs: Subobjective[]
   setSubs: React.Dispatch<React.SetStateAction<Subobjective[]>>
-  running: { subId: string; startedAt: number } | null
-  setRunning: React.Dispatch<React.SetStateAction<{ subId: string; startedAt: number } | null>>
+  running: RunningTimer | null
+  setRunning: React.Dispatch<React.SetStateAction<RunningTimer | null>>
   stopTimerIfRunning: () => Promise<void>
   subMedia: MediaItem[]
   reload: () => Promise<void>
@@ -1666,17 +2100,49 @@ function Slideshow(props: {
   );
 }
 
-function TimerDisplay(props: { totalMs: number; isRunning: boolean; startedAt: number | null; className?: string }) {
+function TimerDisplay(props: {
+  totalMs: number
+  isRunning: boolean
+  startedAt: number | null
+  durationMs?: number | null
+  onComplete?: () => void
+  className?: string
+}) {
   const [displayMs, setDisplayMs] = useState(props.totalMs);
+  const completedRef = useRef(false)
 
   useEffect(() => {
+    completedRef.current = false
     if (!props.isRunning || !props.startedAt) { setDisplayMs(props.totalMs); return; }
-    const id = window.setInterval(() => setDisplayMs(props.totalMs + Math.max(0, Date.now() - props.startedAt!)), 500);
-    setDisplayMs(props.totalMs + Math.max(0, Date.now() - props.startedAt!));
+    const update = () => {
+      const elapsed = Math.max(0, Date.now() - props.startedAt!)
+      if (props.durationMs) {
+        const remaining = Math.max(0, props.durationMs - elapsed)
+        setDisplayMs(remaining)
+        if (remaining === 0 && !completedRef.current) {
+          completedRef.current = true
+          props.onComplete?.()
+        }
+      } else {
+        setDisplayMs(elapsed)
+      }
+    }
+    const id = window.setInterval(update, 250)
+    update()
     return () => window.clearInterval(id);
-  }, [props.isRunning, props.startedAt, props.totalMs]);
+  }, [props.isRunning, props.startedAt, props.durationMs, props.totalMs]);
 
-  return <div className={props.className}>{msToHHMMSS(displayMs)}</div>;
+  const clockLabel = msToHHMMSS(displayMs)
+  const [hours, minutes, seconds] = clockLabel.split(':')
+  return (
+    <div className={props.className} aria-live="off" aria-label={clockLabel}>
+      <span aria-hidden="true">{hours}</span>
+      <span className={`bingo-timer-separator${props.isRunning ? ' is-running' : ''}`} aria-hidden="true">:</span>
+      <span aria-hidden="true">{minutes}</span>
+      <span className={`bingo-timer-separator${props.isRunning ? ' is-running' : ''}`} aria-hidden="true">:</span>
+      <span aria-hidden="true">{seconds}</span>
+    </div>
+  );
 }
 
 function msToHHMMSS(ms: number) {

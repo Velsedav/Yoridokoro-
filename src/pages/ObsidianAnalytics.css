@@ -28,6 +28,11 @@
   flex-shrink: 0;
 }
 
+.oa-topbar { justify-content: space-between; gap: 20px; }
+.oa-topbar-identity { display: grid; gap: 5px; }
+.oa-topbar-identity span { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font: 600 9px var(--font-mono,'DM Mono',monospace); letter-spacing: .1em; text-transform: uppercase; }
+.oa-topbar-identity strong { font: 600 24px/1 var(--font-heading,'Newsreader',Georgia,serif); }
+
 .oa-view-pills {
   display: flex;
   gap: 4px;
@@ -131,7 +136,7 @@
 }
 
 .oa-stat-value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 20px;
   font-weight: 700;
   color: var(--text-dark, #e6edf3);
@@ -329,7 +334,7 @@
 }
 
 .oa-subject-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 11px;
   color: var(--text-muted, #7d8590);
   white-space: nowrap;
@@ -365,14 +370,14 @@
 }
 
 .oa-deadline-days {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .oa-deadline-studied {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 11px;
   color: var(--text-muted, #7d8590);
   white-space: nowrap;
@@ -404,7 +409,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 18px;
   font-weight: 700;
   color: var(--text-dark, #e6edf3);
@@ -444,7 +449,7 @@
 }
 
 .oa-tier-pct {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 11px;
   color: var(--text-muted, #7d8590);
 }
@@ -483,7 +488,7 @@
 }
 
 .oa-focus-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 11px;
   color: var(--text-muted, #7d8590);
 }
@@ -515,7 +520,7 @@
 }
 
 .oa-cal-value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 18px;
   font-weight: 700;
   color: var(--text-dark, #e6edf3);
@@ -650,7 +655,7 @@
 }
 
 .oa-narrative-hero-value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 28px;
   font-weight: 700;
   color: var(--text-dark, #e6edf3);

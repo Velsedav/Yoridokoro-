@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { applyMasteryRating, parseSpacing, getChapterSpacingIntervals, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus } from '../chapters'
+import { applyMasteryRating, archiveChapter, getChapterSpacingIntervals, getChaptersForSubject, getRatings, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus, parseSpacing, saveRating, synchronizeStudyDataDurability, unarchiveChapter } from '../chapters'
 import type { Chapter } from '../chapters'
 
 // ── parseSpacing ──────────────────────────────────────────────────────────────
@@ -134,6 +134,130 @@ describe('getRecommendations', () => {
 
     const result = getRecommendations({ 'sub-1': 'Math' })
     expect(result[0].subjectName).toBe('Unknown')
+  })
+
+  it('excludes archived chapters', () => {
+    const chapters = [makeChapter({ id: 'ch-1', archived: true })]
+    localStorage.setItem('study-buddy-chapters', JSON.stringify(chapters))
+    vi.setSystemTime(NOW)
+
+    expect(getRecommendations({ 'sub-1': 'Math' })).toEqual([])
+  })
+})
+
+describe('chapter archives', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('hides archived chapters by default and keeps them restorable', () => {
+    const chapter = makeChapter({ id: 'ch-1' })
+    localStorage.setItem('study-buddy-chapters', JSON.stringify([chapter]))
+
+    archiveChapter(chapter.id)
+
+    expect(getChaptersForSubject('sub-1')).toEqual([])
+    expect(getChaptersForSubject('sub-1', { includeArchived: true })[0].archived).toBe(true)
+
+    unarchiveChapter(chapter.id)
+
+    expect(getChaptersForSubject('sub-1')[0].archived).toBeUndefined()
+  })
+})
+
+describe('study data recovery', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    delete (window as any).electronAPI
+  })
+
+  afterEach(() => {
+    delete (window as any).electronAPI
+  })
+
+  it('restores chapters from the recovery copy when the primary JSON is corrupted', () => {
+    const chapter = makeChapter({ id: 'recoverable' })
+    localStorage.setItem('study-buddy-chapters', '{broken')
+    localStorage.setItem('study-buddy-chapters-recovery', JSON.stringify([chapter]))
+
+    expect(getChaptersForSubject('sub-1')[0].id).toBe('recoverable')
+    expect(JSON.parse(localStorage.getItem('study-buddy-chapters') || '[]')[0].id).toBe('recoverable')
+  })
+
+  it('keeps a current recovery copy after a chapter mutation', () => {
+    const chapter = makeChapter({ id: 'mirrored' })
+    localStorage.setItem('study-buddy-chapters', JSON.stringify([chapter]))
+
+    archiveChapter(chapter.id)
+
+    expect(localStorage.getItem('study-buddy-chapters-recovery')).toBe(localStorage.getItem('study-buddy-chapters'))
+    expect(localStorage.getItem('study-buddy-chapters-storage-version')).toBe('1')
+  })
+
+  it('restores mastery ratings and mirrors subsequent writes', () => {
+    const recovered = [{
+      chapterId: 'chapter-1',
+      sessionId: 'session-1',
+      ratedAt: '2026-07-21T12:00:00.000Z',
+      rating: 'good',
+    }]
+    localStorage.setItem('study-buddy-mastery-ratings', 'not-json')
+    localStorage.setItem('study-buddy-mastery-ratings-recovery', JSON.stringify(recovered))
+
+    expect(getRatings()).toEqual(recovered)
+    saveRating({
+      chapterId: 'chapter-1',
+      sessionId: 'session-2',
+      ratedAt: '2026-07-22T12:00:00.000Z',
+      rating: 'easy',
+    })
+    expect(localStorage.getItem('study-buddy-mastery-ratings-recovery')).toBe(localStorage.getItem('study-buddy-mastery-ratings'))
+    expect(localStorage.getItem('study-buddy-mastery-ratings-storage-version')).toBe('1')
+  })
+
+  it('restores chapters from the durable SQLite snapshot when local copies are missing', async () => {
+    const chapter = makeChapter({ id: 'durable' })
+    const transaction = vi.fn(async () => [])
+    const select = vi.fn(async () => [{
+      kind: 'chapters',
+      version: 1,
+      payload_json: JSON.stringify([chapter]),
+      updated_at: '2026-07-21T12:00:00.000Z',
+    }])
+    ;(window as any).electronAPI = {
+      db: {
+        select,
+        transaction,
+      },
+    }
+
+    await synchronizeStudyDataDurability()
+
+    expect(getChaptersForSubject('sub-1')[0].id).toBe('durable')
+    expect(localStorage.getItem('study-buddy-chapters-recovery')).toBe(localStorage.getItem('study-buddy-chapters'))
+    expect(select).toHaveBeenCalledTimes(1)
+    expect(transaction).not.toHaveBeenCalled()
+  })
+
+  it('does not rewrite durable snapshots when their payload is already current', async () => {
+    const chapter = makeChapter({ id: 'already-synced' })
+    const serialized = JSON.stringify([chapter])
+    localStorage.setItem('study-buddy-chapters', serialized)
+    localStorage.setItem('study-buddy-chapters-recovery', serialized)
+    const transaction = vi.fn(async () => [])
+    ;(window as any).electronAPI = {
+      db: {
+        select: vi.fn(async () => [{
+          kind: 'chapters',
+          version: 1,
+          payload_json: serialized,
+          updated_at: '2026-07-21T12:00:00.000Z',
+        }]),
+        transaction,
+      },
+    }
+
+    await synchronizeStudyDataDurability()
+
+    expect(transaction).not.toHaveBeenCalled()
   })
 })
 

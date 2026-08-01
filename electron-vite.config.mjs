@@ -32,6 +32,20 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: resolve(process.cwd(), 'src/index.html'),
+        output: {
+          manualChunks(id) {
+            const moduleId = id.replaceAll('\\', '/')
+            if (moduleId.includes('/node_modules/lucide-react/')) return 'icons'
+            if (
+              moduleId.includes('/node_modules/react/') ||
+              moduleId.includes('/node_modules/react-dom/') ||
+              moduleId.includes('/node_modules/react-router/') ||
+              moduleId.includes('/node_modules/react-router-dom/') ||
+              moduleId.includes('/node_modules/scheduler/')
+            ) return 'react-vendor'
+            if (moduleId.endsWith('/src/lib/i18n.ts')) return 'translations'
+          },
+        },
       },
     },
     plugins: [react()],

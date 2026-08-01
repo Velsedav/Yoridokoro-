@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeObjectivePercent } from '../progress'
+import { computeObjectivePercent, objectiveProgressLabel } from '../progress'
 import type { Objective, Subobjective } from '../db'
 
 function makeObjective(overrides: Partial<Objective> = {}): Objective {
@@ -37,7 +37,7 @@ function makeSub(overrides: Partial<Subobjective> = {}): Subobjective {
 
 // ── count mode ────────────────────────────────────────────────────────────────
 
-describe('computeObjectivePercent — count mode', () => {
+describe('computeObjectivePercent — unified steps', () => {
   it('returns null when goal_target is null', () => {
     const obj = makeObjective({ goal_target: null })
     expect(computeObjectivePercent(obj, [])).toBeNull()
@@ -85,28 +85,32 @@ describe('computeObjectivePercent — count mode', () => {
     // sum = 0.5 + 1.0 = 1.5; target = 2 → 1.5/2 = 0.75
     expect(computeObjectivePercent(obj, subs)).toBe(0.75)
   })
+  it('infers the target from the number of steps when no total is planned', () => {
+    const obj = makeObjective({ goal_target: null })
+    const subs = [makeSub({ is_done: 1 }), makeSub({ id: 'sub-2', is_done: 0 })]
+    expect(computeObjectivePercent(obj, subs)).toBe(0.5)
+  })
 })
 
-// ── metric / amount / manual mode ─────────────────────────────────────────────
-
-describe('computeObjectivePercent — metric/amount/manual mode', () => {
-  it('returns null when goal_target is null', () => {
-    const obj = makeObjective({ goal_kind: 'metric', goal_target: null, current_value: 5 })
-    expect(computeObjectivePercent(obj, [])).toBeNull()
+describe('objectiveProgressLabel', () => {
+  it('shows the exact value for one measured step', () => {
+    const obj = makeObjective({ goal_target: 1, goal_unit: null })
+    const subs = [makeSub({ target_total: 60, progress_current: 42, unit: 'WPM' })]
+    expect(objectiveProgressLabel(obj, subs)).toBe('42 / 60 WPM')
   })
 
-  it('returns partial progress', () => {
-    const obj = makeObjective({ goal_kind: 'metric', goal_target: 10, current_value: 3 })
-    expect(computeObjectivePercent(obj, [])).toBeCloseTo(0.3)
+  it('shows completed items for a simple collection', () => {
+    const obj = makeObjective({ goal_target: 24, goal_unit: 'albums' })
+    const subs = [makeSub({ is_done: 1 }), makeSub({ id: 'sub-2', is_done: 1 })]
+    expect(objectiveProgressLabel(obj, subs)).toBe('2 / 24 albums')
   })
 
-  it('returns 1 when target met', () => {
-    const obj = makeObjective({ goal_kind: 'metric', goal_target: 10, current_value: 10 })
-    expect(computeObjectivePercent(obj, [])).toBe(1)
-  })
-
-  it('clamps to 1 when over target', () => {
-    const obj = makeObjective({ goal_kind: 'metric', goal_target: 10, current_value: 15 })
-    expect(computeObjectivePercent(obj, [])).toBe(1)
+  it('uses a percentage for mixed measured steps', () => {
+    const obj = makeObjective({ goal_target: 2, goal_unit: null })
+    const subs = [
+      makeSub({ target_total: 10, progress_current: 5 }),
+      makeSub({ id: 'sub-2', is_done: 1 }),
+    ]
+    expect(objectiveProgressLabel(obj, subs)).toBe('75%')
   })
 })

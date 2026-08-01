@@ -110,7 +110,7 @@ export async function generateAIReport(): Promise<string> {
     const lines: string[] = [];
 
     // ── Document header ───────────────────────────────────────────────────────
-    lines.push('# Study Buddy — Rapport d\'étude complet');
+    lines.push('# Yoridokoro — Rapport d\'étude complet');
     lines.push(`Généré le : ${fmtDate(now.toISOString())}`);
     lines.push('');
     lines.push('---');

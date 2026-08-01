@@ -8,7 +8,7 @@
     overflow-y: auto;
     background: var(--bg-color, #0d1117);
     color: var(--text-dark, #e6edf3);
-    font-family: var(--font-main, 'IBM Plex Sans', sans-serif);
+    font-family: var(--font-main, 'Manrope', sans-serif);
 }
 
 .obs-dev-content {
@@ -90,7 +90,7 @@
 }
 
 .obs-dev-hint code {
-    font-family: monospace;
+    font-family: var(--font-mono, 'DM Mono', monospace);
     font-size: 0.74rem;
     padding: 1px 5px;
     border-radius: 4px;

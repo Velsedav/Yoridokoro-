@@ -305,6 +305,7 @@ export async function preloadCustomSounds(): Promise<void> {
 // ── Audio Cache & Playback ──
 
 const audioCache: { [key: string]: HTMLAudioElement } = {};
+let lastHoverPlayedAt = 0;
 
 /** Stop all currently playing sounds */
 export function stopAllSounds() {
@@ -331,6 +332,15 @@ function isTimerSound(effectName: string): boolean {
 
 export function playSFX(effectName: SoundEffect, theme: string = currentTheme) {
     try {
+        // A delegated hover listener covers the whole application, while a few
+        // legacy controls still call playSFX themselves. Coalesce those events so
+        // entering one control always produces one clean sound instead of a stack.
+        if (effectName === SFX.HOVER) {
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            if (now - lastHoverPlayedAt < 55) return;
+            lastHoverPlayedAt = now;
+        }
+
         // Timer and hover sounds play over ongoing audio; all others stop the current sound first
         if (!isTimerSound(effectName) && effectName !== 'glass_ui_hover') {
             stopAllSounds();

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Palette, Brain, Volume2, Database, Power, Zap, Keyboard, Play, AlertTriangle, Trash2, FolderOpen, X } from 'lucide-react';
+import { Palette, Brain, Volume2, Database, Power, Zap, Keyboard, Play, AlertTriangle, Trash2, FolderOpen, X, ExternalLink, Plus, Paintbrush, Check, Languages, FileCode2, FileDown, ShieldCheck, ClipboardCopy } from 'lucide-react';
 import { deleteAllData } from '../lib/db';
 import { deleteAllBingoData } from '../lib/bingoals/db';
 import {
     getExportConfig, saveExportConfig,
-    getLastExportTime,
-    exportToConfiguredPaths,
+    getLastExportTime, getLastArtHtmlExportTime,
+    exportToConfiguredPaths, exportArtHtmlToConfiguredPath,
     pickExportFolder, pickImportFilePath,
-    importBackup,
+    importBackup, pickHtmlExportFilePath, exportReadableHtml,
 } from '../lib/export';
 import { useTranslation } from '../lib/i18n';
 import { useSettings } from '../lib/settings';
@@ -18,9 +18,25 @@ import { SFX, SFX_LABELS, SFX_GROUPS, loadVolumeSettings, saveVolumeSettings, te
 import type { SoundEffect, VolumeSettings, AudioProfile } from '../lib/sounds';
 import { getDefaultSpacing, setDefaultSpacing, parseSpacing, DEFAULT_SPACING } from '../lib/chapters';
 import { THEME_GROUPS } from './settingsThemeGroups';
+import { loadSessionResources, normalizeWebUrl, saveSessionResources, type SessionResource } from '../lib/sessionResources';
+import { loadCatalogueCredentials, saveCatalogueCredentials } from '../features/art/lib/catalogCredentials';
+import { applyYoridokoroTheme } from '../lib/yoridokoroThemes';
+import { loadPreferences as loadArtPreferences, savePreferences as saveArtPreferences, shortcutDefinitions, shortcutLabel, type Preferences as ArtPreferences } from '../features/art/lib/preferences';
+import {
+    clearBehaviorEvents,
+    getBehaviorAnalyticsSummary,
+    loadObservationPreferences,
+    saveObservationPreferences,
+    type ObservationPreferences,
+} from '../lib/behaviorAnalytics';
+import {
+    BEHAVIOR_ANALYSIS_PROMPT,
+    exportBehaviorAnalyticsBundle,
+    type BehaviorExportPeriod,
+} from '../lib/behaviorExport';
 import './ObsidianSettings.css';
 
-type Category = 'look-and-feel' | 'learning' | 'audio' | 'system';
+type Category = 'look-and-feel' | 'sessions' | 'learning' | 'art' | 'audio' | 'data' | 'system';
 
 export default function ObsidianSettings() {
     const { t } = useTranslation();
@@ -45,8 +61,11 @@ export default function ObsidianSettings() {
 
     const railItems: { id: Category; icon: typeof Palette; label: string }[] = [
         { id: 'look-and-feel', icon: Palette, label: t('settings.look_and_feel') || 'Look & feel' },
+        { id: 'sessions', icon: Play, label: 'Sessions' },
         { id: 'learning', icon: Brain, label: t('settings.learning') || 'Learning' },
+        { id: 'art', icon: Paintbrush, label: 'Art' },
         { id: 'audio', icon: Volume2, label: t('settings.audio') || 'Audio' },
+        { id: 'data', icon: FileDown, label: 'Données & IA' },
         { id: 'system', icon: Database, label: t('settings.system') || 'System' },
     ];
 
@@ -139,7 +158,7 @@ export default function ObsidianSettings() {
             )}
 
             <div className="obs-settings-layout">
-                <nav className="obs-settings-rail" aria-label="Settings categories">
+                <nav className="obs-settings-rail" aria-label="Catégories des paramètres">
                     <div className="obs-settings-rail-header">Settings</div>
                     {railItems.map(({ id, icon: Icon, label }) => (
                         <button
@@ -158,8 +177,11 @@ export default function ObsidianSettings() {
                 <main className="obs-settings-panel" key={category}>
                     <div className={`obs-settings-panel-content${category === 'audio' ? ' obs-settings-panel-content--wide' : ''}`}>
                         {category === 'look-and-feel' && <LookAndFeelPanel />}
+                        {category === 'sessions' && <SessionResourcesPanel />}
                         {category === 'learning' && <LearningPanel />}
+                        {category === 'art' && <ArtSettingsPanel />}
                         {category === 'audio' && <AudioPanel />}
+                        {category === 'data' && <ObservationDataPanel />}
                         {category === 'system' && (
                             <SystemPanel
                                 onRequestDeleteAll={() => setShowDeleteModal(true)}
@@ -170,6 +192,214 @@ export default function ObsidianSettings() {
                 </main>
             </div>
         </div>
+    );
+}
+
+function ObservationDataPanel() {
+    const [preferences, setPreferences] = useState<ObservationPreferences>(loadObservationPreferences);
+    const [period, setPeriod] = useState<BehaviorExportPeriod>(30);
+    const [pseudonymizeLabels, setPseudonymizeLabels] = useState(true);
+    const [summary, setSummary] = useState<Awaited<ReturnType<typeof getBehaviorAnalyticsSummary>> | null>(null);
+    const [working, setWorking] = useState(false);
+    const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+    async function refreshSummary() {
+        try { setSummary(await getBehaviorAnalyticsSummary()); }
+        catch { setSummary(null); }
+    }
+
+    useEffect(() => { void refreshSummary(); }, []);
+    useEffect(() => { saveObservationPreferences(preferences); }, [preferences]);
+
+    function updatePreference<K extends keyof ObservationPreferences>(key: K, value: ObservationPreferences[K]) {
+        setPreferences(current => ({ ...current, [key]: value }));
+    }
+
+    async function handleExport() {
+        setWorking(true);
+        setStatus(null);
+        try {
+            const result = await exportBehaviorAnalyticsBundle({ period, pseudonymizeLabels });
+            if (result) {
+                setStatus({
+                    type: 'success',
+                    message: `${result.eventCount} événements exportés dans ${result.folder}. Joignez les fichiers Markdown et CSV à ChatGPT.`,
+                });
+            }
+        } catch (error) {
+            setStatus({ type: 'error', message: `Impossible de créer l’export : ${String(error)}` });
+        } finally {
+            setWorking(false);
+        }
+    }
+
+    async function handleCopyPrompt() {
+        await navigator.clipboard.writeText(BEHAVIOR_ANALYSIS_PROMPT);
+        setStatus({ type: 'success', message: 'Prompt d’analyse copié.' });
+    }
+
+    async function handleClearJournal() {
+        if (!window.confirm('Effacer définitivement le journal d’observation local ? Les sessions et vos autres données resteront intactes.')) return;
+        await clearBehaviorEvents();
+        await refreshSummary();
+        setStatus({ type: 'success', message: 'Journal d’observation effacé. Une nouvelle période peut commencer.' });
+    }
+
+    const firstDate = summary?.first_event_at
+        ? new Date(summary.first_event_at).toLocaleDateString('fr-FR')
+        : 'Pas encore de données';
+
+    return (
+        <>
+            <header className="obs-settings-panel-header">
+                <span className="obs-settings-eyebrow"><ShieldCheck size={14} /> Observation locale</span>
+                <h1 className="obs-settings-panel-title">Données & IA</h1>
+                <p>Mesurez ce qui vous aide réellement à commencer, reprendre et avancer. Le journal reste sur cet appareil jusqu’à un export volontaire.</p>
+            </header>
+
+            <section className="obs-settings-section observation-summary" aria-labelledby="observation-summary-title">
+                <div className="observation-section-head">
+                    <div>
+                        <h2 id="observation-summary-title" className="obs-settings-section-label">Couverture actuelle</h2>
+                        <p className="obs-settings-hint">Depuis : {firstDate}</p>
+                    </div>
+                    <span className="observation-local-badge"><ShieldCheck size={14} /> Local uniquement</span>
+                </div>
+                <div className="observation-stats">
+                    <div><strong>{summary?.event_count ?? 0}</strong><span>événements</span></div>
+                    <div><strong>{summary?.opportunity_count ?? 0}</strong><span>occasions de démarrer</span></div>
+                    <div><strong>{summary?.session_count ?? 0}</strong><span>sessions</span></div>
+                </div>
+                <p className="observation-data-note">Sont enregistrés : suggestions, démarrages, transitions, pauses, reprises, prolongations, passages, sauvegardes et évaluations du rappel. Jamais les frappes, URL, notes, citations, Relations ou données Art.</p>
+            </section>
+
+            <section className="obs-settings-section">
+                <h2 className="obs-settings-section-label">Votre contexte déclaré</h2>
+                <p className="obs-settings-hint">Ces préférences empêchent une analyse externe d’interpréter à tort un comportement qui vous aide.</p>
+                <label className="obs-settings-toggle">
+                    <Check size={17} className="obs-settings-toggle-icon" />
+                    <span><strong>La checklist de préparation m’aide</strong><small>Elle reste facultative et je peux la passer sans que cela soit considéré comme un échec.</small></span>
+                    <input type="checkbox" checked={preferences.prepChecklistHelpful} onChange={event => updatePreference('prepChecklistHelpful', event.target.checked)} />
+                </label>
+                <label className="obs-settings-toggle">
+                    <Play size={17} className="obs-settings-toggle-icon" />
+                    <span><strong>Le compte à rebours visible me stimule</strong><small>La pression du chronomètre est une préférence volontaire, pas un problème à corriger.</small></span>
+                    <input type="checkbox" checked={preferences.countdownTimerStimulating} onChange={event => updatePreference('countdownTimerStimulating', event.target.checked)} />
+                </label>
+            </section>
+
+            <section className="obs-settings-section">
+                <h2 className="obs-settings-section-label">Exporter pour analyse</h2>
+                <p className="obs-settings-hint">Yoridokoro crée un rapport Markdown explicatif et un CSV structuré. Vérifiez-les avant de les joindre à ChatGPT ou à un autre outil.</p>
+                <div className="observation-export-options">
+                    <label className="obs-settings-field">
+                        <span>Période</span>
+                        <select value={String(period)} onChange={event => setPeriod(event.target.value === 'all' ? 'all' : Number(event.target.value) as 30 | 90)}>
+                            <option value="30">30 derniers jours</option>
+                            <option value="90">90 derniers jours</option>
+                            <option value="all">Toute la période</option>
+                        </select>
+                    </label>
+                    <label className="observation-checkbox-card">
+                        <input type="checkbox" checked={pseudonymizeLabels} onChange={event => setPseudonymizeLabels(event.target.checked)} />
+                        <span><strong>Pseudonymiser les sujets</strong><small>« Python » devient « Sujet 01 » et les identifiants internes ne quittent jamais l’appareil.</small></span>
+                    </label>
+                </div>
+                <div className="obs-settings-row observation-export-actions">
+                    <button type="button" className="btn btn-primary" onClick={() => void handleExport()} disabled={working || !summary?.event_count}>
+                        <FileDown size={15} /> {working ? 'Création…' : 'Créer Markdown + CSV'}
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => void handleCopyPrompt()}>
+                        <ClipboardCopy size={15} /> Copier seulement le prompt
+                    </button>
+                </div>
+                {!summary?.event_count && <p className="obs-settings-hint">Le premier événement sera créé lorsque Yoridokoro affichera votre prochaine suggestion d’étude.</p>}
+                {status && <p className="obs-settings-hint" role="status" aria-live="polite" style={{ color: status.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>{status.message}</p>}
+            </section>
+
+            <section className="obs-settings-section observation-boundaries">
+                <h2 className="obs-settings-section-label">Limites volontaires</h2>
+                <ul>
+                    <li>Aucun score TDAH, CDS, burnout ou « productivité ».</li>
+                    <li>Aucune interprétation de l’absence d’usage.</li>
+                    <li>Aucun classement, streak ou comparaison avec d’autres personnes.</li>
+                    <li>Les textes libres restent exclus de cette première version.</li>
+                </ul>
+                <button type="button" className="btn btn-danger-outline observation-clear" onClick={() => void handleClearJournal()} disabled={!summary?.event_count}>
+                    <Trash2 size={14} /> Effacer uniquement le journal d’observation
+                </button>
+            </section>
+        </>
+    );
+}
+
+function ArtSettingsPanel() {
+    const [credentials,setCredentials]=useState(loadCatalogueCredentials);
+    const [preferences,setPreferences]=useState<ArtPreferences>(loadArtPreferences);
+    function updateCredentials(patch:Partial<typeof credentials>){const next={...credentials,...patch};setCredentials(next);saveCatalogueCredentials(next)}
+    function updateShortcut(action:keyof ArtPreferences['shortcuts'],value:string){const next={...preferences,shortcuts:{...preferences.shortcuts,[action]:value.toLowerCase().slice(0,1)}};setPreferences(next);saveArtPreferences(next)}
+    return <>
+        <h1 className="obs-settings-panel-title">Art</h1>
+        <section className="obs-settings-section">
+            <h2 className="obs-settings-section-label"><ExternalLink size={14}/> Catalogues</h2>
+            <p className="obs-settings-hint">Ces clés restent uniquement sur cet appareil et servent à compléter les fiches Art.</p>
+            <label className="obs-settings-field"><span>Jeton de lecture TMDB</span><input type="password" value={credentials.tmdbReadToken||''} onChange={event=>updateCredentials({tmdbReadToken:event.target.value})} autoComplete="off"/></label>
+            <label className="obs-settings-field"><span>Clé API RAWG</span><input type="password" value={credentials.rawgApiKey||''} onChange={event=>updateCredentials({rawgApiKey:event.target.value})} autoComplete="off"/></label>
+        </section>
+        <section className="obs-settings-section">
+            <h2 className="obs-settings-section-label"><Keyboard size={14}/> Raccourcis Art</h2>
+            <p className="obs-settings-hint">Un seul caractère par action. Le thème, la langue et les sauvegardes sont gérés globalement par Yoridokoro.</p>
+            {shortcutDefinitions.map(definition=><label className="obs-settings-field" key={definition.id}><span>{definition.label}</span><input className="art-shortcut-input" value={shortcutLabel(preferences.shortcuts[definition.id])} maxLength={1} onChange={event=>updateShortcut(definition.id,event.target.value)} aria-label={`Raccourci ${definition.label}`}/></label>)}
+        </section>
+    </>
+}
+
+function SessionResourcesPanel() {
+    const [resources, setResources] = useState<SessionResource[]>(loadSessionResources);
+    const [error, setError] = useState('');
+
+    function persist(next: SessionResource[]) {
+        setResources(next);
+        saveSessionResources(next);
+    }
+
+    function addResource() {
+        persist([...resources, { id: crypto.randomUUID(), label: '', url: '', enabled: true }]);
+    }
+
+    function updateResource(id: string, patch: Partial<SessionResource>) {
+        persist(resources.map(resource => resource.id === id ? { ...resource, ...patch } : resource));
+        setError('');
+    }
+
+    function validateResource(resource: SessionResource) {
+        if (resource.url && !normalizeWebUrl(resource.url)) setError(`L’adresse « ${resource.url} » n’est pas une page web valide.`);
+    }
+
+    return (
+        <>
+            <h1 className="obs-settings-panel-title">Sessions</h1>
+            <section className="obs-settings-section">
+                <h2 className="obs-settings-section-label"><ExternalLink size={14} /> Pages ouvertes au démarrage</h2>
+                <p className="obs-settings-hint">Les pages activées s’ouvrent une seule fois quand vous lancez réellement une session depuis le Quick Start.</p>
+                <div className="session-resource-list">
+                    {resources.map((resource, index) => (
+                        <div className="session-resource-row" key={resource.id}>
+                            <label className="session-resource-enabled">
+                                <input type="checkbox" checked={resource.enabled} onChange={event => updateResource(resource.id, { enabled: event.target.checked })} />
+                                <span className="sr-only">Activer la ressource {index + 1}</span>
+                            </label>
+                            <input aria-label={`Nom de la ressource ${index + 1}`} value={resource.label} placeholder="Documentation Linux" onChange={event => updateResource(resource.id, { label: event.target.value })} />
+                            <input aria-label={`Adresse de la ressource ${index + 1}`} value={resource.url} placeholder="https://…" onChange={event => updateResource(resource.id, { url: event.target.value })} onBlur={() => validateResource(resource)} />
+                            <button type="button" className="btn btn-icon" onClick={() => persist(resources.filter(item => item.id !== resource.id))} aria-label={`Supprimer ${resource.label || `la ressource ${index + 1}`}`}><X size={14} /></button>
+                        </div>
+                    ))}
+                    {resources.length === 0 && <p className="obs-settings-hint">Aucune page ne sera ouverte automatiquement.</p>}
+                </div>
+                {error && <p className="session-resource-error" role="alert">{error}</p>}
+                <button type="button" className="btn btn-secondary" onClick={addResource}><Plus size={14} /> Ajouter une page</button>
+            </section>
+        </>
     );
 }
 
@@ -196,69 +426,68 @@ function LookAndFeelPanel() {
 
     const handleThemeHover = (id: Theme) => {
         setPreviewThemeId(id);
-        document.documentElement.setAttribute('data-theme', id);
+        applyYoridokoroTheme(id);
     };
     const handleThemeLeave = () => {
         setPreviewThemeId(null);
-        document.documentElement.setAttribute('data-theme', theme);
+        applyYoridokoroTheme(theme);
     };
 
     return (
         <>
-            <h1 className="obs-settings-panel-title">{t('settings.look_and_feel') || 'Look & feel'}</h1>
+            <header className="obs-settings-panel-header">
+                <span className="obs-settings-eyebrow"><Palette size={14} /> Interface</span>
+                <h1 className="obs-settings-panel-title">{t('settings.look_and_feel') || 'Look & feel'}</h1>
+                <p>Choisissez une atmosphère cohérente pour tout Yoridokoro.</p>
+            </header>
 
-            <section className="obs-settings-section">
+            <section className="obs-settings-section obs-settings-theme-section">
                 <h2 className="obs-settings-section-label">{t('settings.theme') || 'Theme'}</h2>
                 <p className="obs-settings-hint">
                     {previewThemeId
                         ? `${t('settings.preview_theme') || 'Previewing'}: ${activeThemeName} — ${t('settings.click_to_apply') || 'click to apply'}`
                         : `${t('settings.select_theme') || 'Active'}: ${activeThemeName}`}
                 </p>
-                <div className="obs-settings-theme-grid" onMouseLeave={handleThemeLeave}>
+                <div className="obs-settings-theme-groups" onMouseLeave={handleThemeLeave} role="radiogroup" aria-label="Thème de l’interface">
                     {THEME_GROUPS.map((group) => (
-                        <div key={group.name} className="theme-group">
-                            <h4 className="theme-group-title">{group.name}</h4>
-                            <div className="theme-group-grid">
+                        <fieldset key={group.name} className="obs-theme-family">
+                            <legend>{group.name}</legend>
+                            <div className="obs-theme-grid">
                                 {group.themes.map((th) => (
-                                    <button
+                                    <label
                                         key={th.id}
-                                        type="button"
-                                        className={`theme-color-select ${theme === th.id ? 'active' : ''}`}
-                                        style={{ background: th.background || th.color }}
+                                        className={`obs-theme-card${theme === th.id ? ' is-active' : ''}`}
                                         onMouseEnter={() => { handleThemeHover(th.id); playSFX(SFX.HOVER); }}
-                                        onFocus={() => handleThemeHover(th.id)}
-                                        onBlur={handleThemeLeave}
-                                        onClick={() => setTheme(th.id)}
-                                        title={th.name}
-                                        aria-label={th.name}
-                                    />
+                                    >
+                                        <input type="radio" name="yoridokoro-theme" value={th.id} checked={theme === th.id} onFocus={() => handleThemeHover(th.id)} onBlur={handleThemeLeave} onChange={() => setTheme(th.id)} />
+                                        <span className="obs-theme-preview" aria-hidden="true" style={{ background: th.colors.surface, borderColor: th.colors.line }}>
+                                            <i style={{ background: th.colors.sidebarBg }} />
+                                            <i style={{ background: th.colors.surfaceRaised }} />
+                                            <b style={{ background: th.colors.accent }} />
+                                            <em style={{ background: th.colors.text }} />
+                                        </span>
+                                        <span className="obs-theme-copy"><strong>{th.name}</strong><small>{th.description}</small></span>
+                                        {theme === th.id && <Check className="obs-theme-check" size={16} aria-hidden="true" />}
+                                    </label>
                                 ))}
                             </div>
-                        </div>
+                        </fieldset>
                     ))}
                 </div>
             </section>
 
             <section className="obs-settings-section">
-                <h2 className="obs-settings-section-label">{t('settings.language') || 'Language'}</h2>
-                <CustomSelect
-                    value={language}
-                    onChange={(val) => setLanguage(val)}
-                    options={[
-                        { value: "en", label: "English" },
-                        { value: "fr", label: "Français" },
-                        { value: "es", label: "Español" },
-                        { value: "id", label: "Bahasa Indonesia" },
-                        { value: "zh-CN", label: "简体中文 (Simplified Chinese)" },
-                        { value: "zh-TW", label: "繁體中文 (Traditional Chinese)" }
-                    ]}
-                />
+                <div className="obs-settings-setting-row">
+                    <span className="obs-settings-setting-icon"><Languages size={18} /></span>
+                    <span className="obs-settings-setting-copy"><strong>{t('settings.language') || 'Language'}</strong><small>Langue utilisée dans l’ensemble de l’application.</small></span>
+                    <CustomSelect value={language} onChange={(val) => setLanguage(val)} options={[{ value: "en", label: "English" },{ value: "fr", label: "Français" },{ value: "es", label: "Español" },{ value: "id", label: "Bahasa Indonesia" },{ value: "zh-CN", label: "简体中文" },{ value: "zh-TW", label: "繁體中文" }]} />
+                </div>
             </section>
 
             <section className="obs-settings-section">
                 <h2 className="obs-settings-section-label">{t('settings.preferences') || 'Calendar'}</h2>
-                <div>
-                    <p className="obs-settings-hint">{t('settings.first_day')}</p>
+                <div className="obs-settings-setting-row">
+                    <span className="obs-settings-setting-copy"><strong>{t('settings.first_day')}</strong><small>Définit le découpage des vues hebdomadaires.</small></span>
                     <CustomSelect
                         value={weekStart}
                         onChange={(val) => setWeekStart(val as WeekStart)}
@@ -268,8 +497,8 @@ function LookAndFeelPanel() {
                         ]}
                     />
                 </div>
-                <div>
-                    <p className="obs-settings-hint">{t('settings.metacognition_day')}</p>
+                <div className="obs-settings-setting-row">
+                    <span className="obs-settings-setting-copy"><strong>{t('settings.metacognition_day')}</strong><small>Fenêtre proposée pour votre réflexion hebdomadaire.</small></span>
                     <CustomSelect
                         value={metacognitionDay}
                         onChange={(val) => setMetacognitionDay(val as MetacognitionDay)}
@@ -285,8 +514,8 @@ function LookAndFeelPanel() {
             <section className="obs-settings-section">
                 <h2 className="obs-settings-section-label">{t('settings.system_behavior') || 'System behavior'}</h2>
                 <label className="obs-settings-toggle">
-                    <Power size={15} className="obs-settings-toggle-icon" />
-                    {t('settings.launch_at_login')}
+                    <Power size={17} className="obs-settings-toggle-icon" />
+                    <span><strong>{t('settings.launch_at_login')}</strong><small>Ouvrir Yoridokoro avec votre session Windows.</small></span>
                     <input
                         type="checkbox"
                         checked={autostartEnabled}
@@ -298,15 +527,14 @@ function LookAndFeelPanel() {
                     />
                 </label>
                 <label className="obs-settings-toggle">
-                    <Zap size={15} className="obs-settings-toggle-icon" />
-                    {t('settings.performance_mode')}
+                    <Zap size={17} className="obs-settings-toggle-icon" />
+                    <span><strong>{t('settings.performance_mode')}</strong><small>{t('settings.performance_mode_hint')}</small></span>
                     <input
                         type="checkbox"
                         checked={performanceMode}
                         onChange={(e) => setPerformanceMode(e.target.checked)}
                     />
                 </label>
-                <p className="obs-settings-hint">{t('settings.performance_mode_hint')}</p>
             </section>
         </>
     );
@@ -384,7 +612,7 @@ function ShortcutList() {
             {shortcuts.map(s => (
                 <li key={s.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                     <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
-                    <code style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-dark)' }}>{s.key}</code>
+                    <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-dark)' }}>{s.key}</code>
                 </li>
             ))}
         </ul>
@@ -565,7 +793,9 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
     const { onRequestDeleteAll, onRequestDeleteBingo } = props;
     const [exportPath1, setExportPath1] = useState(() => getExportConfig().path1);
     const [exportPath2, setExportPath2] = useState(() => getExportConfig().path2);
+    const [artHtmlPath, setArtHtmlPath] = useState(() => getExportConfig().artHtmlPath);
     const [lastExportTime, setLastExportTime] = useState(() => getLastExportTime());
+    const [lastArtHtmlExportTime, setLastArtHtmlExportTime] = useState(() => getLastArtHtmlExportTime());
     const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     function flashStatus(type: 'success' | 'error', message: string) {
@@ -573,8 +803,8 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
         setTimeout(() => setStatus(null), 4000);
     }
 
-    function persistPaths(p1: string, p2: string) {
-        saveExportConfig({ path1: p1, path2: p2 });
+    function persistPaths(p1: string, p2: string, htmlPath = artHtmlPath) {
+        saveExportConfig({ path1: p1, path2: p2, artHtmlPath: htmlPath });
     }
 
     async function handlePickPath(slot: 1 | 2) {
@@ -598,6 +828,20 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
         }
     }
 
+    async function handlePickArtHtmlPath() {
+        const folder = await pickExportFolder();
+        if (!folder) return;
+        setArtHtmlPath(folder);
+        persistPaths(exportPath1, exportPath2, folder);
+        flashStatus('success', 'Export HTML automatique activé pour ce dossier.');
+    }
+
+    function handleClearArtHtmlPath() {
+        setArtHtmlPath('');
+        persistPaths(exportPath1, exportPath2, '');
+        flashStatus('success', 'Export HTML automatique désactivé.');
+    }
+
     async function handleExportNow() {
         const result = await exportToConfiguredPaths();
         setLastExportTime(getLastExportTime());
@@ -609,10 +853,38 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
         const file = await pickImportFilePath();
         if (!file) return;
         try {
-            await importBackup(file);
-            flashStatus('success', t('settings.import_success') || 'Imported');
+            const result = await importBackup(file);
+            if (result.kind === 'konomi') {
+                flashStatus(
+                    'success',
+                    `Sauvegarde Konomi importée : ${result.itemsImported ?? 0} œuvres et ${result.decisionsImported ?? 0} décisions fusionnées.`,
+                );
+            } else {
+                flashStatus('success', t('settings.import_success') || 'Imported');
+            }
         } catch (e) {
             flashStatus('error', String(e));
+        }
+    }
+
+    async function handleHtmlExport() {
+        const file = await pickHtmlExportFilePath();
+        if (!file) return;
+        try {
+            await exportReadableHtml(file);
+            flashStatus('success', 'Page Art créée. Envoyez ce fichier sur votre téléphone pour consulter et filtrer votre collection hors-ligne.');
+        } catch (error) {
+            flashStatus('error', `Impossible de créer la page HTML : ${String(error)}`);
+        }
+    }
+
+    async function handleConfiguredHtmlExport() {
+        try {
+            const filePath = await exportArtHtmlToConfiguredPath();
+            setLastArtHtmlExportTime(getLastArtHtmlExportTime());
+            flashStatus('success', `Page Art mise à jour : ${filePath}`);
+        } catch (error) {
+            flashStatus('error', `Impossible de mettre à jour la page HTML : ${String(error)}`);
         }
     }
 
@@ -652,9 +924,45 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
                         {t('settings.export_now') || 'Export now'}
                     </button>
                     <button type="button" className="btn btn-secondary" onClick={handleImport} onMouseEnter={() => playSFX(SFX.HOVER)}>
-                        {t('settings.import') || 'Import backup'}
+                        Importer Yoridokoro / Konomi
                     </button>
                 </div>
+                <div className="obs-settings-html-export">
+                    <div className="obs-settings-html-export__head">
+                      <div>
+                        <strong><FileCode2 size={16} aria-hidden="true" /> Art sur téléphone</strong>
+                        <p>Crée une page HTML autonome de vos classements Art, avec accès rapide aux collections et filtres Top, genre, pays, année et décennie.</p>
+                      </div>
+                      <button type="button" className="btn btn-secondary" onClick={handleHtmlExport} onMouseEnter={() => playSFX(SFX.HOVER)}>
+                          Exporter ailleurs…
+                      </button>
+                    </div>
+                    <div className="obs-settings-html-auto">
+                        <label htmlFor="art-html-auto-path">Export automatique à la fermeture</label>
+                        <p id="art-html-auto-help">Choisissez votre dossier Google Drive synchronisé. Yoridokoro y remplacera <code>yoridokoro-art.html</code> par la version la plus récente à chaque fermeture.</p>
+                        <div className="obs-settings-row">
+                            <input id="art-html-auto-path" type="text" value={artHtmlPath} readOnly aria-describedby="art-html-auto-help" placeholder="Aucun dossier — export automatique désactivé" style={{ flex: 1 }} />
+                            <button type="button" className="btn btn-icon" onClick={handlePickArtHtmlPath} aria-label="Choisir le dossier de l’export HTML automatique" title="Choisir le dossier">
+                                <FolderOpen size={14} aria-hidden="true" />
+                            </button>
+                            {artHtmlPath && (
+                                <button type="button" className="btn btn-icon" onClick={handleClearArtHtmlPath} aria-label="Désactiver l’export HTML automatique" title="Désactiver l’export automatique">
+                                    <X size={14} aria-hidden="true" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="obs-settings-html-auto__footer">
+                            <span>{artHtmlPath ? 'Activé · export à chaque fermeture' : 'Désactivé'}</span>
+                            <button type="button" className="btn btn-secondary" onClick={handleConfiguredHtmlExport} disabled={!artHtmlPath}>
+                                Mettre à jour maintenant
+                            </button>
+                        </div>
+                        {lastArtHtmlExportTime && <p className="obs-settings-html-last">Dernier export HTML : {new Date(lastArtHtmlExportTime).toLocaleString()}</p>}
+                    </div>
+                </div>
+                <p className="obs-settings-hint">
+                    Les anciennes sauvegardes Konomi sont acceptées. Les œuvres et l’historique des duels sont fusionnés avec Art, sans effacer vos données actuelles.
+                </p>
 
                 {lastExportTime && (
                     <p className="obs-settings-hint">
@@ -662,7 +970,7 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
                     </p>
                 )}
                 {status && (
-                    <p className="obs-settings-hint" style={{ color: status.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
+                    <p className="obs-settings-hint" role="status" aria-live="polite" style={{ color: status.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
                         {status.message}
                     </p>
                 )}

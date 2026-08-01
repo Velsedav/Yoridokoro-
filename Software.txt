@@ -41,6 +41,14 @@ Les idées suivantes ne sont notamment PAS implémentées au 1er août 2026 :
 Ces éléments sont conservés pour préparer de futures mises à jour, pas pour
 documenter l’état actuel.
 
+Les sections 19 à 25 forment une annexe de référence exhaustive. Elles
+reproduisent les libellés, valeurs par défaut, classements, règles de calcul,
+raccourcis et conditions réellement présents dans le code au 1er août 2026.
+Lorsqu’une phrase est décrite comme « texte affiché », elle est documentée
+fidèlement mais n’est pas pour autant validée ici comme affirmation
+scientifique. Cette distinction est indispensable pour permettre un audit
+externe du contenu éditorial aussi bien que du fonctionnement.
+
 Yoridokoro est un logiciel personnel. Il est développé pour son utilisateur
 principal et peut donc assumer des préférences très spécifiques. Il n’a pas à
 optimiser un hypothétique utilisateur moyen lorsqu’une préférence explicite et
@@ -1443,3 +1451,1331 @@ Avant d’ajouter une fonction à Yoridokoro, poser les questions suivantes :
 
 La bonne fonction n’est pas celle qui rend Yoridokoro plus impressionnant. C’est
 celle qui rend le prochain geste plus accessible et la progression plus réelle.
+
+===============================================================================
+19. ANNEXE ACTUELLE — DÉROULEMENT EXACT D’UNE SESSION D’ÉTUDE
+===============================================================================
+
+[ACTUEL]
+
+19.1 Deux chemins de planification
+----------------------------------
+
+MODE GUIDÉ
+
+Le mode guidé produit exactement trois blocs :
+
+    PREP    5 minutes
+    WORK   25 minutes
+    BREAK   5 minutes
+
+Le sujet, le chapitre et la technique du bloc WORK viennent de la proposition
+automatique. Le texte d’objectif dépend de cette proposition :
+
+- révision : « Rappelle-toi sans notes, vérifie les oublis, puis arrête. » ;
+- savoir-faire : « Essaie d’abord l’exercice ; consulte la méthode seulement si
+  tu bloques. » ;
+- progression : « Comprends la structure principale, note ce qui reste flou,
+  puis avance sans polir. »
+
+Le bouton annonce explicitement : « 5 min de préparation · 25 min de
+concentration · 5 min de repos ». Entrée démarre la proposition mise en avant.
+« Une autre suggestion » fait avancer dans la file de recommandations.
+
+MODE AVANCÉ
+
+Le mode avancé permet trois représentations du même plan : chronologie, vue
+partagée et assistant pas-à-pas. Les préréglages sont :
+
+    nom       PREP    WORK    BREAK
+    25/5      10 min  25 min   5 min
+    50/10     10 min  50 min  10 min
+    90/15     10 min  90 min  15 min
+    Custom    10 min  25 min   5 min dans la table de préréglages
+
+Une particularité actuelle doit être connue : à l’initialisation de l’écran,
+la forme personnalisée locale commence avec PREP 5, WORK 25 et BREAK 5, alors
+que la valeur « Custom » de la table commune indique PREP 10. Il s’agit d’une
+incohérence d’implémentation actuelle, pas d’une règle cognitive.
+
+Le nombre de répétitions est borné entre 1 et 10. La génération ajoute un bloc
+PREP si sa durée est supérieure à zéro, puis, pour chaque répétition, un WORK
+et un BREAK. Cela signifie qu’un BREAK est également créé après le dernier
+WORK. Lorsqu’une forme est régénérée, les affectations déjà saisies des blocs
+WORK de même rang sont conservées autant que possible.
+
+Les préférences de vue, de forme, de répétitions et d’alerte sont conservées
+localement. Ctrl/Cmd + Entrée démarre le plan avancé ; Ctrl/Cmd + Z annule une
+modification ; Ctrl/Cmd + Maj + Z la rétablit.
+
+19.2 État technique initial et restauration
+--------------------------------------------
+
+Au démarrage d’une session, Yoridokoro crée :
+
+- un identifiant de session aléatoire ;
+- une date ISO de début ;
+- l’index de bloc courant égal à 0 ;
+- le nombre de secondes restant calculé depuis le premier bloc ;
+- paused = false ;
+- le brouillon complet des blocs ;
+- le modèle « 25/5 » et repeats = 1 pour une session guidée ;
+- la somme des minutes planifiées ;
+- l’alerte cinq minutes activée par défaut ;
+- une table vide du temps écoulé par bloc ;
+- le contexte analytique du mode de planification.
+
+La session active est conservée dans le stockage local sous la clé
+« activeSession ». Quitter puis revenir restaure le bloc, le temps restant,
+l’état de pause, le brouillon et les temps déjà accumulés.
+
+19.3 Checklist PREP exacte — 9 éléments intégrés
+------------------------------------------------
+
+Les cases ne sont pas obligatoires. L’utilisateur peut les ignorer et continuer.
+Le compteur intégré est sur 9, auquel peuvent s’ajouter des éléments personnels.
+
+SECTION « MÉMOIRE DE TRAVAIL » — icône 🧠
+
+1. 📵 « Tél. éteint & rangé »
+   Infobulle actuellement affichée : « Empêche le flux de stimuli nouveaux qui
+   saturent la mémoire de travail et bloquent le transfert vers la mémoire à
+   long terme. »
+
+2. 🧹 « Onglets & fenêtres inutiles fermés »
+   Infobulle actuellement affichée : « Réduit la charge cognitive extrinsèque
+   pour garder toute la bande passante pour l’apprentissage. »
+
+3. 🧹 « Désencombrer l’espace de travail »
+   Infobulle actuellement affichée : « Un environnement visuellement sain
+   minimise les distractions pour votre poulpe attentionnel. »
+
+SECTION « CARBURANT BIOLOGIQUE » — icône ⚗️
+
+4. 🥤 « Eau prête »
+   Infobulle actuellement affichée : « Une baisse de 2 % d’hydratation altère
+   profondément la concentration et la mémoire à court terme. »
+
+5. 🍇 « Snack sain (IG bas) »
+   Infobulle actuellement affichée : « Évite les pics de glycémie suivis de
+   crashs qui détruisent le focus et provoquent le brouillard mental. »
+
+6. 🧦 « Grosses chaussettes »
+   Infobulle actuellement affichée : « Élimine les signaux d’inconfort envoyés
+   par le corps qui volent de l’attention à votre tâche principale. »
+
+SECTION « STRESS & MOTIVATION » — icône 🧘
+
+7. 🧘 « Respiration 3–5 min »
+   Infobulle actuellement affichée : « Abaisse le cortisol qui bloque
+   chimiquement la formation de nouveaux souvenirs. »
+   Lien externe : https://www.youtube.com/watch?v=1h_q1u9jncs
+
+8. 👥 « Body Doubling »
+   Infobulle actuellement affichée : « Exploite la sensibilité instinctive du
+   cerveau à être observé pour réduire les distractions. »
+
+9. 🔊 « Bruit blanc »
+   Infobulle actuellement affichée : « Isole le cerveau des bruits
+   imprévisibles qui pourraient réveiller le centre de la douleur associé aux
+   tâches difficiles. »
+   Lien externe : https://asoftmurmur.com/
+
+L’utilisateur peut ajouter des lignes personnalisées en texte libre. Elles ont
+l’icône 📌, peuvent être supprimées et sont conservées sous la clé locale
+« study-buddy-custom-prep ». Les coches, elles, représentent l’état de la
+session courante et ne deviennent pas des habitudes obligatoires permanentes.
+
+19.4 Checklist BREAK exacte — 5 éléments intégrés
+-------------------------------------------------
+
+SECTION « BDNF — ENGRAIS CÉRÉBRAL » — icône 🌱
+
+1. 🚶 « Se lever et marcher »
+   Infobulle actuellement affichée : « Augmente le débit sanguin cérébral de
+   30–40 %, apportant instantanément un regain d’oxygène et de focus. »
+
+2. 💪 « Exercice rapide (règle des 9 min) »
+   Infobulle actuellement affichée : « Libère du BDNF, une protéine qui agit
+   comme de l’engrais pour renforcer vos connexions neuronales fraîches. »
+
+SECTION « MODE DIFFUS » — icône 🌊
+
+3. 🧘 « S’étirer »
+   Infobulle actuellement affichée : « Changement de contexte physique radical,
+   signalant au cerveau de passer en mode diffus. »
+
+4. 💧 « Boire de l’eau »
+   Infobulle actuellement affichée : « Répond au signal d’urgence du corps avant
+   qu’il ne dégrade vos fonctions cognitives. »
+
+SECTION « RELECTURE NEURALE » — icône 😴
+
+5. 😴 « Fermer les yeux »
+   Infobulle actuellement affichée : « Permet au cerveau de rejouer les
+   informations apprises à haute vitesse et de les ancrer durablement. »
+
+Les éléments personnels de pause fonctionnent comme ceux de PREP et sont
+conservés sous « study-buddy-custom-break ». Les coches de pause sont remises à
+zéro à chaque nouveau bloc BREAK.
+
+19.5 Checklist de fin exacte — 6 éléments
+-----------------------------------------
+
+PENDANT LE REPOS — suggestions visibles dans l’écran de repos total
+
+1. 🧘 « Fermer les yeux »
+   Texte associé : « S’asseoir en silence permet au cerveau de répéter les
+   informations à haute vitesse. Si vous scrollez immédiatement, vous effacez
+   vos efforts. »
+
+2. 📵 « Zéro nouveau stimulus (pas de téléphone) »
+   Texte associé : « Évite de bulldozer vos briques toutes fraîches avec des
+   stimuli nouveaux qui saturent la mémoire de travail. »
+
+3. 🗣️ « Vocalisation flash (3 min) »
+   Texte associé : « Expliquer 3 idées clés à voix haute renforce immédiatement
+   les connexions synaptiques avant la pause. »
+
+APRÈS LE REPOS — cases interactives de l’écran de review
+
+4. 📅 « Préparer la liste du lendemain »
+   Texte associé dans les données de l’application : « Votre esprit est fait
+   pour avoir des idées, pas pour les retenir. Noter vos tâches libère de
+   l’énergie mentale. »
+
+5. 📊 « Mise à jour de la Boussole (couleur chapitre) »
+   Texte associé dans les données de l’application : « L’anxiété vient souvent
+   du flou. Savoir exactement où vous en êtes supprime la peur de l’examen. »
+
+6. 🚀 « Rituel de fermeture — Systèmes OFF »
+   Texte associé dans les données de l’application : « Prononcez “Travail
+   terminé !” pour signaler au cerveau de quitter le mode focalisé et passer en
+   mode repos total. »
+
+Limite actuelle : les trois textes explicatifs « Après le repos » existent dans
+les traductions et les définitions, mais la review affiche les libellés sans
+rendre leurs infobulles. Les trois éléments « Pendant le repos » sont présentés
+comme suggestions, pas comme cases à cocher dans la review.
+
+19.6 Règles du chronomètre pendant PREP, WORK et BREAK
+-----------------------------------------------------
+
+- Le décompte avance seulement lorsque paused = false.
+- À 0 seconde, le bloc se met en pause et attend une action : il n’enchaîne pas
+  silencieusement PREP ou BREAK vers WORK.
+- Un son est joué dix secondes avant la fin d’un bloc.
+- Si l’option correspondante est active, un signal est joué pendant WORK à
+  chaque multiple positif de cinq minutes restantes.
+- « +5 minutes » n’existe que dans WORK. Si le bloc était expiré, l’ajout le
+  relance.
+- « Passer le bloc » n’est disponible hors PREP qu’avant expiration.
+- Espace alterne pause/reprise hors PREP, tant qu’il reste du temps et qu’aucun
+  champ interactif n’est en cours de saisie.
+- Entrée fait avancer depuis PREP ou depuis un bloc arrivé à zéro.
+- Les touches 1, 2, 3 et 4 choisissent respectivement Oublié, Difficile, Bien et
+  Facile lorsque l’évaluation est affichée.
+- La technique « Pratique 30/30 » ajoute, à l’intérieur de WORK, une alternance
+  de 30 secondes de pratique et 30 secondes de repos avec signal au changement.
+
+Seules les secondes réellement passées dans des blocs WORK alimentent le temps
+d’étude. Les temps PREP et BREAK ne sont pas ajoutés au temps du sujet.
+
+19.7 Sauvegarde, abandon et seuil d’une minute
+----------------------------------------------
+
+Le temps réel d’un WORK courant est calculé comme durée planifiée moins temps
+restant ; les blocs précédents utilisent le temps explicitement accumulé. La
+somme donne actualWorkSeconds.
+
+- actualWorkSeconds <= 0 : session classée « abandoned » ;
+- temps positif et tous les blocs terminés : « completed » ;
+- temps positif mais arrêt anticipé : « stopped ».
+
+Pour les totaux par sujet, les secondes sont converties en minutes par arrondi
+inférieur. Un résultat de zéro minute n’est pas ajouté au total du sujet.
+
+Un chapitre devient éligible à l’évaluation seulement s’il cumule au moins
+60 secondes de WORK dans la session. Chaque chapitre éligible n’est incrémenté
+qu’une fois, même s’il apparaît dans plusieurs blocs. Cela explique pourquoi
+des essais de quelques secondes peuvent apparaître comme activité brute mais ne
+pas produire une progression de chapitre ou une évaluation.
+
+« Terminer la session » demande de choisir entre sauvegarder la progression ou
+la jeter. Une erreur de persistance laisse la possibilité de réessayer ; la
+fermeture complète n’est pas présentée comme réussie tant que l’enregistrement
+n’a pas abouti.
+
+19.8 Évaluation de maîtrise : Oublié / Difficile / Bien / Facile
+---------------------------------------------------------------
+
+L’évaluation ne note pas la valeur de la personne ni la qualité générale de la
+session. Elle ajuste la prochaine révision d’un chapitre étudié au moins une
+minute. L’ordre d’opération est : incrémenter studyCount, puis appliquer la
+réponse.
+
+    touche  libellé      effet sur studyCount après incrément initial
+    1       Oublié       remet studyCount à 1
+    2       Difficile    retire 1 si studyCount > 1, minimum 1
+    3       Bien         ne fait aucun ajustement supplémentaire
+    4       Facile       ajoute encore 1, donc saute une étape de plus
+
+L’utilisateur peut ignorer une évaluation. Après la dernière réponse ou le
+dernier passage, la session est marquée évaluée.
+
+19.9 Pré-rappel et calibration
+------------------------------
+
+Lorsqu’un chapitre a déjà été étudié, le sélecteur peut demander une estimation
+avant le travail : presque rien, une partie, la plupart ou tout. Cette question
+peut être ignorée. Elle est supprimée pour les techniques marquées
+noPreRecall = true, car elles correspondent surtout à une première approche ou
+à une activité pour laquelle ce pré-test n’est pas pertinent dans l’interface.
+
+Pour les analyses, les quatre pré-rappels sont convertis en 0 ; 0,33 ; 0,67 ; 1.
+Les quatre évaluations finales sont converties en 0 ; 0,33 ; 0,67 ; 1. L’écart
+moyen entre les deux peut servir à examiner la calibration. Le taux « bon »
+regroupe Bien et Facile. Ces nombres sont des conventions analytiques internes,
+pas une mesure clinique de la mémoire.
+
+19.10 Repos total et review
+---------------------------
+
+Après la session, le repos total dure 10 minutes, soit 600 secondes. Il peut
+être terminé immédiatement ou poursuivi jusqu’à l’écran de review. La review
+contient les trois cases « Après le repos », une « Zone d’ombre » en texte libre
+et, lorsqu’elles existent, les notes de lecture scientifique. La zone d’ombre
+est enregistrée dans le journal d’erreurs et rattachée au dernier sujet et au
+dernier chapitre WORK disponibles.
+
+La question « Est-ce que mon cerveau est brûlé ? » n’est pas présente dans ce
+flux au 1er août 2026.
+
+===============================================================================
+20. ANNEXE ACTUELLE — CATALOGUE EXACT DES TECHNIQUES ET CLASSEMENT
+===============================================================================
+
+[ACTUEL]
+
+20.1 Système de classement
+--------------------------
+
+Les rangs possibles sont S, A, B, C, D, E et F. L’ordre conceptuel et l’ordre
+prévu dans le sélecteur large sont exactement :
+
+    S → A → B → C → D → E → F
+
+Interprétation éditoriale actuelle du code :
+
+- S : efficacité maximale (« God Tier » dans le commentaire source) ;
+- A : très efficace, notamment pour la compréhension ;
+- B : première rencontre nécessaire pour un apprenant autonome ;
+- C : situationnel, utile avec réserves ;
+- D : utilité faible, au mieux situationnelle ;
+- E : rang prévu par le type et le système de couleurs, mais aucune technique
+  n’y est actuellement enregistrée ;
+- F : pièges à éviter, beaucoup de temps pour peu de résultat.
+
+Les trois familles sont :
+
+    memoriser    « Savoir Mémoriser »    couleur #8b5cf6
+    comprendre   « Savoir Comprendre »   couleur #3b82f6
+    faire        « Savoir Faire »        couleur #f59e0b
+
+Le sélecteur large présente les familles dans l’ordre Comprendre, Mémoriser,
+Faire, puis trie chaque famille par S/A/B/C/D/E/F. Les techniques F sans famille
+sont regroupées dans « À éviter ».
+
+Anomalie connue : la vue étroite dérive ses rangs de l’ordre physique du tableau
+source. Elle peut donc afficher S, A, C, B, D, F au lieu de S, A, B, C, D, E, F.
+Le rang E est absent parce qu’il ne contient aucune technique. Cette anomalie
+d’affichage ne change pas le rang enregistré sur une technique.
+
+20.2 Techniques de rang S — 5 entrées
+-------------------------------------
+
+S-1 — Active Recall
+
+    identifiant : t1
+    famille : Savoir Mémoriser
+    durée par défaut : aucune durée imposée
+    pré-rappel : autorisé
+    description stockée : “Instead of passively reading, train yourself to
+        pull information out. This struggle builds long-term memory.”
+    avantage stocké : “Builds powerful long-term memory through effortful
+        retrieval”
+    ressource : https://www.youtube.com/watch?v=FatnXnlwAc4&t=29s
+
+S-2 — Anki / Spaced Repetition
+
+    identifiant : a1
+    famille : Savoir Mémoriser
+    durée par défaut : 25 minutes
+    pré-rappel : autorisé
+    description stockée : “Algorithm-optimized flashcards. This is the most
+        direct and efficient way to apply spaced repetition and interrupt the
+        forgetting curve.”
+    avantage stocké : “Algorithm-optimized to defeat the forgetting curve”
+    ressource : https://youtu.be/OxUNYr2ruh8
+
+S-3 — Faire les annales
+
+    identifiant : s4
+    famille : Savoir Faire
+    durée par défaut : 50 minutes
+    pré-rappel : autorisé
+    description stockée : “Using past exams helps spot exact knowledge gaps
+        and prepares you for the real format.”
+    avantage stocké : “Reveals exact exam blind spots & builds exam readiness”
+    ressource : notebook NotebookLM configuré dans l’application
+
+S-4 — La Feuille Blanche (Blurting)
+
+    identifiant : new1
+    famille : Savoir Mémoriser
+    durée par défaut : 15 minutes
+    pré-rappel : autorisé
+    description stockée : “Write down everything you know from scratch in
+        10-15 minutes. It is the ultimate diagnostic tool to find what you
+        missed.”
+    avantage stocké : “Ultimate diagnostic: instantly reveals what you truly
+        know”
+    ressource : https://www.youtube.com/watch?v=t_Gl270AJW4
+
+S-5 — Faire des exercices
+
+    identifiant : s6
+    famille : Savoir Faire
+    durée par défaut : 50 minutes
+    pré-rappel : autorisé
+    description stockée : « Résoudre des problèmes et exercices types pour
+        s’entraîner. La pratique active est le meilleur prédicteur de
+        performance en examen. »
+    avantage stocké : “Direct practice = best exam performance predictor”
+    ressource spécifique : aucune ; le bouton générique d’apprentissage peut
+        utiliser la ressource NotebookLM de repli
+
+20.3 Techniques de rang A — 6 entrées
+-------------------------------------
+
+A-1 — Reading a scientific paper (1st pass)
+
+    identifiant : paper1
+    famille : Savoir Comprendre
+    durée par défaut : 10 minutes
+    pré-rappel : désactivé
+    description stockée : “Bird’s-eye view in 5–10 min: read title, abstract,
+        intro → scan section headings → read conclusions → scan references.
+        Identify the 5 Cs.”
+    avantage stocké : “Decides in <10 min whether an article is worth deep
+        reading”
+    ressource : notebook NotebookLM configuré dans l’application
+    interface spéciale : checklist de premier passage et champs des 5 C,
+        détaillés en 20.8
+
+A-2 — Filtrer le cours (Filtrage & Synthèse)
+
+    identifiant : c1
+    famille : Savoir Comprendre
+    durée par défaut : aucune
+    pré-rappel : désactivé
+    description stockée : « Trier délibérément le cours pour ne garder que
+        l’essentiel (concepts clés, zones denses, éléments insistés par le prof)
+        au lieu de tout apprendre. C’est l’étape indispensable avant de créer
+        des flashcards. »
+    avantage stocké : “Eliminates noise & focuses on highest-value content”
+    ressource : https://youtu.be/rzFJkuumZl8?t=282
+
+A-3 — Enseigner aux autres (Feynman)
+
+    identifiant : t3
+    famille : Savoir Comprendre
+    durée par défaut : aucune
+    pré-rappel : autorisé
+    description stockée : “Explaining a concept out loud helps you instantly
+        identify your gaps in understanding.”
+    avantage stocké : “Instantly exposes hidden gaps in understanding”
+    ressource : vidéo YouTube configurée dans l’application
+
+A-4 — Mind-mapping
+
+    identifiant : b2
+    famille : Savoir Comprendre
+    durée par défaut : 20 minutes
+    pré-rappel : désactivé
+    description stockée : “Forces you to chunk info and draw relationships.
+        Extremely effective if kept to keywords and visual links rather than
+        long text.”
+    avantage stocké : “Creates a visual network that mirrors how the brain
+        stores info”
+    ressource : artefact NotebookLM configuré dans l’application
+
+A-5 — Priming
+
+    identifiant : a3
+    famille : Savoir Comprendre
+    durée par défaut : 10 minutes
+    pré-rappel : désactivé
+    description stockée : “Skimming headings and diagrams before reading. It
+        builds subconscious familiarity and speeds up deep reading”
+    avantage stocké : “Pre-builds a mental framework so deep reading sticks”
+    ressource spécifique : aucune
+
+A-6 — Pratique 30/30
+
+    identifiant : music1
+    famille : Savoir Faire
+    durée par défaut : aucune
+    pré-rappel : autorisé
+    description stockée : « Pratique 30 secondes, pause 30 secondes — répéter.
+        La pause active consolide la mémoire motrice entre les essais, ce qui
+        améliore l’acquisition plus vite qu’une pratique continue. »
+    avantage stocké : « La pause entre essais consolide la mémoire motrice
+        (Shadmehr & Brashers-Krug, 1997) »
+    mode minuterie spécial : interval_30_30
+    ressource spécifique : aucune
+
+20.4 Technique de rang B — 1 entrée
+-----------------------------------
+
+B-1 — Première Approche (Stop & Recall)
+
+    identifiant : disc1
+    famille : Savoir Comprendre
+    durée par défaut : 30 minutes
+    pré-rappel : désactivé
+    description stockée : « Premier contact approfondi avec le contenu. Divise
+        le sous-chapitre en 3-4 idées fortes. Après chaque idée, ferme les yeux
+        et explique-la à voix haute. Objectif : 80% de compréhension globale en
+        mode Bulldozer — ne t’arrête pas sur les détails complexes. »
+    avantage stocké : « Construit une compréhension de base solide avant toute
+        mémorisation »
+    ressource spécifique : aucune
+
+20.5 Techniques de rang C — 2 entrées
+-------------------------------------
+
+C-1 — Interleaving (Entrelacement)
+
+    identifiant : t5
+    famille : Savoir Faire
+    durée par défaut : aucune
+    pré-rappel : autorisé
+    description stockée : « Mélange différents types de problèmes ou chapitres
+        dans une même session. Cela t’apprend non seulement “comment” résoudre
+        un problème, mais surtout “quand” utiliser la bonne méthode. »
+    avantage stocké : “Teaches WHEN to use formulas, not just HOW”
+    ressource : https://youtu.be/J4YazZUXT_A
+
+C-2 — Créer ses propres notes
+
+    identifiant : s5
+    famille : Savoir Comprendre
+    durée par défaut : aucune
+    pré-rappel : désactivé
+    description stockée : “Must combine visual and verbal elements (Dual
+        Coding) to be highly effective, rather than acting as a passive
+        transcription”
+    avantage stocké : “Dual-coded notes are 2x more memorable than plain text”
+    ressource : https://youtu.be/AY7XYMM_9l8
+
+20.6 Techniques de rang D et F
+--------------------------------
+
+D-1 — Apprentissage par coeur
+
+    identifiant : d1
+    rang : D
+    famille : Savoir Mémoriser
+    pré-rappel : autorisé
+    description stockée : “Mémorisation mécanique. Always try to understand
+        the concept first, as comprehension reduces the need for rote
+        memorization”
+
+D-2 — Relecture avant sommeil
+
+    identifiant : d2
+    rang : D
+    famille : Savoir Mémoriser
+    pré-rappel : désactivé
+    description stockée : « Relire son cours juste avant de dormir si = zero
+        énergie »
+
+F-1 — Relire ses propres notes
+
+    identifiant : b1
+    rang : F
+    famille : aucune
+    pré-rappel : désactivé
+    description stockée : “Re-reading is a ‘low utility’ trap. It creates an
+        illusion of competence but yields very poor retention.”
+
+F-2 — Relire son cours
+
+    identifiant : e1
+    rang : F
+    famille : aucune
+    pré-rappel : désactivé
+    description stockée : “Reading a text 5 or 10 times is passive, inefficient,
+        and wastes massive amounts of time”
+
+F-3 — Re-regarder cours magistral
+
+    identifiant : f1
+    rang : F
+    famille : aucune
+    pré-rappel : désactivé
+    description stockée : “Total passivity. Re-consuming material does not mean
+        you are encoding it”
+
+F-4 — Beautifying summaries
+
+    identifiant : f2
+    rang : F
+    famille : aucune
+    pré-rappel : désactivé
+    description stockée : “Wastes precious cognitive energy on graphic design
+        (arts and crafts) instead of conceptual synthesis”
+
+20.7 Garde-fous et apprentissage des techniques
+------------------------------------------------
+
+Si plus de 30 % du temps de concentration planifié repose sur des techniques de
+rang D, E ou F, le planificateur affiche un avertissement de faible efficacité.
+Le texte visuel actuel mentionne surtout D/F bien que la condition technique
+inclue E.
+
+Le bouton d’apprentissage externe est volontairement rationné : hors mode Dev,
+une seule technique externe encore jamais apprise peut être ouverte par jour.
+Une technique déjà marquée apprise peut être consultée de nouveau. La dernière
+technique choisie devient aussi la « technique de la semaine » enregistrée.
+
+Après le choix d’une technique, le plan demande un objectif. Ctrl/Cmd + Entrée
+peut valider. Jusqu’à huit entrées pertinentes du journal d’erreurs peuvent être
+suggérées lorsqu’elles correspondent au chapitre courant.
+
+20.8 Interface exacte de « Reading a scientific paper (1st pass) »
+-----------------------------------------------------------------
+
+CHECKLIST DU PREMIER PASSAGE
+
+1. Titre + résumé + introduction
+2. Titres de sections et sous-sections
+3. Conclusions
+4. Références bibliographiques
+
+LES 5 C
+
+1. Catégorie
+   Placeholder : « Type d’étude : mesure, analyse, prototype… »
+   Type de callout Obsidian exporté : info
+
+2. Contexte
+   Placeholder : « Relation avec d’autres travaux, bases théoriques… »
+   Type de callout : abstract
+
+3. Correction
+   Placeholder : « Les hypothèses semblent-elles valides ? »
+   Type de callout : warning
+
+4. Contributions
+   Placeholder : « Principaux apports de l’article… »
+   Type de callout : success
+
+5. Clarté
+   Placeholder : « Qualité de la rédaction… »
+   Type de callout : note
+
+Un champ de titre d’article complète ces données. Les coches et notes sont
+conservées localement sous « study-buddy-paper-notes ». Deux boutons génèrent
+une copie Markdown ordinaire ou une copie avec callouts Obsidian.
+
+===============================================================================
+21. ANNEXE ACTUELLE — QUESTIONS MÉTACOGNITIVES PAR TECHNIQUE
+===============================================================================
+
+[ACTUEL]
+
+Ces rappels apparaissent pendant WORK dans une section repliable. Les rangs D
+et F utilisent un style d’avertissement ; les autres utilisent le style normal.
+Ils ne constituent pas le futur rythme 1/3/7. Ils sont attachés à la technique
+courante et peuvent être ouverts ou ignorés.
+
+ACTIVE RECALL — t1 — rang métacognitif S
+
+- « Si je ferme les yeux tout de suite, suis-je capable d’expliquer ce que je
+  viens de lire avec mes propres mots ? »
+- « Est-ce que je suis vraiment en train de chercher la réponse dans ma mémoire,
+  ou est-ce que j’ai triché en regardant mon cours ? »
+
+ANKI / SPACED REPETITION — a1 — rang métacognitif S
+
+- « Ai-je vraiment deviné la réponse exacte, ou ai-je retourné la carte trop
+  vite en me disant “ah oui je le savais” ? »
+- « À quel point suis-je certain(e) de me souvenir de ce concept si on me pose
+  la question demain ? »
+
+FAIRE LES ANNALES — s4 — rang métacognitif S
+
+- « Quel est le principe fondamental (ou la règle abstraite) qui se cache
+  derrière cet exercice spécifique ? »
+- « Ma réponse est-elle vraiment cohérente et logique compte tenu du contexte
+  du problème ? »
+- « Est-ce que mon erreur est une simple faute d’inattention, ou une vraie
+  faille de compréhension ? »
+
+LA FEUILLE BLANCHE — new1 — rang métacognitif S
+
+- « Quelles sont les informations cruciales que j’ai oubliées de noter, et
+  pourquoi m’ont-elles échappé ? »
+- « Maintenant que je vois mes erreurs, sur quelles lacunes exactes dois-je
+  concentrer ma prochaine session ? »
+
+INTERLEAVING — t5 — rang métacognitif enregistré S
+
+- « À quel type de problème ai-je affaire ici, et quels indices me permettent
+  de choisir la bonne méthode ? »
+- « En quoi ce problème est-il fondamentalement différent de celui que je viens
+  juste de résoudre ? »
+
+Anomalie à connaître : la technique t5 est classée C dans le catalogue, mais sa
+fiche de questions indique S. Le logiciel n’effectue pas de synchronisation
+automatique entre ces deux rangs.
+
+ENSEIGNER AUX AUTRES — t3 — rang métacognitif A
+
+- « Est-ce que j’utilise trop le jargon du manuel, ou puis-je l’expliquer
+  simplement à un enfant de 10 ans ? »
+- « À quel moment précis de mon explication est-ce que je commence à bafouiller
+  ou à hésiter ? »
+
+MIND-MAPPING — b2 — rang métacognitif A
+
+- « Comment ce concept se connecte-t-il logiquement à ce que je savais déjà ? »
+- « Que se passe-t-il sur cette branche si je modifie une variable sur la
+  branche opposée ? »
+
+PRIMING — a3 — rang métacognitif A
+
+- « En lisant uniquement les grands titres et les schémas, qu’est-ce que je
+  m’attends à apprendre dans ce chapitre ? »
+- « Comment ce nouveau sujet s’intègre-t-il dans le grand plan du cours ? »
+
+CRÉER SES PROPRES NOTES — s5 — rang métacognitif enregistré A
+
+- « Suis-je en train de faire le “dictaphone” en recopiant, ou suis-je vraiment
+  en train de filtrer et synthétiser ? »
+- « Quelle image, schéma ou métaphore pourrais-je dessiner pour résumer cette
+  idée abstraite ? »
+
+Anomalie à connaître : s5 est classée C dans le catalogue mais A dans la table
+des questions métacognitives.
+
+APPRENTISSAGE PAR COEUR — d1 — rang métacognitif D
+RELECTURE AVANT SOMMEIL — d2 — rang métacognitif D
+
+Ces deux techniques affichent la même question :
+
+- « Est-ce que je comprends vraiment la logique derrière cette phrase, ou
+  est-ce que je m’efforce juste d’apprendre une suite de mots par cœur ? »
+
+RELIRE SES PROPRES NOTES — b1 — rang métacognitif F
+RELIRE SON COURS — e1 — rang métacognitif F
+
+Ces deux techniques affichent les mêmes questions :
+
+- « Attention : est-ce que je suis victime de l’illusion de compétence
+  simplement parce que ce texte me semble familier ? »
+- « Si je ferme ce cahier tout de suite, est-ce que je peux réciter les trois
+  idées principales sans regarder ? »
+
+RE-REGARDER COURS MAGISTRAL — f1 — rang métacognitif F
+
+- « Suis-je en train de regarder ce cours passivement comme une série Netflix,
+  ou est-ce que je mets pause pour prédire ce que le prof va dire ? »
+
+BEAUTIFYING SUMMARIES — f2 — rang métacognitif F
+
+- « Est-ce que passer 15 minutes à rendre ce titre magnifique m’aide vraiment à
+  mieux comprendre le concept, ou est-ce que je perds mon temps (et mon
+  énergie) ? »
+
+FILTRER LE COURS — c1 — rang métacognitif A
+
+- « Suis-je en train de filtrer efficacement, ou est-ce que je garde tout par
+  peur de manquer quelque chose ? »
+- « Quels sont les 3 concepts clés de cette section que je dois absolument
+  retenir ? »
+
+FAIRE DES EXERCICES — s6 — rang métacognitif S
+
+- « Quel est le principe fondamental qui se cache derrière cet exercice ? »
+- « Est-ce que mon erreur est une faute d’inattention ou une faille de
+  compréhension ? »
+
+Aucune question n’est actuellement définie pour paper1, disc1 ou music1.
+
+===============================================================================
+22. ANNEXE ACTUELLE — ALGORITHME DE LA PROCHAINE ÉTUDE
+===============================================================================
+
+[ACTUEL]
+
+22.1 Candidats de progression et de révision
+--------------------------------------------
+
+Le moteur produit deux types de proposition : « progress » et « review ».
+
+Pour chaque sujet, les chapitres non archivés sont triés par date de création,
+puis par identifiant en cas d’égalité. La frontière de progression est le tout
+premier chapitre dont studyCount vaut 0. Un seul candidat de progression est
+créé par sujet : Yoridokoro n’expose donc pas tous les chapitres futurs à la
+fois.
+
+Un candidat de révision est créé pour chaque chapitre dont la date prévue est
+atteinte ou dépassée. Son motif est « due-today » si le retard vaut zéro et
+« overdue » sinon.
+
+Une révision devient critique lorsque :
+
+    jours de retard >= maximum(2, intervalle courant en jours)
+
+Exemples : avec un intervalle de 1 jour, elle devient critique à 2 jours de
+retard ; avec un intervalle de 5 jours, à 5 jours de retard.
+
+22.2 Ordre des sujets
+---------------------
+
+Les sujets sont comparés dans cet ordre :
+
+1. échéance encore active la plus proche ;
+2. sujet épinglé avant sujet non épinglé ;
+3. sujet jamais étudié, puis sujet étudié le moins récemment ;
+4. sujet créé le plus ancien ;
+5. identifiant, pour rendre le résultat stable.
+
+Une échéance passée est volontairement traitée comme absente pour éviter qu’un
+ancien délai oublié bloque éternellement la tête de la file.
+
+22.3 Construction de la file
+-----------------------------
+
+Les révisions sont d’abord triées : critiques avant ordinaires, puis plus grand
+retard, puis ordre des sujets. La file finale suit cette règle :
+
+1. placer au maximum une révision critique avant toute progression ;
+2. placer un candidat de progression ;
+3. placer la prochaine révision critique restante ou, à défaut, ordinaire ;
+4. répéter progression / révision tant qu’il reste des candidats ;
+5. ne jamais ajouter deux fois le même chapitre.
+
+Le but explicite du code est qu’une répétition espacée ordinaire ne devienne pas
+une boucle perfectionniste empêchant d’avancer. Seule une révision réellement
+critique peut temporairement passer devant le prochain chapitre neuf, et une
+seule à la fois.
+
+22.4 Choix automatique de la technique
+--------------------------------------
+
+    nature du chapitre       progression                 révision
+    Savoir Faire             Faire des exercices (s6)    Faire des exercices (s6)
+    Savoir Mémoriser         Active Recall (t1)           Active Recall (t1)
+    Savoir Comprendre        Première Approche (disc1)    Feynman (t3)
+    non renseignée           Première Approche (disc1)    Active Recall (t1)
+
+Les identifiants de proposition sont stables et explicables :
+« progress:<id chapitre> » ou « review:<id chapitre> ».
+
+22.5 Répétition espacée exacte
+------------------------------
+
+Le calendrier global par défaut est la chaîne :
+
+    1 1 2 5 7
+
+Elle signifie des intervalles de 1, 1, 2, 5 puis 7 jours. Un chapitre peut avoir
+sa propre chaîne de remplacement. Seuls les nombres strictement positifs sont
+retenus ; si la chaîne ne fournit rien de valide, l’intervalle devient 1 jour.
+Après la dernière valeur, le dernier intervalle est répété indéfiniment.
+
+L’index utilisé est studyCount - 1. La date de dernière étude est ramenée au
+début du jour puis augmentée de l’intervalle. La révision est due lorsque le
+nombre de jours restants est inférieur ou égal à zéro.
+
+22.6 Estimation de rétention affichée
+-------------------------------------
+
+Pour un chapitre déjà étudié, l’affichage utilise :
+
+    rétention = arrondi(100 × 0,5 ^ (jours écoulés / intervalle courant))
+
+Le résultat est borné entre 0 et 100 %. Il vaut environ 100 % juste après
+l’étude et 50 % à la date prévue. Le code précise explicitement qu’il s’agit
+d’une heuristique d’affichage et non d’une mesure de la mémoire de l’utilisateur.
+
+===============================================================================
+23. ANNEXE ACTUELLE — OBJECTIFS, ÉTAPES, TEMPS ET GRILLES
+===============================================================================
+
+[ACTUEL]
+
+23.1 Vocabulaire fonctionnel
+----------------------------
+
+La « grille d’objectifs » est l’écran annuel contenant des cartes. Une « fiche
+objectif » est l’écran intérieur d’une carte. Une fiche contient des « étapes »
+ou sous-objectifs. Cette terminologie remplace dans l’interface la modalité
+technique historique Count / Metric / Amount / Manual.
+
+La base conserve encore goal_kind pour compatibilité, mais l’éditeur actuel ne
+demande plus à l’utilisateur de choisir ce modèle. À la sauvegarde, il écrit
+goal_kind = count et déduit l’affichage depuis le nombre d’étapes, leur cible et
+leur unité. L’éditeur essentiel présente d’abord seulement : titre et image de
+couverture. Une section repliée « Progression et options de rappel » contient :
+
+- nombre d’étapes prévues, nombre strictement positif ou vide ;
+- nom du résultat / unité, texte libre comme « albums » ;
+- rythme de rappel en jours, entier positif ou vide.
+
+La couverture peut être importée depuis le disque, le presse-papiers ou une URL
+web via le sélecteur d’image commun. Elle est redimensionnée pour cet usage.
+
+23.2 Formes de grille réellement disponibles
+---------------------------------------------
+
+    forme          colonnes   capacité   cases visuelles   cases bloquées
+    2x2            2          4          4                  aucune
+    3x3            3          9          9                  aucune
+    3x3-center     3          8          9                  centre, index 4
+    4x4            4          16         16                 aucune
+
+Une valeur inconnue retombe sur 4x4. Un changement vers une grille de capacité
+inférieure n’est permis que si le nombre de cases occupées tient dans la nouvelle
+capacité. La forme 3x3-center représente donc bien huit objectifs autour d’un
+vide central intentionnel, et non neuf objectifs dont un serait masqué.
+
+Les années antérieures à la plus ancienne grille réellement enregistrée ne sont
+pas proposées comme grilles fantômes. La navigation annuelle reste possible
+pour les années pertinentes et pour préparer une future grille.
+
+23.3 Calcul de progression sans demander un « Goal type »
+---------------------------------------------------------
+
+Pour chaque étape :
+
+- si target_total > 0, contribution = progress_current / target_total, bornée
+  entre 0 et 1 ;
+- sinon, contribution = 1 si l’étape est terminée, 0 sinon.
+
+La cible globale est goal_target lorsqu’elle est strictement positive ; sinon,
+elle est le nombre d’étapes. La progression globale est la somme des
+contributions divisée par cette cible, bornée entre 0 et 100 %.
+
+Le libellé choisit automatiquement le format le plus utile :
+
+- une seule étape mesurée avec une cible d’objectif <= 1 : valeur exacte de
+  l’étape, par exemple « 18 / 21 km » ;
+- collection d’étapes toutes binaires : nombre terminé / cible, suivi de
+  l’unité, par exemple « 4 / 24 albums » ;
+- mélange de cibles mesurées : pourcentage arrondi ;
+- aucune cible exploitable : « — ».
+
+Une étape avec cible peut être augmentée ou diminuée. Une progression atteignant
+la cible marque automatiquement l’étape terminée ; la décrémenter peut la
+rouvrir. Une étape sans cible utilise son état terminé manuel.
+
+23.4 Chronomètre d’objectif
+---------------------------
+
+Chaque étape peut lancer soit un compte à rebours, soit un chronomètre libre.
+Les préréglages exacts sont :
+
+    5, 15, 25, 45, 60, 90 et 120 minutes
+
+« Autre » accepte un nombre entier de minutes. La valeur stockée est bornée de
+0 à 720 ; 0 signifie chronomètre libre. Une valeur absente ou invalide retombe
+sur 25 minutes. La préférence est mémorisée sous « bingoals.timerMinutes ».
+
+Lancer crée startedAt et, pour un compte à rebours, durationMs. Arrêter crée une
+entrée de temps avec le début et la fin réels. Quitter la fiche pendant un
+enregistrement tente également de fermer et sauvegarder cette entrée. Un seul
+enregistrement d’étape est actif à la fois. Le bouton et le panneau clignotent
+de manière volontairement visible pendant l’enregistrement afin d’éviter
+l’oubli. Le temps cumulé de toutes les étapes alimente le temps investi de la
+fiche et l’Historique commun.
+
+23.5 Vues d’une fiche et souvenirs
+----------------------------------
+
+Deux vues existent :
+
+- Focus : une étape active, son chrono, sa progression et ses souvenirs ;
+- Vue d’ensemble : l’ensemble des étapes sous une forme plus compacte.
+
+Une étape peut recevoir plusieurs images, citations et liens. Une citation est
+du texte libre. Un lien possède une URL et un libellé. Les images peuvent venir
+du disque, du presse-papiers ou du web. Les médias sont liés à l’identifiant de
+l’étape, pas seulement à la fiche globale.
+
+23.6 Navigation clavier exacte dans une fiche
+----------------------------------------------
+
+Les raccourcis globaux sont neutralisés lorsqu’une boîte de dialogue est ouverte
+ou que l’utilisateur saisit dans input, textarea, select ou contenteditable.
+Échap sort alors du champ.
+
+    Flèches       naviguer géométriquement entre les étapes
+    Début / Fin   première / dernière étape
+    J / K         étape suivante / précédente
+    S             démarrer ou arrêter le chrono de l’étape active
+    - / +         diminuer / augmenter sa progression mesurée
+    V             alterner Focus / Vue d’ensemble
+    N             ajouter une étape
+    E             modifier l’objectif
+    B             revenir à la grille annuelle
+
+La première étape incomplète, ou à défaut la première étape, reçoit le focus
+clavier à l’ouverture. Les flèches empêchent alors le défilement de page et
+déplacent la sélection. Tab n’est pas utilisé comme parcours obligatoire de
+toutes les sections décoratives.
+
+===============================================================================
+24. ANNEXE ACTUELLE — ART, CATALOGUES, CITATIONS ET CLASSEMENT
+===============================================================================
+
+[ACTUEL]
+
+24.1 Catégories visibles exactes
+--------------------------------
+
+Dans l’ordre de navigation :
+
+1. Livres — Books — « Written worlds » — accent #a64d35
+2. Bandes dessinées — Comics — « Sequential art » — accent #8f5a2f
+3. Films — Movies — « On screen » — accent #426f85
+4. Séries TV — TV shows — « In episodes » — accent #7960a8
+5. Peintures — Paintings — « On canvas » — accent #266c67
+6. Architecture — « Built form » — accent #81651c
+7. Jeux vidéo — Video games — « Played worlds » — accent #54539b
+8. Albums — « Full records » — accent #3972a3
+9. Photographies — Photographs — « Captured light » — accent #5d7064
+10. Sculptures — « Form in space » — accent #8b674c
+11. Poèmes — Poems — « Distilled words » — accent #765477
+
+L’identifiant historique songs reste lisible lors de la restauration d’anciennes
+données, mais Chansons est volontairement absent de la navigation visible.
+
+24.2 Données d’une œuvre
+------------------------
+
+Une entrée peut contenir : identifiant, catégorie, titre, créateur, année, image,
+genres, pays, tags, série, mouvement, plusieurs citations, commentaire par
+citation, anciens champs de citation unique pour compatibilité, note personnelle,
+score Elo, victoires, défaites, comparaisons, dates de création et modification,
+source de catalogue et identifiant dans cette source.
+
+Le bouton « Rechercher sur le web », présent au survol et dans le volet, construit
+une recherche depuis le titre, le créateur et l’année disponibles. Cette action
+n’altère ni les métadonnées ni le classement.
+
+24.3 Catalogues externes branchés
+---------------------------------
+
+    catégorie                 fournisseur actuel
+    Livres, bandes dessinées  Open Library
+    Peintures                 Wikidata + Art Institute of Chicago, fusionnés
+    Photographies, sculptures Metropolitan Museum of Art
+    Poèmes                    PoetryDB, recherche titre ET auteur
+    Albums                    MusicBrainz + Cover Art Archive
+    Films, séries             TMDB, jeton personnel requis
+    Jeux vidéo                RAWG, clé personnelle requise
+    Architecture              Wikidata, avec image Wikimedia/Wikipedia
+
+Open Library demande 12 résultats et importe titre, premier auteur, première
+année de publication, grande couverture et jusqu’à quatre sujets.
+
+Le Met demande seulement des objets avec image et limite les identifiants aux
+12 premiers. Les détails sont ensuite récupérés individuellement. Photographies
+utilise departmentId 19 ; Sculptures utilise medium = Sculpture.
+
+PoetryDB interroge simultanément le titre et l’auteur, fusionne et déduplique les
+paires titre/auteur, puis priorise correspondance exacte, préfixe et résultat
+partiel.
+
+TMDB récupère au maximum 12 résultats détaillés. Pour un film, le créateur est
+la liste des réalisateurs ; pour une série, la liste created_by. Genres, pays,
+collection éventuelle et affiche sont importés.
+
+RAWG utilise search_precise=true et page_size=12, puis récupère le détail de
+chaque jeu afin d’importer développeurs, date, image et genres.
+
+24.4 Recherche MusicBrainz corrigée
+-----------------------------------
+
+La recherche d’albums ne suppose pas que l’utilisateur saisisse aussi l’artiste.
+Elle demande jusqu’à 100 release-groups à MusicBrainz. Chaque titre est normalisé
+en minuscules, sans accents et sans espaces extérieurs, puis reçoit une priorité :
+
+    0  titre exactement égal à la requête
+    1  titre commençant par la requête
+    2  titre contenant la requête
+    3  autre correspondance MusicBrainz
+
+À priorité égale, le score MusicBrainz décroissant décide, puis l’ordre original
+stabilise le résultat. Toutes les correspondances exactes sont conservées, même
+s’il y en a plus que la taille minimale. Des résultats moins précis complètent
+jusqu’à au moins 24 candidats. Les couvertures Cover Art Archive sont demandées
+pour les 16 premiers seulement afin de maîtriser le coût réseau.
+
+Cette règle corrige le cas où un album exact comme « Distracted » de Thundercat
+pouvait être repoussé hors d’une petite première page par de nombreux homonymes.
+
+24.5 Classement Elo exact
+-------------------------
+
+Tout nouvel élément commence à 1200. Pour un élément A contre B :
+
+    score attendu A = 1 / (1 + 10 ^ ((rating B - rating A) / 400))
+
+Le facteur de déplacement K dépend du nombre de comparaisons déjà effectuées :
+
+    moins de 5 comparaisons    K = 96
+    de 5 à 11                  K = 56
+    de 12 à 24                 K = 36
+    25 ou plus                 K = 24
+
+Après un choix, le gagnant reçoit K × (1 - score attendu) et le perdant
+K × (0 - score attendu), puis les deux scores sont arrondis. Victoire, défaite
+et comparaison sont incrémentées. Un élément est déclaré « placement accéléré
+actif » tant qu’il a moins de 8 comparaisons.
+
+Le choix d’adversaire prend comme prétendant l’élément imposé ou, sinon, un des
+éléments ayant le moins de comparaisons avec départage aléatoire. Pour chaque
+adversaire possible, le coût est :
+
+    différence absolue de rating
+    + 450 si cet adversaire vient d’être vu récemment
+    + un bruit aléatoire compris entre 0 et 120
+
+Le coût minimal est choisi. L’annulation du dernier duel restaure les deux
+ratings antérieurs et décrémente victoire/défaite/comparaison correspondantes.
+
+24.6 Citations dans le volet Carnet
+-----------------------------------
+
+Le seul layout conservé est le layout C « Carnet » : citations et note à gauche,
+image et informations à droite, actions de gestion séparées en bas. Les couleurs
+du volet proviennent du thème courant ; la colonne de citations ne crée pas une
+nouvelle couleur de page indépendante.
+
+Chaque citation possède son texte et un commentaire facultatif. Lorsque la
+hauteur disponible permet de montrer deux cartes sans défilement, deux citations
+sont empilées verticalement. La règle de pagination parcourt la liste dans
+l’ordre : à l’index courant, elle groupe la citation courante et la suivante si
+
+    hauteur citation 1 + espacement 14 px + hauteur citation 2
+        <= hauteur disponible
+
+Sinon elle crée une page d’une seule citation. La page suivante recommence la
+même décision, ce qui permet une rotation 2 par 2 lorsque les contenus suivants
+tiennent, puis 1 par 1 lorsqu’ils sont plus longs. La hauteur réservée tient
+compte du header et de la note personnelle pour éviter de leur imposer un
+scroll. La rotation automatique est suspendue lorsque le carrousel est en pause.
+
+24.7 Raccourcis Art par défaut
+------------------------------
+
+    S      placer le focus dans la recherche floue
+    A      ajouter une œuvre
+    D      commencer un duel
+    F      choisir l’œuvre de gauche
+    J      choisir l’œuvre de droite
+    K      passer cette paire
+    H      annuler le dernier choix
+    Échap  quitter le duel ou retirer le focus de recherche selon le contexte
+
+Ces touches sont personnalisables et doivent rester uniques. Les modificateurs
+Ctrl, Cmd et Alt ne sont pas acceptés comme raccourci simple. Lorsque le champ
+de recherche a le focus, les raccourcis de navigation sont suspendus jusqu’à
+Échap, afin que taper une lettre ne quitte pas la saisie.
+
+===============================================================================
+25. ANNEXE ACTUELLE — DONNÉES, HISTORIQUE, EXPORT IA ET PRÉFÉRENCES
+===============================================================================
+
+[ACTUEL]
+
+25.1 Modèle commun d’activité
+-----------------------------
+
+L’Historique peut réunir des activités de nature : study, goal, project, hobby,
+exercise, art ou general. Une activité possède : identifiant, nom, nature,
+couleur, état épinglé/archivé, dates de création et modification, temps total,
+date de dernière entrée, date de dernier événement et nombre d’événements.
+
+Une entrée de temps possède exactement :
+
+- identifiant ;
+- activity_id ;
+- started_at et ended_at au format temporel ;
+- duration_seconds ;
+- note facultative ;
+- source ;
+- source_ref facultatif permettant de retrouver l’enregistrement d’origine ;
+- created_at.
+
+Une modification recalcule duration_seconds depuis fin moins début, avec minimum
+zéro, transforme ensuite l’entrée en source manuelle et retire source_ref. Une
+suppression efface réellement l’entrée. Si elle provenait d’une autre source,
+une pierre tombale de source_ref est d’abord enregistrée afin qu’une future
+synchronisation ne la recrée pas.
+
+Les événements de progression possibles sont : progress_increased,
+progress_decreased, completed et reopened. Ils peuvent conserver delta, valeur
+après action, unité, note, source et référence source.
+
+25.2 Données d’une matière et d’une session d’étude
+---------------------------------------------------
+
+Une matière contient : identifiant, nom, couverture, épinglage, création,
+dernière étude, minutes totales, échéance, archive, type de focus, ancien champ
+chapters, résultat attendu, date de suppression et type de sujet. Les tags sont
+normalisés en minuscules dans une table liée.
+
+Une session conserve au minimum : identifiant, début, fin, modèle, répétitions,
+minutes planifiées, minutes réelles, secondes réelles, statut completed/stopped/
+abandoned et date d’évaluation. Ses blocs conservent index, type PREP/WORK/BREAK,
+minutes, matière, technique, chapitre, confiance et dates.
+
+Les totaux « aujourd’hui » et « cette semaine » utilisent actual_seconds si ce
+nombre est positif, sinon actual_minutes × 60. Les sessions abandoned sont
+exclues de ces totaux.
+
+Les chapitres et évaluations, historiquement stockés localement, disposent aussi
+de snapshots SQLite versionnés pour la durabilité et la récupération.
+
+25.3 Journal comportemental local
+---------------------------------
+
+La politique active s’appelle « yoridokoro-next-step », version 1.0.0. Les
+événements possibles sont exactement :
+
+    recommendation_exposed
+    recommendation_alternative_requested
+    recommendation_accepted
+    session_created
+    block_started
+    block_paused
+    block_resumed
+    block_boundary_reached
+    block_extended
+    block_completed
+    session_persisted
+    session_persist_failed
+    session_discarded
+    rating_submitted
+    rating_skipped
+    session_closed
+
+Chaque ligne peut contenir : identifiant, type et version d’événement, heure et
+décalage de fuseau, temps monotone, identifiant de visite, opportunité,
+recommandation, session, bloc, matière, chapitre, politique, payload JSON,
+drapeaux de qualité, clé de déduplication et date d’enregistrement.
+
+Le payload est volontairement filtré : seuls string, number, boolean et null
+sont acceptés. Les objets ou tableaux arbitraires sont écartés. Une panne du
+journal ne doit jamais interrompre une session : l’échec renvoie false et reste
+dans la console de développement.
+
+Deux préférences d’interprétation sont explicitement enregistrables :
+
+    prepChecklistHelpful = true par défaut
+    countdownTimerStimulating = true par défaut
+
+Elles reflètent les préférences déclarées de l’utilisateur ; elles ne sont pas
+inférées comme vérité universelle sur le TDAH ou le fonctionnement cognitif.
+
+25.4 Export lisible pour une IA
+-------------------------------
+
+L’export « rapport d’étude complet » résout les identifiants en noms et contient
+notamment :
+
+- date de génération ;
+- statistiques globales : temps total, nombre de sessions, première étude,
+  matières actives, chapitres suivis et Pit Stops ;
+- huit dernières semaines ayant de l’activité, avec sessions, durée, jours
+  actifs sur sept, matières, chapitres et quatre techniques principales ;
+- profils de matières : type, durée, dernière session, échéance, résultat,
+  chapitres et étapes ;
+- historique métacognitif disponible ;
+- contexte de répétition et données nécessaires à l’analyse présents dans les
+  sections suivantes de l’export.
+
+Le prompt actuellement inclus dans cet export demande à l’IA :
+
+1. les patterns récurrents positifs et négatifs ;
+2. l’écart entre priorités déclarées aux Pit Stops et temps investi ;
+3. l’adéquation des techniques aux besoins mémorisation/compréhension/
+   savoir-faire ;
+4. les matières urgentes selon leurs deadlines ;
+5. trois recommandations concrètes pour la semaine suivante.
+
+Software.txt complète cet export en expliquant le fonctionnement du produit.
+Pour une analyse correcte, il faut transmettre les deux : le rapport représente
+les observations personnelles ; Software.txt représente les règles, affordances,
+limites et idées futures du logiciel. Une IA ne doit pas confondre absence de
+donnée, absence de fonction et choix volontaire de l’utilisateur.
+
+25.5 Préférences et thèmes
+--------------------------
+
+Les réglages généraux incluent notamment langue, thème, premier jour de semaine,
+zoom, jour du Pit Stop et options de performance disponibles selon le système.
+Le premier jour de semaine est lundi par défaut. Le zoom est borné de 50 à
+200 %, par pas de 10, et Ctrl/Cmd + molette peut le modifier.
+
+Art possède les thèmes suivants, regroupés par famille :
+
+Original
+    Konomi / identifiant keystone
+
+Catppuccin
+    Latte, Frappé, Macchiato, Mocha
+
+Tokyo Night
+    Day, Night, Storm, Moon
+
+Rosé Pine
+    Dawn, Main, Moon
+
+Classics
+    Dracula, Monokai, Nord, Solarized Dark, Solarized Light,
+    Gruvbox Dark, Gruvbox Light
+
+Distinctive
+    Everforest, Kanagawa, Mellow, Night Owl
+
+Chaque thème définit séparément surface, surface surélevée, surface subtile,
+overlay, texte, texte atténué, ligne, fond sombre, fond et texte de barre
+latérale, accent et texte sur accent. Les panneaux de citation et les barres de
+défilement doivent donc utiliser ces variables plutôt que des couleurs papier
+codées en dur.
+
+25.6 Limites de lecture des données
+-----------------------------------
+
+- Le temps prouve une présence chronométrée, pas une compréhension.
+- L’évaluation finale est une auto-évaluation ponctuelle, pas un test clinique.
+- La rétention est une courbe heuristique, pas une mesure de rappel.
+- Une session de moins de 60 secondes ne met pas à jour la progression d’un
+  chapitre, même si une trace technique très courte peut exister.
+- Les checklists enregistrent principalement des comptes cochés/total, pas un
+  récit détaillé des raisons de chaque case ignorée.
+- Une corrélation entre technique, durée et résultat ne prouve pas que la
+  technique cause le résultat.
+- Le logiciel est destiné à un utilisateur principal : les préférences
+  personnelles documentées ne doivent pas être généralisées à toutes les
+  personnes TDAH ou présentant un syndrome de désengagement cognitif.
+- Les infobulles reproduites en section 19 sont du contenu éditorial à auditer ;
+  leur présence dans le code ne constitue pas une validation scientifique.

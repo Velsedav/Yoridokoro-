@@ -9,6 +9,7 @@ const openExternal = (url: string) => (window as any).electronAPI.shell.openExte
 import { getSessions, getAllSessionBlocks } from '../lib/db';
 import type { ErrorLogEntry } from '../lib/db';
 import { useTranslation } from '../lib/i18n';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import './TechniquePickerModal.css';
 
 interface TechniquePickerModalProps {
@@ -84,6 +85,8 @@ export default function TechniquePickerModal({ onClose, onSelect, currentSelecti
     const [pendingTechId, setPendingTechId] = useState<string | null>(null);
     const [objectiveInput, setObjectiveInput] = useState('');
     const objectiveInputRef = useRef<HTMLTextAreaElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
+    useDialogFocus(dialogRef, onClose, '.tech-picker-close');
 
     useEffect(() => {
         async function fetchDfRatio() {
@@ -215,7 +218,7 @@ export default function TechniquePickerModal({ onClose, onSelect, currentSelecti
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content tech-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tech-picker-title" onClick={e => e.stopPropagation()}>
+            <div ref={dialogRef} className="modal-content tech-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tech-picker-title" tabIndex={-1} onClick={e => e.stopPropagation()}>
                 <div className="tech-picker-header">
                     <div className="tech-picker-header-left">
                         {(subjectName || chapterName) && (

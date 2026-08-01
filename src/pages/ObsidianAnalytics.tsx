@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { AlignJustify, Columns2, Minimize2 } from 'lucide-react'
+import { AlignJustify, Columns2, Minimize2, BarChart3 } from 'lucide-react'
 import { getSessions, getSubjects, getAllSessionBlocks, getAllSubjectTagsMap } from '../lib/db'
 import type { Session, Subject, SessionBlock } from '../lib/db'
 import { getRatings } from '../lib/chapters'
@@ -114,10 +114,12 @@ export default function ObsidianAnalytics() {
   return (
     <div className="oa-root">
       <div className="oa-topbar">
-        <div className="oa-view-pills">
+        <div className="oa-topbar-identity"><span><BarChart3 size={13} /> Comprendre votre rythme</span><strong>Analyses</strong></div>
+        <div className="oa-view-pills" aria-label="Mode d’analyse">
           <button
             className={`oa-view-pill${view === 'command' ? ' oa-view-pill-active' : ''}`}
             onClick={() => changeView('command')}
+            aria-pressed={view === 'command'}
             title="Everything at once — grounding stats, deadline radar, full breakdown"
           >
             <AlignJustify size={14} /> Command
@@ -125,6 +127,7 @@ export default function ObsidianAnalytics() {
           <button
             className={`oa-view-pill${view === 'narrative' ? ' oa-view-pill-active' : ''}`}
             onClick={() => changeView('narrative')}
+            aria-pressed={view === 'narrative'}
             title="Story top to bottom — each section answers one question"
           >
             <Columns2 size={14} /> Narrative
@@ -132,6 +135,7 @@ export default function ObsidianAnalytics() {
           <button
             className={`oa-view-pill${view === 'minimal' ? ' oa-view-pill-active' : ''}`}
             onClick={() => changeView('minimal')}
+            aria-pressed={view === 'minimal'}
             title="Just what matters — time, streak, subjects, techniques"
           >
             <Minimize2 size={14} /> Minimal

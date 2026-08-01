@@ -1,0 +1,75 @@
+/* Yoridokoro layout contract: one rhythm for every inherited surface. */
+.yoridokoro-layout{
+  --y-page-max:1480px;
+  --y-page-gutter:clamp(24px,3.6vw,56px);
+  --y-page-top:clamp(28px,3.2vw,48px);
+  --y-page-bottom:72px;
+  --y-workspace-gutter:clamp(24px,3.2vw,48px);
+  --y-workspace-top:32px;
+  --y-control-radius:6px;
+}
+.page-route-transition{min-width:0;min-height:100%;background:var(--bg-color)}
+.page-route-standard{overflow:visible}
+.page-route-workspace{min-height:0}
+
+:is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.bingoals-root,.metacognition-page){
+  --y-surface:var(--card-bg,#f5f2e9);--y-raised:var(--surface-raised,#fff);--y-line:var(--border-color,#d7d1c4);--y-ink:var(--text-dark,#24231f);--y-muted:var(--text-muted,#706d65);--y-accent:var(--primary,#a64d35);
+  color:var(--y-ink);font-family:var(--font-main,'Manrope',sans-serif)
+}
+:is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.bingoals-root,.metacognition-page) :is(button,a,input,select,textarea):focus-visible{outline:3px solid color-mix(in srgb,var(--y-accent) 72%,white);outline-offset:2px}
+:is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.bingoals-root,.metacognition-page) button{min-width:32px;min-height:32px}
+.yoridokoro-layout button{border-radius:var(--y-control-radius)!important}
+.yoridokoro-layout button[aria-label]:has(>svg:only-child){border-radius:50%!important}
+:is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.metacognition-page) :is(input,select,textarea){border-color:var(--y-line);background:var(--y-raised);color:var(--y-ink)}
+
+/* Standard editorial pages share the same width and physical origin. */
+.yoridokoro-layout :is(.yd-page,.ac-page,.rel-page,.ohi-page,.bingoals-root){
+  box-sizing:border-box;width:100%;max-width:var(--y-page-max);margin:0 auto;
+  padding:var(--y-page-top) var(--y-page-gutter) var(--y-page-bottom)
+}
+.yoridokoro-layout :is(.yd-header,.ac-header,.rel-topbar){min-height:96px;margin:0 0 28px;align-items:flex-end}
+.yoridokoro-layout :is(.yd-header,.ac-header,.rel-topbar) h1{font:600 clamp(2.5rem,4.2vw,3.35rem)/.98 var(--font-heading,'Newsreader',Georgia,serif);letter-spacing:-.025em;margin:6px 0 5px}
+:is(.yd-eyebrow,.ac-eyebrow,.rel-eyebrow,.ohi-eyebrow,.ohi-section-label){font-family:var(--font-mono,'DM Mono',monospace);letter-spacing:.1em;text-transform:uppercase;color:var(--y-accent)}
+
+/* Studies keeps its dense data views but now sits on the same page grid. */
+.ohi-page{height:auto;min-height:100%;background:var(--bg-color)}
+.ohi-topbar{min-height:64px;padding:0 0 18px;margin:0 0 18px;border-bottom:1px solid var(--y-line);background:transparent}
+.ohi-content{overflow:visible;min-height:0}
+.ohi-review-queue{margin:0 0 18px;background:var(--y-raised);border-color:var(--y-line)}
+.ohi-board{padding:0}
+.ohi-list-wrap,.ohi-split{border:1px solid var(--y-line);border-radius:8px;background:var(--y-raised);overflow:auto}
+.ohi-page :is(.ohi-subject-card,.ohi-stat-card,.ohi-quick-card){border:1px solid var(--y-line);border-radius:7px;background:var(--y-raised)}
+
+/* Full-height workspaces use one consistent header gutter instead of local 16px values. */
+:is(.op-root,.oa-root){width:100%;max-width:none;margin:0;padding:0;background:var(--bg-color)}
+.yoridokoro-layout :is(.op-topbar,.oa-topbar){min-height:86px;height:86px;padding:0 var(--y-workspace-gutter);border-color:var(--y-line);background:var(--y-surface)}
+.op-config{padding-inline:var(--y-workspace-gutter);border-color:var(--y-line);background:var(--bg-color)}
+:is(.op-timeline,.op-wizard,.oa-command-view,.oa-narrative-view,.oa-minimal-view){padding:24px var(--y-workspace-gutter) 56px}
+:is(.op-card,.op-block,.op-sidebar,.op-panel,.oa-card,.oa-panel,.oa-stat){border-color:var(--y-line);border-radius:7px;background:var(--y-raised);box-shadow:none}
+:is(.op-kicker,.op-label,.op-config-label,.oa-panel-header){font-family:var(--font-mono,'DM Mono',monospace);letter-spacing:.08em;text-transform:uppercase;color:var(--y-muted)}
+
+/* Rail workspaces align their rail and content headers to the same top line. */
+:is(.obs-learn-shell,.obs-meta-shell,.obs-settings-layout){background:var(--bg-color)}
+:is(.obs-learn-rail,.obs-meta-rail,.obs-settings-rail){flex-basis:260px;border-right:1px solid var(--y-line);background:var(--y-surface)}
+:is(.obs-learn-rail-header,.obs-meta-rail-header){padding:var(--y-workspace-top) 20px 20px}
+.obs-settings-rail{padding:var(--y-workspace-top) 0 24px}
+.obs-settings-rail-header{padding:0 20px 12px}
+:is(.obs-learn-main,.obs-meta-main){background:var(--bg-color)}
+:is(.obs-learn-intro,.obs-learn-section,.obs-meta-main){box-sizing:border-box;width:100%;padding:var(--y-workspace-top) var(--y-workspace-gutter) 64px}
+:is(.obs-learn-rail-item,.obs-meta-rail-item,.obs-settings-rail-item){min-height:42px;padding-inline:20px;border-radius:5px}
+:is(.obs-learn-rail-item.is-active,.obs-learn-rail-item[aria-current="page"],.obs-meta-rail-item.is-active,.obs-settings-rail-item--active){background:color-mix(in srgb,var(--y-accent) 11%,var(--y-surface));color:var(--y-ink)}
+:is(.obs-learn-card,.obs-learn-lesson,.obs-meta-card,.obs-settings-section){border-color:var(--y-line);border-radius:7px;background:var(--y-raised);box-shadow:none}
+
+/* Reflection follows the same workspace header/content inset. */
+.mc-header{min-height:72px;padding:14px var(--y-workspace-gutter);border-color:var(--y-line);background:var(--y-surface)}
+.mc-layout{padding:var(--y-workspace-top) var(--y-workspace-gutter) 56px}
+
+@media(max-width:900px){
+  .yoridokoro-layout{--y-page-gutter:20px;--y-page-top:24px;--y-workspace-gutter:22px;--y-workspace-top:24px}
+  :is(.obs-learn-shell,.obs-meta-shell,.obs-settings-layout){grid-template-columns:1fr}
+}
+@media(max-width:700px){
+  .yoridokoro-layout{--y-page-gutter:16px;--y-page-top:20px;--y-workspace-gutter:16px;--y-workspace-top:20px}
+  :is(.yd-header,.ac-header,.rel-topbar){align-items:flex-start;min-height:0}
+}
+@media(prefers-reduced-motion:reduce){:is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.bingoals-root,.metacognition-page) *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}

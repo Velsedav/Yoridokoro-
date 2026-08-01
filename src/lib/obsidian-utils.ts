@@ -26,6 +26,7 @@ export interface QuickStartSession {
   repeats: number
   plannedMinutes: number
   fiveMinAlert: boolean
+  analytics: { planningMode: 'advanced' }
 }
 
 export function groupByTag(subjects: (Subject & { tags: Tag[] })[]): TagGroup[] {
@@ -101,5 +102,6 @@ export function buildQuickStartSession(
     repeats: 1,
     plannedMinutes: QUICK_START_PREP_MINUTES + minutes,
     fiveMinAlert: false,
+    analytics: { planningMode: 'advanced' },
   }
 }

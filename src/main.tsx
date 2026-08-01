@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { HashRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
@@ -6,56 +6,56 @@ import './index.css'
 import { SettingsProvider } from './lib/settings.tsx'
 
 import Layout from './components/Layout'
-import Home from './pages/Home.tsx'
-import Plan from './pages/Plan.tsx'
-import Session from './pages/Session.tsx'
-import SubjectDetail from './pages/SubjectDetail.tsx'
-import Learning from './pages/Learning.tsx'
-import Analytics from './pages/Analytics.tsx'
-import Settings from './pages/Settings.tsx'
-import MetacognitionLogs from './pages/MetacognitionLogs.tsx'
-import Metacognition from './pages/Metacognition.tsx'
-import DevPage from './pages/Dev.tsx'
-import BingoDashboard from './pages/bingoals/BingoDashboard.tsx'
-import BingoObjectivePage from './pages/bingoals/BingoObjectivePage.tsx'
-import './styles/bingoals.css'
 import './styles/linux-perf.css'
+import './styles/yoridokoro-legacy.css'
+import AppErrorBoundary from './components/AppErrorBoundary.tsx'
 
-// CTRL+Scroll: scale font-size
-let rootFontScale = 1.0;
-document.addEventListener('wheel', (e) => {
-  if (e.ctrlKey) {
-    e.preventDefault();
-    const direction = e.deltaY < 0 ? 1 : -1;
-    rootFontScale = Math.max(0.7, Math.min(1.5, rootFontScale + direction * 0.05));
-    document.documentElement.style.fontSize = `${rootFontScale * 100}%`;
-  }
-}, { passive: false });
-
-// CTRL+0: reset font scale
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.key === '0') {
-    e.preventDefault();
-    rootFontScale = 1.0;
-    document.documentElement.style.removeProperty('font-size');
-  }
-});
+const TodayDashboard = lazy(() => import('./pages/TodayDashboard.tsx'))
+const Home = lazy(() => import('./pages/Home.tsx'))
+const SubjectDetail = lazy(() => import('./pages/SubjectDetail.tsx'))
+const Plan = lazy(() => import('./pages/Plan.tsx'))
+const ActivityCalendar = lazy(() => import('./pages/ActivityCalendar.tsx'))
+const Session = lazy(() => import('./pages/Session.tsx'))
+const Learning = lazy(() => import('./pages/Learning.tsx'))
+const Analytics = lazy(() => import('./pages/Analytics.tsx'))
+const MetacognitionLogs = lazy(() => import('./pages/MetacognitionLogs.tsx'))
+const Metacognition = lazy(() => import('./pages/Metacognition.tsx'))
+const Settings = lazy(() => import('./pages/Settings.tsx'))
+const DevPage = lazy(() => import('./pages/Dev.tsx'))
+const BingoDashboard = lazy(() => import('./pages/bingoals/BingoDashboard.tsx'))
+const BingoObjectivePage = lazy(() => import('./pages/bingoals/BingoObjectivePage.tsx'))
+const ArtModule = lazy(() => import('./pages/ArtModule.tsx'))
+const Relations = lazy(() => import('./pages/Relations.tsx'))
 
 // F11: toggle fullscreen via Electron
 document.addEventListener('keydown', (e) => {
   if (e.key === 'F11') {
     e.preventDefault();
-    // Electron handles fullscreen toggling natively via main process
+    void (window as any).electronAPI?.windowControls?.toggleFullscreen();
   }
 });
 
-// Auto-export on close via Electron window close event
-window.addEventListener('beforeunload', async () => {
+// Electron pauses window closure until every configured local/cloud-folder
+// export has finished. This avoids the unreliable async-beforeunload pattern.
+const lifecycle = (window as any).electronAPI?.lifecycle;
+let closeInProgress = false;
+lifecycle?.onBeforeClose(async () => {
+  if (closeInProgress) return;
+  closeInProgress = true;
+  window.dispatchEvent(new Event('app-close-start'));
   try {
     const { autoExportToConfiguredPaths } = await import('./lib/export');
-    await autoExportToConfiguredPaths();
-  } catch {}
+    await autoExportToConfiguredPaths((path, status, slot) => {
+      window.dispatchEvent(new CustomEvent('app-close-path', { detail: { path, status, slot } }));
+    });
+  } catch {
+    // The main process still provides a timeout and the overlay offers force quit.
+  } finally {
+    window.dispatchEvent(new Event('app-close-done'));
+    setTimeout(() => lifecycle.readyToClose(), 250);
+  }
 });
+(window as any).__forceQuit = () => lifecycle?.forceClose();
 
 // Strip any accidental zoom property
 const clearNativeZoom = () => {
@@ -65,27 +65,46 @@ const clearNativeZoom = () => {
 new MutationObserver(clearNativeZoom).observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
 new MutationObserver(clearNativeZoom).observe(document.body, { attributes: true, attributeFilter: ['style'] });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <SettingsProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Home />} />
-            <Route path="subject/:id" element={<SubjectDetail />} />
-            <Route path="plan" element={<Plan />} />
-            <Route path="session" element={<Session />} />
-            <Route path="learning" element={<Learning />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="metacognition-logs" element={<MetacognitionLogs />} />
-            <Route path="metacognition" element={<Metacognition />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="dev" element={<DevPage />} />
-            <Route path="bingoals" element={<BingoDashboard />} />
-            <Route path="bingoals/objective/:id" element={<BingoObjectivePage />} />
-          </Route>
-        </Routes>
-      </HashRouter>
-    </SettingsProvider>
-  </StrictMode>,
-)
+async function startRenderer() {
+  try {
+    const { synchronizeStudyDataDurability } = await import('./lib/chapters')
+    await synchronizeStudyDataDurability()
+  } catch (error) {
+    console.warn('Study data durability check could not complete', error)
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <AppErrorBoundary>
+        <SettingsProvider>
+          <HashRouter>
+          <Suspense fallback={<div className="route-loading" role="status">Ouverture de votre espace…</div>}>
+            <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<TodayDashboard />} />
+              <Route path="study" element={<Home />} />
+              <Route path="subject/:id" element={<SubjectDetail />} />
+              <Route path="plan" element={<Plan />} />
+              <Route path="calendar" element={<ActivityCalendar />} />
+              <Route path="session" element={<Session />} />
+              <Route path="learning" element={<Learning />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="metacognition-logs" element={<MetacognitionLogs />} />
+              <Route path="metacognition" element={<Metacognition />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="dev" element={<DevPage />} />
+              <Route path="bingoals" element={<BingoDashboard />} />
+              <Route path="bingoals/objective/:id" element={<BingoObjectivePage />} />
+              <Route path="art" element={<ArtModule />} />
+              <Route path="relations" element={<Relations />} />
+            </Route>
+            </Routes>
+          </Suspense>
+          </HashRouter>
+        </SettingsProvider>
+      </AppErrorBoundary>
+    </StrictMode>,
+  )
+}
+
+void startRenderer()

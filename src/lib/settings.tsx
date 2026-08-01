@@ -1,49 +1,15 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { setAudioTheme, preloadCustomSounds } from './sounds';
+import { applyYoridokoroTheme, getYoridokoroTheme, type YoridokoroThemeId } from './yoridokoroThemes';
 
-export type Theme = 'obsidian' | 'obsidian-terminal-green' | 'obsidian-terminal-orange' | 'obsidian-designers-republic' | 'obsidian-tdr-acid' | 'obsidian-kokedera' | 'obsidian-cyberpunk' | 'obsidian-dracula' | 'obsidian-nord' | 'obsidian-monokai' | 'obsidian-tokyo-night' | 'obsidian-solarized-dark' | 'obsidian-gruvbox' | 'obsidian-catppuccin' | 'obsidian-catppuccin-latte' | 'obsidian-catppuccin-frappe' | 'obsidian-catppuccin-macchiato' | 'obsidian-ayu' | 'obsidian-starry-night'
-  | 'obsidian-pastel'
-  | 'obsidian-classic-uniform' | 'obsidian-cosmic-manicure' | 'obsidian-chibi-moon'
-  | 'obsidian-transformation-ribbon' | 'obsidian-honey-lemon' | 'obsidian-ai-pro'
-  | 'obsidian-cyber-scan' | 'obsidian-terminal-red' | 'obsidian-terminal-cyan'
-  | 'obsidian-terminal-amber' | 'obsidian-terminal-acid' | 'obsidian-terminal-blue'
-  | 'obsidian-tdr-blue' | 'obsidian-tdr-ember' | 'obsidian-tdr-night' | 'obsidian-tdr-warp'
-  | 'obsidian-dark-academia' | 'obsidian-light-academia';
+export type Theme = YoridokoroThemeId;
 
 /** Classic theme ids removed in the redesign unification → obsidian equivalents. */
-const LEGACY_THEME_MAP: Record<string, Theme> = {
-  'pastel': 'obsidian-pastel',
-  'neumorphism': 'obsidian',
-  'neobrutalism': 'obsidian',
-  'classic-uniform': 'obsidian-classic-uniform',
-  'cosmic-manicure': 'obsidian-cosmic-manicure',
-  'chibi-moon': 'obsidian-chibi-moon',
-  'transformation-ribbon': 'obsidian-transformation-ribbon',
-  'honey-lemon': 'obsidian-honey-lemon',
-  'ai-pro': 'obsidian-ai-pro',
-  'cyber-scan': 'obsidian-cyber-scan',
-  'starry-night': 'obsidian-starry-night',
-  'designers-republic': 'obsidian-designers-republic',
-  'terminal-orange': 'obsidian-terminal-orange',
-  'terminal-green': 'obsidian-terminal-green',
-  'terminal-red': 'obsidian-terminal-red',
-  'terminal-cyan': 'obsidian-terminal-cyan',
-  'terminal-amber': 'obsidian-terminal-amber',
-  'terminal-acid': 'obsidian-terminal-acid',
-  'terminal-blue': 'obsidian-terminal-blue',
-  'tdr-blue': 'obsidian-tdr-blue',
-  'tdr-ember': 'obsidian-tdr-ember',
-  'tdr-night': 'obsidian-tdr-night',
-  'tdr-warp': 'obsidian-tdr-warp',
-  'tdr-acid': 'obsidian-tdr-acid',
-};
-
 /** Map a possibly-legacy stored theme id to a valid current Theme. */
 export function migrateTheme(theme: string): Theme {
-  if (theme in LEGACY_THEME_MAP) return LEGACY_THEME_MAP[theme];
-  if (theme.startsWith('obsidian')) return theme as Theme;
-  return 'obsidian-pastel';
+  if (theme === 'obsidian-kokedera') return 'kokedera';
+  return getYoridokoroTheme(theme).id;
 }
 
 export type WeekStart = 'monday' | 'sunday';
@@ -69,7 +35,7 @@ interface Settings {
 const isLinux = (window as any).electronAPI?.platform === 'linux';
 
 const defaultSettings: Settings = {
-    theme: 'obsidian-pastel',
+    theme: 'keystone',
     weekStart: 'monday',
     language: 'en',
     zoomLevel: 100,
@@ -113,7 +79,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         localStorage.setItem('study-buddy-settings', JSON.stringify(settings));
 
-        document.documentElement.setAttribute('data-theme', settings.theme);
+        applyYoridokoroTheme(settings.theme);
         setAudioTheme(settings.theme);
         (document.body.style as any).zoom = (settings.zoomLevel / 100).toString();
         document.documentElement.classList.toggle('linux-perf', settings.performanceMode);

@@ -225,16 +225,16 @@ export default function ObsidianLearning() {
                             {t('learning.header_subtitle') || 'Master the science of learning to study smarter, not harder.'}
                         </p>
                         <div className="obs-learn-rail-stats">
-                            <span className="obs-learn-rail-stat" title="Sections due">
+                            <span className="obs-learn-rail-stat" title="Sections à réviser">
                                 <RotateCcw size={11} /> {stats.due}
                             </span>
-                            <span className="obs-learn-rail-stat" title="Sections locked">
+                            <span className="obs-learn-rail-stat" title="Sections verrouillées">
                                 <Lock size={11} /> {stats.locked}
                             </span>
-                            <span className="obs-learn-rail-stat" title="Graduated">
+                            <span className="obs-learn-rail-stat" title="Maîtrisées">
                                 <GraduationCap size={11} /> {stats.graduated}
                             </span>
-                            <span className="obs-learn-rail-stat" title="In progress">
+                            <span className="obs-learn-rail-stat" title="En cours">
                                 <Trophy size={11} /> {stats.started}
                             </span>
                             <span className="obs-learn-rail-stat obs-learn-rail-stat-total">
@@ -243,7 +243,7 @@ export default function ObsidianLearning() {
                         </div>
                     </header>
 
-                    <nav className="obs-learn-rail-list" aria-label="Curriculum sections">
+                    <nav className="obs-learn-rail-list" aria-label="Sections du parcours">
                         {curriculum.map((section, idx) => {
                             const entry = srsState[section.id];
                             const due = isSectionDue(entry);
@@ -271,8 +271,9 @@ export default function ObsidianLearning() {
                                     ].filter(Boolean).join(' ')}
                                     onClick={() => handleSelect(section)}
                                     onMouseEnter={() => { if (!locked) playSFX(SFX.HOVER, theme); }}
-                                    disabled={locked}
-                                    title={locked && entry?.lockedUntil ? `Locked — try again in ${getTimeUntil(entry.lockedUntil)}` : section.title}
+                                    aria-disabled={locked}
+                                    aria-current={active ? 'page' : undefined}
+                                    title={locked && entry?.lockedUntil ? `${t('learning.section_locked')} — ${t('learning.locked_desc')} ${getTimeUntil(entry.lockedUntil)}` : section.title}
                                 >
                                     <span className="obs-learn-rail-item-num">{String(idx + 1).padStart(2, '0')}</span>
                                     <span className="obs-learn-rail-item-body">
@@ -288,7 +289,7 @@ export default function ObsidianLearning() {
                                             </span>
                                         )}
                                         {due && !locked && (
-                                            <span className="obs-learn-rail-item-meta">Due for review</span>
+                                            <span className="obs-learn-rail-item-meta">À réviser</span>
                                         )}
                                     </span>
                                     {badge && <span className="obs-learn-rail-item-badge">{badge}</span>}
@@ -317,6 +318,7 @@ export default function ObsidianLearning() {
                             onPick={(s) => handleSelect(s)}
                             srsState={srsState}
                             theme={theme}
+                            t={t}
                         />
                     ) : (
                         <SectionView
@@ -347,28 +349,28 @@ interface IntroProps {
     onPick: (s: Section) => void;
     srsState: SRSState;
     theme: string;
+    t: (key: string) => string;
 }
 
-function IntroPanel({ stats, onPick, srsState, theme }: IntroProps) {
+function IntroPanel({ stats, onPick, srsState, theme, t }: IntroProps) {
     return (
         <div className="obs-learn-intro">
             <div className="obs-learn-intro-hero">
                 <div className="obs-learn-intro-eyebrow">
                     <Sparkles size={12} />
-                    <span>Learning Center</span>
+                    <span>{t('learning.title')}</span>
                 </div>
-                <h2 className="obs-learn-intro-title">Study smarter, not harder.</h2>
+                <h2 className="obs-learn-intro-title">{t('learning.intro_title')}</h2>
                 <p className="obs-learn-intro-lede">
-                    A short, science-backed curriculum on how learning actually works — sleep, attention,
-                    spaced repetition, and the techniques that make practice stick.
+                    {t('learning.intro_lede')}
                 </p>
 
                 <div className="obs-learn-intro-stats">
-                    <div className="obs-learn-intro-stat"><span className="val">{stats.due}</span><span className="lbl">due</span></div>
-                    <div className="obs-learn-intro-stat"><span className="val">{stats.started}</span><span className="lbl">in progress</span></div>
-                    <div className="obs-learn-intro-stat"><span className="val">{stats.graduated}</span><span className="lbl">graduated</span></div>
-                    <div className="obs-learn-intro-stat"><span className="val">{stats.locked}</span><span className="lbl">locked</span></div>
-                    <div className="obs-learn-intro-stat obs-learn-intro-stat-total"><span className="val">{stats.total}</span><span className="lbl">total sections</span></div>
+                    <div className="obs-learn-intro-stat"><span className="val">{stats.due}</span><span className="lbl">{t('learning.stat_due')}</span></div>
+                    <div className="obs-learn-intro-stat"><span className="val">{stats.started}</span><span className="lbl">{t('learning.stat_progress')}</span></div>
+                    <div className="obs-learn-intro-stat"><span className="val">{stats.graduated}</span><span className="lbl">{t('learning.stat_graduated')}</span></div>
+                    <div className="obs-learn-intro-stat"><span className="val">{stats.locked}</span><span className="lbl">{t('learning.stat_locked')}</span></div>
+                    <div className="obs-learn-intro-stat obs-learn-intro-stat-total"><span className="val">{stats.total}</span><span className="lbl">{t('learning.stat_total')}</span></div>
                 </div>
             </div>
 
@@ -390,16 +392,17 @@ function IntroPanel({ stats, onPick, srsState, theme }: IntroProps) {
                                 due ? 'is-due' : '',
                                 graduated ? 'is-graduated' : '',
                             ].filter(Boolean).join(' ')}
-                            disabled={locked}
+                            aria-disabled={locked}
+                            title={locked ? t('learning.section_locked') : section.title}
                             onClick={() => onPick(section)}
                             onMouseEnter={() => { if (!locked) playSFX(SFX.HOVER, theme); }}
                         >
                             <div className="obs-learn-card-head">
                                 <span className="obs-learn-card-num">{String(idx + 1).padStart(2, '0')}</span>
                                 <span className="obs-learn-card-status">
-                                    {locked && <><Lock size={11} /> Locked</>}
-                                    {!locked && due && <><RotateCcw size={11} /> Due</>}
-                                    {!locked && !due && graduated && <><GraduationCap size={11} /> Graduated</>}
+                                    {locked && <><Lock size={11} /> {t('learning.btn_locked')}</>}
+                                    {!locked && due && <><RotateCcw size={11} /> {t('learning.due_badge')}</>}
+                                    {!locked && !due && graduated && <><GraduationCap size={11} /> {t('learning.graduated_badge')}</>}
                                     {!locked && !due && !graduated && hasLevel && <><Trophy size={11} /> {getLevelLabel(entry!.level)}</>}
                                 </span>
                             </div>
@@ -407,11 +410,11 @@ function IntroPanel({ stats, onPick, srsState, theme }: IntroProps) {
                             <p className="obs-learn-card-desc">{section.description}</p>
                             <div className="obs-learn-card-foot">
                                 <span className="obs-learn-card-meta">
-                                    {section.chapters.length} chapters ·{' '}
-                                    {section.chapters.reduce((n, c) => n + c.lessons.length, 0)} lessons
+                                    {section.chapters.length} {t('learning.chapters')} ·{' '}
+                                    {section.chapters.reduce((n, c) => n + c.lessons.length, 0)} {t('learning.lessons')}
                                 </span>
                                 <span className="obs-learn-card-cta">
-                                    {locked ? 'Locked' : due ? 'Review' : hasLevel ? 'Revisit' : 'Start'}
+                                    {locked ? t('learning.btn_locked') : due ? t('learning.btn_review') : hasLevel ? t('learning.btn_revisit') : t('learning.btn_start')}
                                     {!locked && <ChevronRight size={13} />}
                                 </span>
                             </div>
@@ -453,7 +456,7 @@ function SectionView({
                 <div className="obs-learn-section-eyebrow">
                     <span className="obs-learn-section-num">{String(idx + 1).padStart(2, '0')}</span>
                     <button type="button" className="obs-learn-section-close" onClick={onClose}>
-                        ← Back to overview
+                        ← {t('learning.back_overview')}
                     </button>
                 </div>
                 <h2 className="obs-learn-section-title">{sectionShortTitle(section)}</h2>
@@ -463,28 +466,28 @@ function SectionView({
                     {srsEntry && srsEntry.level > 0 && (
                         <span className={`obs-learn-pill${graduated ? ' is-graduated' : ''}`}>
                             {graduated ? <GraduationCap size={12} /> : <Trophy size={12} />}
-                            {graduated ? 'Graduated' : getLevelLabel(srsEntry.level)}
+                            {graduated ? t('learning.graduated_badge') : getLevelLabel(srsEntry.level)}
                         </span>
                     )}
                     {locked && (
                         <span className="obs-learn-pill is-locked">
                             <Lock size={12} />
-                            Locked {srsEntry?.lockedUntil ? `· ${getTimeUntil(srsEntry.lockedUntil)}` : ''}
+                            {t('learning.btn_locked')} {srsEntry?.lockedUntil ? `· ${getTimeUntil(srsEntry.lockedUntil)}` : ''}
                         </span>
                     )}
                     {perfect && !hasWrong && (
                         <span className="obs-learn-pill is-perfect">
                             <Sparkles size={12} />
-                            {graduated ? 'Section graduated!' : 'Perfect score'}
+                            {graduated ? t('learning.graduated_banner') : t('learning.perfect_score_banner')}
                             {srsEntry && srsEntry.level > 0 && (
-                                <span className="obs-learn-pill-sub"> · next review in {getTimeUntil(srsEntry.nextReviewAt)}</span>
+                                <span className="obs-learn-pill-sub"> · {t('learning.next_review')} {getTimeUntil(srsEntry.nextReviewAt)}</span>
                             )}
                         </span>
                     )}
                     {perfect && hasWrong && (
                         <span className="obs-learn-pill is-imperfect">
                             <RotateCcw size={12} />
-                            Complete — but not perfect. Section will lock when you leave.
+                            {t('learning.section_imperfect')} {t('learning.imperfect_desc')}
                         </span>
                     )}
                 </div>
@@ -521,7 +524,7 @@ function SectionView({
                                     <div className="obs-learn-lesson-quiz">
                                         <div className="obs-learn-quiz-head">
                                             <Sparkles size={13} />
-                                            <span>Concept check</span>
+                                            <span>{t('learning.concept_check')}</span>
                                         </div>
                                         <p className="obs-learn-quiz-question">{lesson.question.question}</p>
                                         <div className="obs-learn-quiz-options">

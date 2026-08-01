@@ -38,6 +38,65 @@ export async function getSubjects(): Promise<Subject[]> {
   return db.select<Subject[]>(`SELECT * FROM subjects WHERE deleted_at IS NULL ORDER BY pinned DESC, created_at ASC`)
 }
 
+export async function getSubjectsWithTags(): Promise<Array<Subject & { tags: Tag[] }>> {
+  const db = await getDb()
+  const [subjects, tagRows] = await Promise.all([
+    db.select<Subject[]>(`SELECT * FROM subjects WHERE deleted_at IS NULL ORDER BY pinned DESC, created_at ASC`),
+    db.select<Array<Tag & { subject_id: string }>>(`
+      SELECT st.subject_id, t.id, t.name
+      FROM subject_tags st
+      JOIN tags t ON t.id = st.tag_id
+      ORDER BY t.name
+    `),
+  ])
+  const tagsBySubject = new Map<string, Tag[]>()
+  for (const row of tagRows) {
+    const tags = tagsBySubject.get(row.subject_id) ?? []
+    tags.push({ id: row.id, name: row.name })
+    tagsBySubject.set(row.subject_id, tags)
+  }
+  return subjects.map(subject => ({ ...subject, tags: tagsBySubject.get(subject.id) ?? [] }))
+}
+
+export interface StudyTimeSummary {
+  today_seconds: number
+  week_seconds: number
+}
+
+export async function getStudyTimeSummary(todayStart: string, weekStart: string): Promise<StudyTimeSummary> {
+  const db = await getDb()
+  const rows = await db.select<StudyTimeSummary[]>(`
+    SELECT
+      COALESCE(SUM(CASE WHEN started_at >= $1 THEN CASE WHEN actual_seconds > 0 THEN actual_seconds ELSE actual_minutes * 60 END ELSE 0 END), 0) AS today_seconds,
+      COALESCE(SUM(CASE WHEN started_at >= $2 THEN CASE WHEN actual_seconds > 0 THEN actual_seconds ELSE actual_minutes * 60 END ELSE 0 END), 0) AS week_seconds
+    FROM sessions
+    WHERE COALESCE(status, 'completed') <> 'abandoned' AND started_at >= $2
+  `, [todayStart, weekStart])
+  return rows[0] ?? { today_seconds: 0, week_seconds: 0 }
+}
+
+export interface StudyDataSnapshot {
+  kind: 'chapters' | 'mastery-ratings'
+  version: number
+  payload_json: string
+  updated_at: string
+}
+
+export async function getStudyDataSnapshots(): Promise<StudyDataSnapshot[]> {
+  const db = await getDb()
+  return db.select<StudyDataSnapshot[]>('SELECT * FROM study_data_snapshots')
+}
+
+export async function saveStudyDataSnapshots(snapshots: StudyDataSnapshot[]): Promise<void> {
+  if (snapshots.length === 0) return
+  await (window as any).electronAPI.db.transaction('main', snapshots.map(snapshot => ({
+    sql: `INSERT INTO study_data_snapshots(kind,version,payload_json,updated_at)
+          VALUES ($1,$2,$3,$4)
+          ON CONFLICT(kind) DO UPDATE SET version=excluded.version,payload_json=excluded.payload_json,updated_at=excluded.updated_at`,
+    params: [snapshot.kind, snapshot.version, snapshot.payload_json, snapshot.updated_at],
+  })))
+}
+
 export async function getArchivedSubjects(): Promise<Subject[]> {
   const db = await getDb()
   return db.select<Subject[]>(`SELECT * FROM subjects WHERE archived = 1 AND deleted_at IS NULL ORDER BY created_at DESC`)
@@ -151,20 +210,26 @@ export async function saveSession(
   confidenceScores?: Record<string, number>
 ) {
   const db = await getDb()
-  await db.execute(
-    `INSERT INTO sessions (id, started_at, ended_at, template, repeats, planned_minutes, actual_minutes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [session.id, session.started_at, session.ended_at, session.template, session.repeats, session.planned_minutes, session.actual_minutes]
-  )
+  const statements: Array<{ sql: string; params: unknown[] }> = [{
+    sql: `INSERT INTO sessions (id, started_at, ended_at, template, repeats, planned_minutes, actual_minutes, actual_seconds, status, evaluated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    params: [session.id, session.started_at, session.ended_at, session.template, session.repeats, session.planned_minutes, session.actual_minutes, session.actual_seconds, session.status, session.evaluated_at],
+  }]
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]
     const confidence = confidenceScores?.[b.id] ?? null
-    await db.execute(
-      `INSERT INTO session_blocks (id, session_id, idx, type, minutes, subject_id, technique_id, chapter_name, confidence_score)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [crypto.randomUUID(), session.id, i, b.type, b.minutes, b.subject_id, b.technique_id, b.chapter_name ?? null, confidence]
-    )
+    statements.push({
+      sql: `INSERT INTO session_blocks (id, session_id, idx, type, minutes, subject_id, technique_id, chapter_name, confidence_score, started_at, ended_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      params: [crypto.randomUUID(), session.id, i, b.type, b.minutes, b.subject_id ?? null, b.technique_id ?? null, b.chapter_name ?? null, confidence, b.started_at ?? null, b.ended_at ?? null],
+    })
   }
+  await (window as any).electronAPI.db.transaction('main', statements)
+}
+
+export async function markSessionEvaluated(id: string) {
+  const db = await getDb()
+  await db.execute(`UPDATE sessions SET evaluated_at = $1 WHERE id = $2`, [new Date().toISOString(), id])
 }
 
 export interface Tag {
@@ -287,14 +352,17 @@ export interface Session {
   repeats: number
   planned_minutes: number
   actual_minutes: number
+  actual_seconds: number
+  status: 'completed' | 'stopped' | 'abandoned'
+  evaluated_at: string | null
 }
 
 export async function createSession(session: Omit<Session, 'id'>): Promise<string> {
   const db = await getDb()
   const id = crypto.randomUUID()
   await db.execute(
-    `INSERT INTO sessions (id, started_at, ended_at, template, repeats, planned_minutes, actual_minutes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [id, session.started_at, session.ended_at, session.template, session.repeats, session.planned_minutes, session.actual_minutes]
+    `INSERT INTO sessions (id, started_at, ended_at, template, repeats, planned_minutes, actual_minutes, actual_seconds, status, evaluated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [id, session.started_at, session.ended_at, session.template, session.repeats, session.planned_minutes, session.actual_minutes, session.actual_seconds, session.status, session.evaluated_at]
   )
   return id
 }
@@ -445,6 +513,17 @@ export async function renameChapterInDb(subjectId: string, oldName: string, newN
 
 export async function deleteAllData() {
   const db = await getDb()
+  await db.execute(`DELETE FROM analytics_events`)
+  await db.execute(`DELETE FROM study_data_snapshots`)
+  await db.execute(`DELETE FROM eisenhower_tasks`)
+  await db.execute(`DELETE FROM time_entries`)
+  await db.execute(`DELETE FROM time_entry_deletions`)
+  await db.execute(`DELETE FROM activity_resources`)
+  await db.execute(`DELETE FROM activity_links`)
+  await db.execute(`DELETE FROM activities`)
+  await db.execute(`DELETE FROM person_interactions`)
+  await db.execute(`DELETE FROM person_notes`)
+  await db.execute(`DELETE FROM people`)
   await db.execute(`DELETE FROM sessions`)
   await db.execute(`DELETE FROM session_blocks`)
   await db.execute(`DELETE FROM subgoals`)
@@ -453,6 +532,7 @@ export async function deleteAllData() {
   await db.execute(`DELETE FROM subjects`)
   await db.execute(`DELETE FROM quotes WHERE id NOT LIKE 'default_%'`)
   await db.execute(`DELETE FROM metacognition_logs`)
+  await db.execute(`DELETE FROM error_log`)
   const keysToRemove = [
     'study-buddy-technique-week', 'study-buddy-weekly-technique',
     'study-buddy-srs-state', 'study-buddy-quiz-state',
@@ -462,6 +542,12 @@ export async function deleteAllData() {
     'study-buddy-chapters', 'study-buddy-custom-prep',
     'study-buddy-custom-break', 'activeSession',
     'study-buddy-mastery-ratings', 'study-buddy-pre-recall',
+    'study-buddy-chapters-recovery', 'study-buddy-mastery-ratings-recovery',
+    'study-buddy-chapters-storage-version', 'study-buddy-mastery-ratings-storage-version',
+    'yoridokoro-active-activity-v1', 'yoridokoro-session-resources-v1',
+    'yoridokoro-adhd-sprint-v1',
   ]
   keysToRemove.forEach(k => localStorage.removeItem(k))
+  const { clearArtArchive } = await import('./artData')
+  await clearArtArchive()
 }

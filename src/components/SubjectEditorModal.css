@@ -80,6 +80,12 @@
     background: rgba(0, 0, 0, 0.04);
 }
 
+.chapter-item.archived {
+    border: 1px dashed rgba(0, 0, 0, 0.16);
+    background: rgba(0, 0, 0, 0.025);
+    opacity: 0.72;
+}
+
 .chapter-item.sub-chapter {
     background: rgba(0, 0, 0, 0.02);
     margin-left: 20px;
@@ -118,6 +124,17 @@
 .chapter-item-name.sub-chapter {
     font-weight: 400;
     font-size: 0.85rem;
+}
+
+.chapter-archived-badge {
+    flex-shrink: 0;
+    padding: 1px 5px;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
 }
 
 .chapter-item-dots {
@@ -163,6 +180,21 @@
     cursor: pointer;
     color: var(--danger);
     padding: 2px;
+}
+
+.chapter-archive-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 2px;
+}
+
+.chapter-archive-btn.is-archived {
+    color: var(--success);
 }
 
 .chapter-focus-types {
@@ -248,7 +280,7 @@
 .chapter-spacing-progress {
     margin-left: auto;
     color: var(--primary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono, 'DM Mono', monospace);
     font-size: 0.66rem;
     white-space: nowrap;
 }
@@ -258,6 +290,10 @@
 }
 
 .chapter-delete-btn:hover {
+    opacity: 0.7;
+}
+
+.chapter-archive-btn:hover {
     opacity: 0.7;
 }
 
@@ -770,3 +806,11 @@ input.input-error {
     text-align: center;
     opacity: 0.7;
 }
+.subject-editor-enrichment { margin-top: 8px; }
+.subject-editor-enrichment > summary { min-height: 44px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; gap: 8px; color: var(--text-dark); cursor: pointer; font-size: 13px; font-weight: 700; }
+.subject-editor-enrichment > summary::-webkit-details-marker { display: none; }
+.subject-editor-enrichment > summary svg { color: var(--primary); transition: transform .16s ease; }
+.subject-editor-enrichment[open] > summary svg { transform: rotate(90deg); }
+.subject-editor-enrichment > summary small { margin-left: auto; color: var(--text-muted); font-size: 11px; font-weight: 500; }
+.subject-editor-enrichment[open] > summary { margin-bottom: 12px; }
+.subject-editor-panel.is-simple-create .cover-section { display: none; }

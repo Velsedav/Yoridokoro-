@@ -67,3 +67,14 @@ export async function fileToCompressedDataUrl(
     img.src = objectUrl;
   });
 }
+
+export async function remoteImageToCompressedDataUrl(
+  url: string,
+  options?: { maxSide?: number; type?: string; quality?: number }
+): Promise<string> {
+  const dataUrl = await (window as any).electronAPI.images.fetchDataUrl(url.trim()) as string
+  const response = await fetch(dataUrl)
+  const blob = await response.blob()
+  const file = new File([blob], 'remote-image', { type: blob.type || 'image/jpeg' })
+  return fileToCompressedDataUrl(file, options)
+}

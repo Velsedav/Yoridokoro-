@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 const openPath = (path: string) => (window as any).electronAPI.shell.openPath(path);
@@ -7,6 +7,7 @@ import { getChaptersForSubject, FOCUS_TYPE_LABELS, FOCUS_TYPE_COLORS, getRecomme
 import { TECHNIQUES } from '../lib/techniques';
 import { playSFX } from '../lib/sounds';
 import { useTranslation } from '../lib/i18n';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import './ChapterPickerModal.css';
 
 function openSource(src: ChapterSource) {
@@ -30,12 +31,8 @@ export default function ChapterPickerModal({ subjectId, techniqueId, onClose, on
     const [expandedSourcesId, setExpandedSourcesId] = useState<string | null>(null);
     const technique = techniqueId ? TECHNIQUES.find(t => t.id === techniqueId) : null;
     const supportsPreRecall = !technique?.noPreRecall;
-
-    useEffect(() => {
-        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', handleKey);
-        return () => document.removeEventListener('keydown', handleKey);
-    }, [onClose]);
+    const dialogRef = useRef<HTMLDivElement>(null);
+    useDialogFocus(dialogRef, onClose, '.chapter-picker-item[aria-current="true"], .chapter-picker-item.recommended, .chapter-picker-item');
 
     function handleChapterClick(ch: Chapter) {
         if (ch.studyCount > 0 && supportsPreRecall) {
@@ -61,10 +58,12 @@ export default function ChapterPickerModal({ subjectId, techniqueId, onClose, on
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div
+                ref={dialogRef}
                 className="modal-content chapter-picker-modal"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="chapter-picker-title"
+                tabIndex={-1}
                 onClick={e => e.stopPropagation()}
             >
                 <div className="chapter-picker-header">
@@ -89,8 +88,16 @@ export default function ChapterPickerModal({ subjectId, techniqueId, onClose, on
                                 <div
                                     key={ch.id}
                                     className={`glass chapter-picker-item${isSelected ? ' selected' : ''}${isRecommended ? ' recommendation-highlight recommended' : ''}${isSubChapter ? ' sub-chapter' : ''}${isPiece ? ' piece' : ''}`}
+                                    role="button"
+                                    tabIndex={0}
                                     onClick={() => handleChapterClick(ch)}
+                                    onKeyDown={event => {
+                                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                                        event.preventDefault();
+                                        handleChapterClick(ch);
+                                    }}
                                     onMouseEnter={() => playSFX('glass_ui_hover', theme)}
+                                    aria-current={isSelected ? 'true' : undefined}
                                 >
                                     <div className="chapter-picker-item-header">
                                         <div className="chapter-picker-item-labels">
@@ -141,7 +148,7 @@ export default function ChapterPickerModal({ subjectId, techniqueId, onClose, on
                                         </div>
                                     )}
                                     {(ch.sources?.length ?? 0) > 0 && (
-                                        <div className="chapter-picker-sources" onClick={e => e.stopPropagation()}>
+                                        <span className="chapter-picker-sources" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                                             <button
                                                 className={`chapter-picker-sources-toggle${expandedSourcesId === ch.id ? ' open' : ''}`}
                                                 onClick={() => setExpandedSourcesId(expandedSourcesId === ch.id ? null : ch.id)}
@@ -161,7 +168,7 @@ export default function ChapterPickerModal({ subjectId, techniqueId, onClose, on
                                                     ))}
                                                 </div>
                                             )}
-                                        </div>
+                                        </span>
                                     )}
                                 </div>
                             );

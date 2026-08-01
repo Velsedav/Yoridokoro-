@@ -1,5 +1,7 @@
 // ── Subject Chapters & Spaced Repetition Recommendations ──
 
+import { getStudyDataSnapshots, saveStudyDataSnapshots, type StudyDataSnapshot } from './db';
+
 export type FocusType = 'skill' | 'comprehension' | 'memorisation' | null;
 
 export interface ChapterSource {
@@ -32,22 +34,91 @@ export interface Chapter {
     totalMeasures?: number;   // music: total number of measures in a piece
     currentMeasure?: number;  // music: frontier measure (how far the student has reached)
     sources?: ChapterSource[]; // links/references attached to this chapter
+    archived?: boolean;
 }
 
 const LS_KEY = 'study-buddy-chapters';
+const LS_BACKUP_KEY = 'study-buddy-chapters-recovery';
+const LS_VERSION_KEY = 'study-buddy-chapters-storage-version';
+const STUDY_DATA_STORAGE_VERSION = '1';
+let durabilityTimer: ReturnType<typeof setTimeout> | null = null;
+let durabilitySync: Promise<void> | null = null;
+
+function scheduleDurabilitySync() {
+    if (!(window as any).electronAPI?.db) return;
+    if (durabilitySync) return;
+    if (durabilityTimer) clearTimeout(durabilityTimer);
+    durabilityTimer = setTimeout(() => {
+        durabilityTimer = null;
+        void synchronizeStudyDataDurability();
+    }, 150);
+}
 const DEFAULT_SPACING_KEY = 'study-buddy-default-spacing';
 export const DEFAULT_SPACING = '1 1 2 5 7';
 
-function loadAll(): Chapter[] {
+function normalizeChapter(value: unknown): Chapter | null {
+    if (!value || typeof value !== 'object') return null;
+    const chapter = value as Partial<Chapter>;
+    if (typeof chapter.id !== 'string' || typeof chapter.subjectId !== 'string' || typeof chapter.name !== 'string') return null;
+    return {
+        id: chapter.id,
+        subjectId: chapter.subjectId,
+        name: chapter.name,
+        studyCount: Number.isFinite(chapter.studyCount) ? Math.max(0, Number(chapter.studyCount)) : 0,
+        lastStudiedAt: typeof chapter.lastStudiedAt === 'string' ? chapter.lastStudiedAt : null,
+        createdAt: typeof chapter.createdAt === 'string' ? chapter.createdAt : new Date(0).toISOString(),
+        focusType: chapter.focusType === 'skill' || chapter.focusType === 'comprehension' || chapter.focusType === 'memorisation'
+            ? chapter.focusType
+            : null,
+        ...(typeof chapter.spacingOverride === 'string' ? { spacingOverride: chapter.spacingOverride } : {}),
+        ...(Number.isFinite(chapter.totalMeasures) ? { totalMeasures: Number(chapter.totalMeasures) } : {}),
+        ...(Number.isFinite(chapter.currentMeasure) ? { currentMeasure: Number(chapter.currentMeasure) } : {}),
+        ...(Array.isArray(chapter.sources) ? { sources: chapter.sources } : {}),
+        ...(chapter.archived ? { archived: true } : {}),
+    };
+}
+
+function readChapterArray(raw: string | null): Chapter[] | null {
+    if (raw === null) return null;
     try {
-        const raw = localStorage.getItem(LS_KEY);
-        if (raw) return JSON.parse(raw);
-    } catch { }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return null;
+        const chapters = parsed.map(normalizeChapter);
+        return chapters.every((chapter): chapter is Chapter => chapter !== null) ? chapters : null;
+    } catch {
+        return null;
+    }
+}
+
+function loadAll(): Chapter[] {
+    const primary = readChapterArray(localStorage.getItem(LS_KEY));
+    if (primary) {
+        if (localStorage.getItem(LS_VERSION_KEY) !== STUDY_DATA_STORAGE_VERSION) saveAll(primary);
+        return primary;
+    }
+    const recoveryRaw = localStorage.getItem(LS_BACKUP_KEY);
+    const recovery = readChapterArray(recoveryRaw);
+    if (recovery && recoveryRaw) {
+        try { localStorage.setItem(LS_KEY, recoveryRaw); } catch { /* The in-memory recovery remains usable. */ }
+        return recovery;
+    }
     return [];
 }
 
 function saveAll(chapters: Chapter[]) {
-    localStorage.setItem(LS_KEY, JSON.stringify(chapters));
+    const serialized = JSON.stringify(chapters);
+    localStorage.setItem(LS_KEY, serialized);
+    try { localStorage.setItem(LS_BACKUP_KEY, serialized); } catch { /* The primary write already succeeded. */ }
+    try { localStorage.setItem(LS_VERSION_KEY, STUDY_DATA_STORAGE_VERSION); } catch { /* Version metadata is advisory. */ }
+    scheduleDurabilitySync();
+}
+
+interface ChapterQueryOptions {
+    includeArchived?: boolean;
+}
+
+function filterArchived(chapters: Chapter[], options?: ChapterQueryOptions): Chapter[] {
+    return options?.includeArchived ? chapters : chapters.filter(c => !c.archived);
 }
 
 export function getDefaultSpacing(): string {
@@ -116,12 +187,12 @@ export function getSpacedRepetitionStatus(chapter: Chapter, at = new Date()): Sp
     };
 }
 
-export function getAllChapters(): Chapter[] {
-    return loadAll();
+export function getAllChapters(options?: ChapterQueryOptions): Chapter[] {
+    return filterArchived(loadAll(), options);
 }
 
-export function getChaptersForSubject(subjectId: string): Chapter[] {
-    return loadAll().filter(c => c.subjectId === subjectId);
+export function getChaptersForSubject(subjectId: string, options?: ChapterQueryOptions): Chapter[] {
+    return getAllChapters(options).filter(c => c.subjectId === subjectId);
 }
 
 export function addChapter(subjectId: string, name: string, totalMeasures?: number): Chapter {
@@ -153,6 +224,24 @@ export function updateChapterMeasure(id: string, currentMeasure: number) {
 export function deleteChapter(id: string) {
     const all = loadAll().filter(c => c.id !== id);
     saveAll(all);
+}
+
+export function setChapterArchived(id: string, archived: boolean) {
+    const all = loadAll();
+    const ch = all.find(c => c.id === id);
+    if (ch) {
+        if (archived) ch.archived = true;
+        else delete ch.archived;
+    }
+    saveAll(all);
+}
+
+export function archiveChapter(id: string) {
+    setChapterArchived(id, true);
+}
+
+export function unarchiveChapter(id: string) {
+    setChapterArchived(id, false);
 }
 
 export function renameChapter(id: string, newName: string) {
@@ -217,19 +306,133 @@ export interface RatingEntry {
 }
 
 const RATINGS_KEY = 'study-buddy-mastery-ratings';
+const RATINGS_BACKUP_KEY = 'study-buddy-mastery-ratings-recovery';
+const RATINGS_VERSION_KEY = 'study-buddy-mastery-ratings-storage-version';
 const PRE_RECALL_KEY = 'study-buddy-pre-recall';
 
-export function getRatings(): RatingEntry[] {
+function readRatings(raw: string | null): RatingEntry[] | null {
+    if (raw === null) return null;
     try {
-        const raw = localStorage.getItem(RATINGS_KEY);
-        return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return null;
+        const validRatings = new Set<MasteryRating>(['forgot', 'hard', 'good', 'easy']);
+        if (!parsed.every(entry => entry
+            && typeof entry.chapterId === 'string'
+            && typeof entry.sessionId === 'string'
+            && typeof entry.ratedAt === 'string'
+            && validRatings.has(entry.rating))) return null;
+        return parsed.map((entry: RatingEntry) => ({
+            chapterId: entry.chapterId,
+            sessionId: entry.sessionId,
+            ratedAt: entry.ratedAt,
+            rating: entry.rating,
+            ...(entry.preRecall === 'nothing' || entry.preRecall === 'some' || entry.preRecall === 'most' || entry.preRecall === 'all'
+                ? { preRecall: entry.preRecall }
+                : {}),
+        }));
+    } catch {
+        return null;
+    }
+}
+
+export function getRatings(): RatingEntry[] {
+    const primary = readRatings(localStorage.getItem(RATINGS_KEY));
+    if (primary) {
+        if (localStorage.getItem(RATINGS_VERSION_KEY) !== STUDY_DATA_STORAGE_VERSION) {
+            const serialized = JSON.stringify(primary);
+            try { localStorage.setItem(RATINGS_BACKUP_KEY, serialized); } catch { /* Best-effort recovery copy. */ }
+            try { localStorage.setItem(RATINGS_VERSION_KEY, STUDY_DATA_STORAGE_VERSION); } catch { /* Advisory metadata. */ }
+        }
+        return primary;
+    }
+    const recoveryRaw = localStorage.getItem(RATINGS_BACKUP_KEY);
+    const recovery = readRatings(recoveryRaw);
+    if (recovery && recoveryRaw) {
+        try { localStorage.setItem(RATINGS_KEY, recoveryRaw); } catch { /* The recovered ratings are still returned. */ }
+        return recovery;
+    }
+    return [];
 }
 
 export function saveRating(entry: RatingEntry): void {
     const all = getRatings();
     all.push(entry);
-    localStorage.setItem(RATINGS_KEY, JSON.stringify(all));
+    const serialized = JSON.stringify(all);
+    localStorage.setItem(RATINGS_KEY, serialized);
+    try { localStorage.setItem(RATINGS_BACKUP_KEY, serialized); } catch { /* The primary write already succeeded. */ }
+    try { localStorage.setItem(RATINGS_VERSION_KEY, STUDY_DATA_STORAGE_VERSION); } catch { /* Version metadata is advisory. */ }
+    scheduleDurabilitySync();
+}
+
+/**
+ * Keeps a SQLite recovery snapshot while the synchronous local store remains
+ * the live API. This is a safe bridge toward a future SQLite-first repository:
+ * existing callers stay synchronous and a lost/corrupted local store can be
+ * rebuilt before the React tree mounts.
+ */
+export function synchronizeStudyDataDurability(): Promise<void> {
+    if (durabilitySync) return durabilitySync;
+    const operation = (async () => {
+        const snapshots = await getStudyDataSnapshots();
+        const snapshotByKind = new Map(snapshots.map(snapshot => [snapshot.kind, snapshot]));
+        const toPersist: StudyDataSnapshot[] = [];
+        const now = new Date().toISOString();
+
+        const primaryChapters = readChapterArray(localStorage.getItem(LS_KEY));
+        const recoveryChapters = readChapterArray(localStorage.getItem(LS_BACKUP_KEY));
+        const localChapters = primaryChapters ?? recoveryChapters;
+        if (localChapters) {
+            if (!primaryChapters) saveAll(localChapters);
+            const serialized = JSON.stringify(localChapters);
+            const durable = snapshotByKind.get('chapters');
+            const durableChapters = readChapterArray(durable?.payload_json ?? null);
+            const durableSerialized = durableChapters ? JSON.stringify(durableChapters) : null;
+            if (durable?.version !== Number(STUDY_DATA_STORAGE_VERSION) || durableSerialized !== serialized) {
+                toPersist.push({
+                    kind: 'chapters',
+                    version: Number(STUDY_DATA_STORAGE_VERSION),
+                    payload_json: serialized,
+                    updated_at: now,
+                });
+            }
+        } else {
+            const durable = readChapterArray(snapshotByKind.get('chapters')?.payload_json ?? null);
+            if (durable) saveAll(durable);
+        }
+
+        const primaryRatings = readRatings(localStorage.getItem(RATINGS_KEY));
+        const recoveryRatings = readRatings(localStorage.getItem(RATINGS_BACKUP_KEY));
+        const localRatings = primaryRatings ?? recoveryRatings;
+        if (localRatings) {
+            const serialized = JSON.stringify(localRatings);
+            if (!primaryRatings) {
+                localStorage.setItem(RATINGS_KEY, serialized);
+                try { localStorage.setItem(RATINGS_BACKUP_KEY, serialized); } catch { /* Best effort. */ }
+            }
+            const durable = snapshotByKind.get('mastery-ratings');
+            const durableRatings = readRatings(durable?.payload_json ?? null);
+            const durableSerialized = durableRatings ? JSON.stringify(durableRatings) : null;
+            if (durable?.version !== Number(STUDY_DATA_STORAGE_VERSION) || durableSerialized !== serialized) {
+                toPersist.push({
+                    kind: 'mastery-ratings',
+                    version: Number(STUDY_DATA_STORAGE_VERSION),
+                    payload_json: serialized,
+                    updated_at: now,
+                });
+            }
+        } else {
+            const durable = readRatings(snapshotByKind.get('mastery-ratings')?.payload_json ?? null);
+            if (durable) {
+                const serialized = JSON.stringify(durable);
+                localStorage.setItem(RATINGS_KEY, serialized);
+                try { localStorage.setItem(RATINGS_BACKUP_KEY, serialized); } catch { /* Best effort. */ }
+            }
+        }
+
+        await saveStudyDataSnapshots(toPersist);
+    })();
+    durabilitySync = operation;
+    return operation.finally(() => { durabilitySync = null; });
 }
 
 export function savePreRecall(chapterId: string, recall: PreRecall): void {
@@ -272,7 +475,8 @@ export function applyMasteryRating(id: string, rating: MasteryRating): void {
     saveAll(all);
 }
 
-// Retention %: 100% at study time, ~50% at the scheduled review date
+// Scheduling heuristic: 100% at study time, ~50% at the scheduled review date.
+// This is deliberately not treated as a measurement of a learner's memory.
 export function getRetentionPercent(chapter: Chapter): number | null {
     if (!chapter.lastStudiedAt || chapter.studyCount === 0) return null;
     const schedule = chapter.spacingOverride || getDefaultSpacing();
@@ -290,7 +494,7 @@ export interface Recommendation {
 }
 
 export function getRecommendations(subjectNames: Record<string, string>): Recommendation[] {
-    const all = loadAll();
+    const all = getAllChapters();
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 

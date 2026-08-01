@@ -1,10 +1,10 @@
 {
-  "name": "study-buddy-electron",
-  "version": "2.0.4",
+  "name": "yoridokoro",
+  "version": "0.2.3",
+  "description": "Yoridokoro — espace personnel pour étudier, agir, créer et entretenir ses relations.",
   "private": true,
   "author": {
-    "name": "Velsedav",
-    "email": "velasquez.sebastien@gmail.com"
+    "name": "Velsedav"
   },
   "type": "module",
   "main": "out/main/index.js",
@@ -14,12 +14,14 @@
     "preview": "electron-vite preview --config electron-vite.config.mjs",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "dist": "npm run build && electron-builder",
-    "test": "vitest",
-    "test:run": "vitest run"
+    "test": "vitest --maxWorkers=1",
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run test:run && npm run build"
   },
   "build": {
-    "appId": "com.velsedav.study-buddy",
-    "productName": "Study Buddy",
+    "appId": "com.velsedav.yoridokoro",
+    "productName": "Yoridokoro",
     "directories": {
       "output": "release"
     },
@@ -34,33 +36,45 @@
       "node_modules/file-uri-to-path/**/*"
     ],
     "extraResources": [
-      { "from": "src/public", "to": "public" }
+      {
+        "from": "src/public",
+        "to": "public"
+      }
     ],
     "linux": {
-      "target": ["deb", "AppImage"],
+      "target": [
+        "deb",
+        "AppImage"
+      ],
       "icon": "icons-dark-academia",
       "category": "Education"
     },
     "win": {
-      "target": "nsis",
+      "target": ["nsis", "portable"],
       "icon": "icon-dark-academia.ico"
     },
     "mac": {
       "target": "dmg",
-      "icon": "icons-dark-academia/1024x1024.png"
+      "icon": "yoridokoro-icon-source.png"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "artifactName": "${productName} Setup ${version}.${ext}",
       "installerIcon": "icon-dark-academia.ico",
       "uninstallerIcon": "icon-dark-academia.ico",
       "installerHeaderIcon": "icon-dark-academia.ico"
+    },
+    "portable": {
+      "artifactName": "${productName} ${version} Portable.${ext}"
     }
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.14.3",
     "better-sqlite3": "^12.10.0",
     "date-fns": "^4.1.0",
+    "dexie": "^4.0.11",
     "electron-auto-launch": "^5.0.5",
+    "fuse.js": "^7.4.2",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

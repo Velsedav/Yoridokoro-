@@ -6,7 +6,7 @@
     height: 100%;
     background: var(--bg-color, #0d1117);
     color: var(--text-dark, #e6edf3);
-    font-family: var(--font-main, 'IBM Plex Sans', sans-serif);
+    font-family: var(--font-main, 'Manrope', sans-serif);
     min-height: 0;
 }
 
@@ -18,28 +18,108 @@
 
 /* ── Empty state ── */
 
-.obs-meta-empty {
-    margin: auto;
-    max-width: 420px;
-    text-align: center;
-    padding: 32px 24px;
-    color: var(--text-muted, #7d8590);
+.obs-meta-page--empty {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--y-page-max, 1480px);
+    height: auto;
+    min-height: 100%;
+    margin: 0 auto;
+    padding: var(--y-page-top, 40px) var(--y-page-gutter, 48px) var(--y-page-bottom, 72px);
+}
+
+.obs-meta-empty-header {
+    min-height: 96px;
+    margin-bottom: 28px;
     display: flex;
     flex-direction: column;
+    justify-content: flex-end;
+}
+
+.obs-meta-empty-eyebrow {
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 7px;
+    width: fit-content;
+    color: var(--primary, #58a6ff);
+    font-family: var(--font-mono, 'DM Mono', monospace);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
 }
 
-.obs-meta-empty h2 {
-    font-size: 1.05rem;
+.obs-meta-empty-header h1 {
+    margin: 6px 0 5px;
     color: var(--text-dark, #e6edf3);
-    margin: 6px 0 0;
+    font: 600 clamp(2.5rem, 4.2vw, 3.35rem) / 0.98 var(--font-heading, Georgia, serif);
+    letter-spacing: -0.025em;
 }
 
-.obs-meta-empty p {
-    font-size: 0.84rem;
-    line-height: 1.5;
+.obs-meta-empty-header p {
+    max-width: 680px;
     margin: 0;
+    color: var(--text-muted, #7d8590);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.obs-meta-empty-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 20px;
+    min-height: 132px;
+    padding: 24px;
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 8px;
+    background: var(--card-bg, #161b22);
+}
+
+.obs-meta-empty-icon {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--primary, #58a6ff) 35%, transparent);
+    border-radius: 50%;
+    color: var(--primary, #58a6ff);
+    background: color-mix(in srgb, var(--primary, #58a6ff) 10%, transparent);
+}
+
+.obs-meta-empty-copy h2 {
+    margin: 0 0 5px;
+    color: var(--text-dark, #e6edf3);
+    font-size: 1.05rem;
+}
+
+.obs-meta-empty-copy p {
+    max-width: 620px;
+    margin: 0;
+    color: var(--text-muted, #7d8590);
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+.obs-meta-empty-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 0 16px;
+    border: 1px solid var(--primary, #58a6ff);
+    border-radius: 6px;
+    color: var(--button-text, #fff);
+    background: var(--primary, #58a6ff);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+@media (max-width: 760px) {
+    .obs-meta-empty-card { grid-template-columns: auto minmax(0, 1fr); }
+    .obs-meta-empty-action { grid-column: 1 / -1; width: 100%; }
 }
 
 /* ── Rail ── */
@@ -86,7 +166,7 @@
     display: flex;
     gap: 8px;
     align-items: center;
-    font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
     font-size: 0.72rem;
     color: var(--text-muted, #7d8590);
 }
@@ -144,7 +224,7 @@
 }
 
 .obs-meta-rail-item-count {
-    font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
     font-size: 0.72rem;
     color: var(--text-muted, #7d8590);
 }
@@ -195,7 +275,7 @@
     font-size: 0.78rem;
     color: var(--text-muted, #7d8590);
     margin: 0;
-    font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
 }
 
 .obs-meta-head-actions {
@@ -286,7 +366,7 @@
 
 .obs-meta-card-num {
     flex: 0 0 auto;
-    font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
     font-size: 0.72rem;
     color: var(--primary, #58a6ff);
     font-weight: 600;
@@ -313,7 +393,7 @@
 }
 
 .obs-meta-card-date {
-    font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
     font-size: 0.72rem;
     color: var(--text-muted, #7d8590);
 }

@@ -1,14 +1,19 @@
-import { useState, useEffect, useMemo } from 'react'
-import { List, LayoutGrid, Columns, Search, Plus, CalendarClock, ArrowRight, BrainCircuit } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { List, LayoutGrid, Columns, Search, Plus, CalendarClock, ArrowRight, BrainCircuit, Archive, BookOpen } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import type { Subject, Tag, Session } from '../lib/db'
-import { getSubjects, getSubjectTags, getSessions } from '../lib/db'
-import { getAllChapters, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus } from '../lib/chapters'
+import type { Subject, Tag, StudyTimeSummary } from '../lib/db'
+import { getSubjectsWithTags, getStudyTimeSummary } from '../lib/db'
+import { archiveChapter, getAllChapters, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus } from '../lib/chapters'
 import type { Chapter, Recommendation, SpacedRepetitionStatus } from '../lib/chapters'
 import { groupByTag, retentionColor } from '../lib/obsidian-utils'
 import ObsidianQuickStart from '../components/ObsidianQuickStart'
 import SubjectEditorModal from '../components/SubjectEditorModal'
+import NextStudyStep from '../components/NextStudyStep'
+import { buildPlannerRecommendations } from '../lib/plannerRecommendations'
+import { buildGuidedDraft, createActiveSession, guidedObjectiveKey } from '../lib/guidedSession'
+import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
+import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
 import './ObsidianHome.css'
 
 type ViewMode = 'list' | 'board' | 'split'
@@ -16,26 +21,27 @@ const LS_VIEW_KEY = 'obsidian-home-view'
 
 function useObsidianData() {
   const [subjects, setSubjects] = useState<(Subject & { tags: Tag[] })[]>([])
-  const [sessions, setSessions] = useState<Session[]>([])
+  const [studyTime, setStudyTime] = useState<StudyTimeSummary>({ today_seconds: 0, week_seconds: 0 })
   const [allChapters, setAllChapters] = useState<Chapter[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
     async function load() {
-      const [subs, fetchedSessions] = await Promise.all([getSubjects(), getSessions()])
-      const withTags = await Promise.all(
-        subs.filter(s => !s.deleted_at && !s.archived).map(async s => ({
-          ...s,
-          tags: await getSubjectTags(s.id),
-        }))
-      )
+      const now = new Date()
+      const todayStart = new Date(now)
+      todayStart.setHours(0, 0, 0, 0)
+      const weekStart = new Date(todayStart)
+      const day = weekStart.getDay()
+      weekStart.setDate(weekStart.getDate() - (day === 0 ? 6 : day - 1))
+      const [allSubjects, summary] = await Promise.all([
+        getSubjectsWithTags(),
+        getStudyTimeSummary(todayStart.toISOString(), weekStart.toISOString()),
+      ])
+      const withTags = allSubjects.filter(subject => !subject.archived)
       if (!mounted) return
-      const pinned = withTags.filter(s => s.pinned)
-      const unpinned = withTags.filter(s => !s.pinned)
-      setSubjects([...pinned, ...unpinned])
-      if (!mounted) return
-      setSessions(fetchedSessions)
+      setSubjects(withTags)
+      setStudyTime(summary)
       if (!mounted) return
       setAllChapters(getAllChapters())
       if (!mounted) return
@@ -45,26 +51,7 @@ function useObsidianData() {
     return () => { mounted = false }
   }, [])
 
-  return { subjects, sessions, allChapters, loading, setSubjects, setAllChapters }
-}
-
-function computeStats(sessions: Session[]) {
-  const now = new Date()
-  const todayStr = now.toDateString()
-
-  const startOfWeek = new Date(now)
-  const day = startOfWeek.getDay()
-  startOfWeek.setDate(startOfWeek.getDate() - (day === 0 ? 6 : day - 1))
-  startOfWeek.setHours(0, 0, 0, 0)
-
-  let todayMins = 0
-  let weekMins = 0
-  for (const s of sessions) {
-    const sd = new Date(s.started_at)
-    if (sd.toDateString() === todayStr) todayMins += s.actual_minutes || 0
-    if (sd >= startOfWeek) weekMins += s.actual_minutes || 0
-  }
-  return { todayHours: todayMins / 60, weekHours: weekMins / 60 }
+  return { subjects, studyTime, allChapters, loading, setSubjects, setAllChapters }
 }
 
 function formatH(h: number): string {
@@ -77,7 +64,7 @@ function formatH(h: number): string {
 }
 
 function getSubjectRetention(subjectId: string, chapters: Chapter[]): number | null {
-  const subjectChapters = chapters.filter(c => c.subjectId === subjectId && c.studyCount > 0)
+  const subjectChapters = chapters.filter(c => c.subjectId === subjectId && c.studyCount > 0 && !c.archived)
   if (subjectChapters.length === 0) return null
   const percents = subjectChapters.map(c => getRetentionPercent(c)).filter((p): p is number => p !== null)
   if (percents.length === 0) return null
@@ -97,33 +84,35 @@ interface TopBarProps {
 }
 
 function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewChange, onAdd, onReflect, reflectLabel }: TopBarProps) {
+  const { t } = useTranslation()
   return (
     <div className="ohi-topbar">
       <div className="ohi-stats">
-        <span className="ohi-stat"><span className="ohi-stat-val">{formatH(todayHours)}</span> today</span>
+        <span className="ohi-stat"><span className="ohi-stat-val">{formatH(todayHours)}</span> {t('subjects.today')}</span>
         <span className="ohi-stat-sep">·</span>
-        <span className="ohi-stat"><span className="ohi-stat-val">{formatH(weekHours)}</span> this week</span>
+        <span className="ohi-stat"><span className="ohi-stat-val">{formatH(weekHours)}</span> {t('subjects.this_week')}</span>
       </div>
       <div className="ohi-filter-wrap">
-        <Search size={14} className="ohi-filter-icon" />
+        <Search size={14} className="ohi-filter-icon" aria-hidden="true" />
         <input
           className="ohi-filter"
-          type="text"
-          placeholder="Filter subjects..."
+          type="search"
+          aria-label={t('subjects.filter')}
+          placeholder={t('subjects.filter')}
           value={filter}
           onChange={e => onFilterChange(e.target.value)}
         />
       </div>
-      <div className="ohi-view-toggle">
-        <button className={`ohi-view-btn${view === 'list' ? ' ohi-view-active' : ''}`} title="List view" aria-label="List view" onClick={() => onViewChange('list')}><List size={16} /></button>
-        <button className={`ohi-view-btn${view === 'board' ? ' ohi-view-active' : ''}`} title="Board view" aria-label="Board view" onClick={() => onViewChange('board')}><LayoutGrid size={16} /></button>
-        <button className={`ohi-view-btn${view === 'split' ? ' ohi-view-active' : ''}`} title="Split view" aria-label="Split view" onClick={() => onViewChange('split')}><Columns size={16} /></button>
+      <div className="ohi-view-toggle" role="group" aria-label={t('subjects.view_modes')}>
+        <button className={`ohi-view-btn${view === 'list' ? ' ohi-view-active' : ''}`} title={t('subjects.list_view')} aria-label={t('subjects.list_view')} aria-pressed={view === 'list'} onClick={() => onViewChange('list')}><List size={16} aria-hidden="true" /></button>
+        <button className={`ohi-view-btn${view === 'board' ? ' ohi-view-active' : ''}`} title={t('subjects.board_view')} aria-label={t('subjects.board_view')} aria-pressed={view === 'board'} onClick={() => onViewChange('board')}><LayoutGrid size={16} aria-hidden="true" /></button>
+        <button className={`ohi-view-btn${view === 'split' ? ' ohi-view-active' : ''}`} title={t('subjects.split_view')} aria-label={t('subjects.split_view')} aria-pressed={view === 'split'} onClick={() => onViewChange('split')}><Columns size={16} aria-hidden="true" /></button>
       </div>
       <button className="ohi-reflect-btn" title={reflectLabel} aria-label={reflectLabel} onClick={onReflect}>
         <BrainCircuit size={15} aria-hidden="true" />
       </button>
-      <button className="ohi-add-btn" title="Add subject" aria-label="Add subject" onClick={onAdd}>
-        <Plus size={16} />
+      <button className="ohi-add-btn" title={t('subjects.add')} aria-label={t('subjects.add')} onClick={onAdd}>
+        <Plus size={16} aria-hidden="true" />
       </button>
     </div>
   )
@@ -132,7 +121,7 @@ function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewCha
 export default function ObsidianHome() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { subjects, sessions, allChapters, loading, setSubjects, setAllChapters } = useObsidianData()
+  const { subjects, studyTime, allChapters, loading, setSubjects, setAllChapters } = useObsidianData()
   const [view, setView] = useState<ViewMode>(() => {
     return (localStorage.getItem(LS_VIEW_KEY) as ViewMode) || 'list'
   })
@@ -140,8 +129,11 @@ export default function ObsidianHome() {
   const [quickStart, setQuickStart] = useState<{ subject: Subject; chapterName?: string } | null>(null)
   const [editingSubject, setEditingSubject] = useState<(Subject & { tags: Tag[] }) | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [suggestionIndex, setSuggestionIndex] = useState(0)
+  const opportunityIdRef = useRef(crypto.randomUUID())
 
-  const { todayHours, weekHours } = useMemo(() => computeStats(sessions), [sessions])
+  const todayHours = studyTime.today_seconds / 3600
+  const weekHours = studyTime.week_seconds / 3600
 
   const { dueReviews, upcomingReviews } = useMemo(() => {
     const subjectNames = Object.fromEntries(subjects.map(s => [s.id, s.name]))
@@ -154,7 +146,7 @@ export default function ObsidianHome() {
         status: getSpacedRepetitionStatus(chapter),
       }))
       .filter((item): item is { chapter: Chapter; subjectName: string; status: SpacedRepetitionStatus } =>
-        Boolean(item.subjectName && item.status && item.status.daysUntilDue > 0 && !dueIds.has(item.chapter.id))
+        Boolean(!item.chapter.archived && item.subjectName && item.status && item.status.daysUntilDue > 0 && !dueIds.has(item.chapter.id))
       )
       .sort((a, b) => a.status.daysUntilDue - b.status.daysUntilDue)
       .slice(0, 3)
@@ -166,19 +158,42 @@ export default function ObsidianHome() {
     return subjects.filter(s => s.name.toLowerCase().includes(q))
   }, [subjects, filter])
 
+  const recommendations = useMemo(
+    () => buildPlannerRecommendations(subjects, allChapters).slice(0, 3),
+    [subjects, allChapters],
+  )
+  const recommendation = recommendations[Math.min(suggestionIndex, Math.max(0, recommendations.length - 1))]
+
+  useEffect(() => {
+    if (loading || !recommendation) return
+    void recordBehaviorEvent({
+      eventType: 'recommendation_exposed',
+      opportunityId: opportunityIdRef.current,
+      recommendationId: recommendation.id,
+      subjectId: recommendation.subjectId,
+      chapterId: recommendation.chapterId,
+      policyId: ANALYTICS_POLICY_ID,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      payload: {
+        recommendation_kind: recommendation.kind,
+        recommendation_reason: recommendation.reason,
+        candidate_rank: suggestionIndex + 1,
+        candidate_count: recommendations.length,
+        timer_display_mode: 'countdown-visible',
+        prep_checklist_mode: 'optional',
+      },
+      dedupeKey: `recommendation-exposed:${opportunityIdRef.current}:${recommendation.id}`,
+    })
+  }, [loading, recommendation, recommendations.length, suggestionIndex])
+
   function handleViewChange(v: ViewMode) {
     setView(v)
     localStorage.setItem(LS_VIEW_KEY, v)
   }
 
   async function reloadSubjects() {
-    const subs = await getSubjects()
-    const withTags = await Promise.all(
-      subs
-        .filter(s => !s.deleted_at && !s.archived)
-        .map(async s => ({ ...s, tags: await getSubjectTags(s.id) }))
-    )
-    setSubjects(withTags)
+    const subjectsWithTags = await getSubjectsWithTags()
+    setSubjects(subjectsWithTags.filter(subject => !subject.archived))
     setAllChapters(getAllChapters())
   }
 
@@ -191,12 +206,92 @@ export default function ObsidianHome() {
     if (subject) setQuickStart({ subject, chapterName: recommendation.chapter.name })
   }
 
+  function archiveReview(recommendation: Recommendation) {
+    archiveChapter(recommendation.chapter.id)
+    setAllChapters(getAllChapters())
+  }
+
+  async function startRecommendation() {
+    if (!recommendation) return
+    const draft = buildGuidedDraft(recommendation, t(guidedObjectiveKey(recommendation)))
+    const analytics = {
+      opportunityId: opportunityIdRef.current,
+      recommendationId: recommendation.id,
+      chapterId: recommendation.chapterId,
+      policyId: ANALYTICS_POLICY_ID,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      planningMode: 'guided' as const,
+    }
+    await recordBehaviorEvent({
+      eventType: 'recommendation_accepted',
+      opportunityId: analytics.opportunityId,
+      recommendationId: analytics.recommendationId,
+      subjectId: recommendation.subjectId,
+      chapterId: analytics.chapterId,
+      policyId: analytics.policyId,
+      policyVersion: analytics.policyVersion,
+      payload: {
+        recommendation_kind: recommendation.kind,
+        recommendation_reason: recommendation.reason,
+        input_method: 'pointer',
+      },
+      dedupeKey: `recommendation-accepted:${analytics.opportunityId}`,
+    })
+    const nextSession = createActiveSession(draft, true, analytics)
+    localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
+    localStorage.removeItem(SESSION_RETURN_PATH_KEY)
+    localStorage.setItem('activeSession', JSON.stringify(nextSession))
+    await recordBehaviorEvent({
+      eventType: 'session_created',
+      opportunityId: analytics.opportunityId,
+      recommendationId: analytics.recommendationId,
+      sessionId: nextSession.sessionId,
+      subjectId: recommendation.subjectId,
+      chapterId: analytics.chapterId,
+      policyId: analytics.policyId,
+      policyVersion: analytics.policyVersion,
+      payload: {
+        planning_mode: 'guided',
+        planned_seconds: nextSession.plannedMinutes * 60,
+        input_method: 'pointer',
+        timer_display_mode: 'countdown-visible',
+        prep_checklist_mode: 'optional',
+      },
+      dedupeKey: `session-created:${nextSession.sessionId}`,
+    })
+    navigate('/session')
+  }
+
+  function requestOtherRecommendation() {
+    if (!recommendation || recommendations.length < 2) return
+    void recordBehaviorEvent({
+      eventType: 'recommendation_alternative_requested',
+      opportunityId: opportunityIdRef.current,
+      recommendationId: recommendation.id,
+      subjectId: recommendation.subjectId,
+      chapterId: recommendation.chapterId,
+      policyId: ANALYTICS_POLICY_ID,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      payload: {
+        candidate_rank: suggestionIndex + 1,
+        candidate_count: recommendations.length,
+        input_method: 'pointer',
+      },
+    })
+    setSuggestionIndex(index => (index + 1) % recommendations.length)
+  }
+
   if (loading) {
-    return <div className="ohi-loading">Loading...</div>
+    return <div className="ohi-loading" role="status">{t('subjects.loading')}</div>
   }
 
   return (
     <div className="ohi-page">
+      <header className="ohi-page-header">
+        <span className="ohi-eyebrow"><BookOpen size={14} aria-hidden="true" /> {t('subjects.eyebrow')}</span>
+        <h1>{t('subjects.title')}</h1>
+        <p>{t('subjects.intro')}</p>
+      </header>
       <TopBar
         todayHours={todayHours}
         weekHours={weekHours}
@@ -210,11 +305,25 @@ export default function ObsidianHome() {
       />
 
       <div className="ohi-content">
-        <ReviewQueue
-          due={dueReviews}
-          upcoming={upcomingReviews}
-          onStartReview={startReview}
-        />
+        {recommendation && (
+          <div className="ohi-next-step-wrap">
+            <NextStudyStep
+              recommendation={recommendation}
+              onStart={() => void startRecommendation()}
+              onOther={recommendations.length > 1 ? requestOtherRecommendation : undefined}
+              compact
+            />
+          </div>
+        )}
+        <details className="ohi-review-details">
+          <summary><CalendarClock size={16} aria-hidden="true" /> {t('subjects.spaced_reviews')} <span>{dueReviews.length}</span></summary>
+          <ReviewQueue
+            due={dueReviews}
+            upcoming={upcomingReviews}
+            onStartReview={startReview}
+            onArchiveReview={archiveReview}
+          />
+        </details>
         {view === 'list' && (
           <ListView
             subjects={filtered}
@@ -278,33 +387,66 @@ interface ReviewQueueProps {
   due: Recommendation[]
   upcoming: Array<{ chapter: Chapter; subjectName: string; status: SpacedRepetitionStatus }>
   onStartReview: (recommendation: Recommendation) => void
+  onArchiveReview: (recommendation: Recommendation) => void
 }
 
-function ReviewQueue({ due, upcoming, onStartReview }: ReviewQueueProps) {
+function ReviewQueue({ due, upcoming, onStartReview, onArchiveReview }: ReviewQueueProps) {
+  const { t } = useTranslation()
+  const [showAllDue, setShowAllDue] = useState(false)
+  const visibleDue = showAllDue ? due : due.slice(0, 4)
+  const hiddenDueCount = Math.max(0, due.length - visibleDue.length)
+
   return (
     <section className="ohi-review-queue" aria-labelledby="review-queue-title">
       <div className="ohi-review-heading">
         <div className="ohi-review-title-wrap">
           <CalendarClock size={17} aria-hidden="true" />
           <div>
-            <h2 id="review-queue-title">Review queue</h2>
-            <p>Your spaced-repetition schedule, with the active interval highlighted.</p>
+            <h2 id="review-queue-title">{t('subjects.review_queue')}</h2>
+            <p>{t('subjects.review_queue_desc')}</p>
           </div>
         </div>
-        <span className={`ohi-due-count${due.length > 0 ? ' has-due' : ''}`}>{due.length} due</span>
+        <div className="ohi-review-heading-actions">
+          {due.length > 4 && (
+            <button
+              className="ohi-review-toggle"
+              onClick={() => setShowAllDue(v => !v)}
+              aria-expanded={showAllDue}
+            >
+              {showAllDue ? t('subjects.show_less') : t('subjects.show_all', { count: due.length })}
+            </button>
+          )}
+          <span className={`ohi-due-count${due.length > 0 ? ' has-due' : ''}`}>{t('subjects.due_count', { count: due.length })}</span>
+        </div>
       </div>
 
       {due.length > 0 ? (
-        <div className="ohi-review-list">
-          {due.slice(0, 4).map(item => (
-            <ReviewCard key={item.chapter.id} item={item} onStart={() => onStartReview(item)} />
-          ))}
-        </div>
+        <>
+          <div className={`ohi-review-list${showAllDue ? ' is-expanded' : ''}`}>
+            {visibleDue.map(item => (
+              <ReviewCard
+                key={item.chapter.id}
+                item={item}
+                onStart={() => onStartReview(item)}
+                onArchive={() => onArchiveReview(item)}
+              />
+            ))}
+          </div>
+          {!showAllDue && hiddenDueCount > 0 && (
+            <button className="ohi-review-more" onClick={() => setShowAllDue(true)}>
+              {t('subjects.more_due', { count: hiddenDueCount })}
+            </button>
+          )}
+        </>
       ) : (
         <div className="ohi-review-empty">
-          <span>Nothing is due today.</span>
+          <span>{t('subjects.nothing_due')}</span>
           {upcoming.length > 0 && (
-            <span className="ohi-review-next">Next: {upcoming[0].subjectName} · {upcoming[0].chapter.name} in {upcoming[0].status.daysUntilDue}d</span>
+            <span className="ohi-review-next">{t('subjects.next_due', {
+              subject: upcoming[0].subjectName,
+              chapter: upcoming[0].chapter.name,
+              days: upcoming[0].status.daysUntilDue,
+            })}</span>
           )}
         </div>
       )}
@@ -312,19 +454,23 @@ function ReviewQueue({ due, upcoming, onStartReview }: ReviewQueueProps) {
   )
 }
 
-function ReviewCard({ item, onStart }: { item: Recommendation; onStart: () => void }) {
+function ReviewCard({ item, onStart, onArchive }: { item: Recommendation; onStart: () => void; onArchive: () => void }) {
+  const { t } = useTranslation()
   const { chapter, subjectName, daysOverdue, status } = item
   return (
     <article className="ohi-review-card">
       <div className="ohi-review-card-main">
         <span className="ohi-review-subject">{subjectName}</span>
         <strong className="ohi-review-chapter">{chapter.name}</strong>
-        <span className="ohi-review-due">{daysOverdue === 0 ? 'Due today' : `${daysOverdue}d overdue`}</span>
+        <span className="ohi-review-due">{daysOverdue === 0 ? t('subjects.due_today') : t('subjects.days_overdue', { days: daysOverdue })}</span>
       </div>
-      <div className="ohi-review-schedule" aria-label={`Review step ${status.stepNumber} of ${status.totalSteps}`}>
+      <div className="ohi-review-schedule" aria-label={t('subjects.review_step', { current: status.stepNumber, total: status.totalSteps })}>
         <div className="ohi-review-step-label">
-          Step {status.stepNumber}{status.isRepeatingLastStep ? '+' : ''}/{status.totalSteps}
-          <span>Next +{status.nextIntervalDays}d</span>
+          {t('subjects.step_next', {
+            current: `${status.stepNumber}${status.isRepeatingLastStep ? '+' : ''}`,
+            total: status.totalSteps,
+            days: status.nextIntervalDays,
+          })}
         </div>
         <div className="ohi-review-intervals" aria-hidden="true">
           {status.intervals.map((days, index) => (
@@ -332,9 +478,19 @@ function ReviewCard({ item, onStart }: { item: Recommendation; onStart: () => vo
           ))}
         </div>
       </div>
-      <button className="ohi-review-start" onClick={onStart} aria-label={`Review ${chapter.name}`}>
-        Review <ArrowRight size={13} />
-      </button>
+      <div className="ohi-review-actions">
+        <button
+          className="ohi-review-archive"
+          onClick={onArchive}
+          title={t('subjects.archive_chapter', { chapter: chapter.name })}
+          aria-label={t('subjects.archive_chapter', { chapter: chapter.name })}
+        >
+          <Archive size={13} aria-hidden="true" />
+        </button>
+        <button className="ohi-review-start" onClick={onStart} aria-label={t('subjects.review_chapter', { chapter: chapter.name })}>
+          {t('subjects.review')} <ArrowRight size={13} aria-hidden="true" />
+        </button>
+      </div>
     </article>
   )
 }
@@ -352,6 +508,7 @@ interface ListViewProps {
 }
 
 function ListView({ subjects, allChapters, onStart, onEdit }: ListViewProps) {
+  const { t } = useTranslation()
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -389,12 +546,12 @@ function ListView({ subjects, allChapters, onStart, onEdit }: ListViewProps) {
     return (
       <th
         className={`ohi-th${active ? ' ohi-th-active' : ''}`}
-        role="button"
-        tabIndex={0}
-        onClick={() => handleSort(k)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSort(k) } }}
+        scope="col"
+        aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
-        {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+        <button type="button" className="ohi-sort-button" onClick={() => handleSort(k)}>
+          {label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+        </button>
       </th>
     )
   }
@@ -406,11 +563,11 @@ function ListView({ subjects, allChapters, onStart, onEdit }: ListViewProps) {
       <table className="ohi-table">
         <thead>
           <tr>
-            <SortHeader label="Name" k="name" />
-            <th className="ohi-th ohi-th-tags">Tags</th>
-            <SortHeader label="Last Studied" k="last_studied_at" />
-            <SortHeader label="Hours" k="total_minutes" />
-            <SortHeader label="Retention" k="retention" />
+            <SortHeader label={t('subjects.name')} k="name" />
+            <th scope="col" className="ohi-th ohi-th-tags">{t('subjects.tags')}</th>
+            <SortHeader label={t('subjects.last_studied')} k="last_studied_at" />
+            <SortHeader label={t('subjects.hours')} k="total_minutes" />
+            <SortHeader label={t('subjects.recall_estimate')} k="retention" />
             <th className="ohi-th ohi-th-action" />
           </tr>
         </thead>
@@ -418,18 +575,24 @@ function ListView({ subjects, allChapters, onStart, onEdit }: ListViewProps) {
           {sorted.map(subject => {
             const retention = getSubjectRetention(subject.id, allChapters)
             const lastStudied = subject.last_studied_at
-              ? formatRelativeDate(subject.last_studied_at)
-              : 'never'
+              ? formatRelativeDate(subject.last_studied_at, t)
+              : t('subjects.never')
             return (
               <tr
                 key={subject.id}
                 className="ohi-row"
-                role="button"
-                tabIndex={0}
                 onClick={() => onEdit(subject)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(subject) } }}
               >
-                <td className="ohi-td ohi-td-name">{subject.name}</td>
+                <td className="ohi-td ohi-td-name">
+                  <button
+                    type="button"
+                    className="ohi-subject-open"
+                    aria-label={t('subjects.edit_subject', { subject: subject.name })}
+                    onClick={event => { event.stopPropagation(); onEdit(subject) }}
+                  >
+                    {subject.name}
+                  </button>
+                </td>
                 <td className="ohi-td ohi-td-tags">
                   {subject.tags.map(t => (
                     <span key={t.id} className="ohi-tag">#{t.name}</span>
@@ -437,17 +600,17 @@ function ListView({ subjects, allChapters, onStart, onEdit }: ListViewProps) {
                 </td>
                 <td className="ohi-td ohi-td-date">{lastStudied}</td>
                 <td className="ohi-td ohi-td-mono">{formatH(subject.total_minutes / 60)}</td>
-                <td className="ohi-td ohi-td-mono" style={{ color: retentionColor(retention) }}>
+                <td className="ohi-td ohi-td-mono" title={t('subjects.recall_estimate_hint')} style={{ color: retentionColor(retention) }}>
                   {retention !== null ? `${retention}%` : '—'}
                 </td>
                 <td className="ohi-td ohi-td-action" onClick={e => e.stopPropagation()}>
-                  <button className="ohi-start-btn" onClick={() => onStart(subject)}>▶ Start</button>
+                  <button className="ohi-start-btn" aria-label={t('subjects.start_subject', { subject: subject.name })} onClick={() => onStart(subject)}>▶ {t('subjects.start')}</button>
                 </td>
               </tr>
             )
           })}
           {sorted.length === 0 && (
-            <tr><td colSpan={COL_COUNT} className="ohi-empty">No subjects match your filter.</td></tr>
+            <tr><td colSpan={COL_COUNT} className="ohi-empty">{t('subjects.no_match')}</td></tr>
           )}
         </tbody>
       </table>
@@ -466,6 +629,7 @@ interface BoardViewProps {
 }
 
 function BoardView({ subjects, allChapters, onStart }: BoardViewProps) {
+  const { t } = useTranslation()
   const groups = useMemo(() => groupByTag(subjects), [subjects])
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
@@ -504,10 +668,10 @@ function BoardView({ subjects, allChapters, onStart }: BoardViewProps) {
                   return (
                     <div key={subject.id} className="ohi-board-row">
                       <span className="ohi-board-name">{subject.name}</span>
-                      <span className="ohi-board-ret" style={{ color: retentionColor(retention) }}>
+                      <span className="ohi-board-ret" title={t('subjects.recall_estimate_hint')} style={{ color: retentionColor(retention) }}>
                         {retention !== null ? `${retention}%` : '—'}
                       </span>
-                      <button className="ohi-start-btn ohi-start-sm" onClick={() => onStart(subject)}>▶</button>
+                      <button className="ohi-start-btn ohi-start-sm" aria-label={t('subjects.start_subject', { subject: subject.name })} onClick={() => onStart(subject)}>▶</button>
                     </div>
                   )
                 })}
@@ -516,7 +680,7 @@ function BoardView({ subjects, allChapters, onStart }: BoardViewProps) {
           </div>
         )
       })}
-      {groups.length === 0 && <div className="ohi-empty">No subjects match your filter.</div>}
+      {groups.length === 0 && <div className="ohi-empty">{t('subjects.no_match')}</div>}
     </div>
   )
 }
@@ -531,6 +695,7 @@ interface SplitViewProps {
 }
 
 function SplitView({ subjects, allChapters, onStart, onEdit }: SplitViewProps) {
+  const { t } = useTranslation()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -557,19 +722,23 @@ function SplitView({ subjects, allChapters, onStart, onEdit }: SplitViewProps) {
           <div
             key={subject.id}
             className={`ohi-split-row${selectedId === subject.id ? ' ohi-split-selected' : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => setSelectedId(subject.id)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(subject.id) } }}
           >
-            <span className="ohi-split-name">{subject.name}</span>
+            <button
+              type="button"
+              className="ohi-split-select"
+              aria-pressed={selectedId === subject.id}
+              onClick={() => setSelectedId(subject.id)}
+            >
+              <span className="ohi-split-name">{subject.name}</span>
+            </button>
             <button
               className="ohi-start-btn ohi-start-sm"
-              onClick={e => { e.stopPropagation(); onStart(subject) }}
+              aria-label={t('subjects.start_subject', { subject: subject.name })}
+              onClick={() => onStart(subject)}
             >▶</button>
           </div>
         ))}
-        {subjects.length === 0 && <div className="ohi-empty">No subjects match your filter.</div>}
+        {subjects.length === 0 && <div className="ohi-empty">{t('subjects.no_match')}</div>}
       </div>
 
       <div className="ohi-split-detail">
@@ -577,21 +746,21 @@ function SplitView({ subjects, allChapters, onStart, onEdit }: SplitViewProps) {
           <>
             <h2 className="ohi-split-detail-title">{selected.name}</h2>
             <div className="ohi-split-detail-grid">
-              <span className="ohi-split-label">Last studied</span>
+              <span className="ohi-split-label">{t('subjects.last_studied')}</span>
               <span className="ohi-split-val">
-                {selected.last_studied_at ? formatRelativeDate(selected.last_studied_at) : 'Never'}
+                {selected.last_studied_at ? formatRelativeDate(selected.last_studied_at, t) : t('subjects.never')}
               </span>
-              <span className="ohi-split-label">Total time</span>
+              <span className="ohi-split-label">{t('subjects.total_time')}</span>
               <span className="ohi-split-val ohi-mono">{formatH(selected.total_minutes / 60)}</span>
-              <span className="ohi-split-label">Retention</span>
-              <span className="ohi-split-val ohi-mono" style={{ color: retentionColor(retention) }}>
+              <span className="ohi-split-label" title={t('subjects.recall_estimate_hint')}>{t('subjects.recall_estimate')}</span>
+              <span className="ohi-split-val ohi-mono" title={t('subjects.recall_estimate_hint')} style={{ color: retentionColor(retention) }}>
                 {retention !== null ? `${retention}%` : '—'}
               </span>
-              <span className="ohi-split-label">Chapters</span>
-              <span className="ohi-split-val">{selectedChapters.length} studied</span>
+              <span className="ohi-split-label">{t('subjects.chapters')}</span>
+              <span className="ohi-split-val">{t('subjects.studied_count', { count: selectedChapters.length })}</span>
               {selected.tags.length > 0 && (
                 <>
-                  <span className="ohi-split-label">Tags</span>
+                  <span className="ohi-split-label">{t('subjects.tags')}</span>
                   <span className="ohi-split-val">
                     {selected.tags.map(t => <span key={t.id} className="ohi-tag">#{t.name}</span>)}
                   </span>
@@ -599,12 +768,12 @@ function SplitView({ subjects, allChapters, onStart, onEdit }: SplitViewProps) {
               )}
             </div>
             <div className="ohi-split-actions">
-              <button className="ohi-launch-btn" onClick={() => onStart(selected)}>▶ Start Session</button>
-              <button className="ohi-edit-btn" onClick={() => onEdit(selected)}>✎ Edit</button>
+              <button className="ohi-launch-btn" onClick={() => onStart(selected)}>▶ {t('subjects.start_session')}</button>
+              <button className="ohi-edit-btn" onClick={() => onEdit(selected)}>✎ {t('subjects.edit')}</button>
             </div>
           </>
         ) : (
-          <div className="ohi-empty">Select a subject</div>
+          <div className="ohi-empty">{t('subjects.select_subject')}</div>
         )}
       </div>
     </div>
@@ -613,10 +782,10 @@ function SplitView({ subjects, allChapters, onStart, onEdit }: SplitViewProps) {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function formatRelativeDate(iso: string): string {
+function formatRelativeDate(iso: string, t: (key: string, variables?: Record<string, string | number>) => string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const days = Math.floor(diff / 86400000)
-  if (days === 0) return 'today'
-  if (days === 1) return 'yesterday'
-  return `${days}d ago`
+  if (days === 0) return t('subjects.today')
+  if (days === 1) return t('subjects.yesterday')
+  return t('subjects.days_ago', { days })
 }

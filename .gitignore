@@ -4,3 +4,16 @@ dist/
 release/
 *.tsbuildinfo
 .env
+.env.*
+!.env.example
+coverage/
+.cache/
+backups/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+electron.vite.config.*.mjs
+.DS_Store
+Thumbs.db

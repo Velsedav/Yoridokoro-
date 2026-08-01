@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { formatSecondsMMSS } from '../lib/time';
-import { updateSubjectStats, saveSession, saveErrorLogEntry } from '../lib/db';
+import { getSubjects, updateSubjectStats, saveSession, saveErrorLogEntry, markSessionEvaluated } from '../lib/db';
 import { TECHNIQUES } from '../lib/techniques';
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 const openPath = (path: string) => (window as any).electronAPI.shell.openPath(path);
@@ -13,6 +14,15 @@ import { getChaptersForSubject, incrementStudyCount, applyMasteryRating, saveRat
 import { isWorkoutMode } from '../lib/devMode';
 import { MUSCLE_GROUPS, CATEGORY_LABELS, loadWorkoutLog, markMuscleWorked, isMuscleEligible, loadWorkoutSets, saveWorkoutSet } from '../lib/workout';
 import type { WorkoutLog, WorkoutSets } from '../lib/workout';
+import {
+    buildSessionProgressSnapshot,
+    classifySessionProgress,
+    SESSION_REVIEW_REQUEST_EVENT,
+    SESSION_REVIEW_REQUEST_KEY,
+    SESSION_RETURN_PATH_KEY,
+    type StudiedChapterPair,
+} from '../lib/sessionProgress';
+import { recordBehaviorEvent } from '../lib/behaviorAnalytics';
 import './Session.css';
 
 function openSource(src: ChapterSource) {
@@ -193,9 +203,9 @@ export default function Session() {
     const [zoneOmbreInput, setZoneOmbreInput] = useState('');
     const [workoutLog, setWorkoutLog] = useState<WorkoutLog>(loadWorkoutLog);
     const [workoutSets, setWorkoutSets] = useState<WorkoutSets>(loadWorkoutSets);
-    const [endConfirmStep, setEndConfirmStep] = useState<'none' | 'confirm-stop' | 'confirm-save' | 'rate-chapters' | 'total-rest'>('none');
+    const [endConfirmStep, setEndConfirmStep] = useState<'none' | 'confirm-stop' | 'confirm-save' | 'saving' | 'save-error' | 'rate-chapters' | 'total-rest'>('none');
     const [restCountdown, setRestCountdown] = useState(600); // 10 minutes in seconds
-    const [chapterRatings, setChapterRatings] = useState<Map<string, MasteryRating>>(new Map());
+    const [postStudyStage, setPostStudyStage] = useState<'rest' | 'review'>('rest');
     const [rateChapterList, setRateChapterList] = useState<Array<{ id: string; name: string }>>([]);
     const [rateChapterIdx, setRateChapterIdx] = useState(0);
     const [pendingCompletedAll, setPendingCompletedAll] = useState(true);
@@ -209,6 +219,16 @@ export default function Session() {
     const [obsidianCopied, setObsidianCopied] = useState(false);
     const [intervalPhase, setIntervalPhase] = useState<'work' | 'rest'>('work');
     const [intervalTick, setIntervalTick] = useState(30);
+    const [subjectNames, setSubjectNames] = useState<Record<string, string>>({});
+    const [ratingSaving, setRatingSaving] = useState(false);
+    const [postSaveError, setPostSaveError] = useState('');
+    const [pausedBeforeDialog, setPausedBeforeDialog] = useState(false);
+    const persistInFlightRef = useRef<Promise<Array<{ id: string; name: string }>> | null>(null);
+    const persistedRef = useRef(false);
+    const ratingInFlightRef = useRef(false);
+    const endDialogRef = useRef<HTMLDivElement>(null);
+    const endSessionButtonRef = useRef<HTMLButtonElement>(null);
+    const primarySessionActionRef = useRef<HTMLButtonElement>(null);
     const { theme } = useSettings();
     const { t } = useTranslation();
 
@@ -222,9 +242,18 @@ export default function Session() {
         }
     }, []);
 
+    useEffect(() => {
+        let mounted = true;
+        getSubjects().then(subjects => {
+            if (!mounted) return;
+            setSubjectNames(Object.fromEntries(subjects.map(subject => [subject.id, subject.name])));
+        }).catch(() => { /* Context remains optional if subjects cannot be loaded. */ });
+        return () => { mounted = false; };
+    }, []);
+
     // Sync remaining/paused back to localStorage
     useEffect(() => {
-        if (!session) return;
+        if (!session || persistedRef.current) return;
         localStorage.setItem('activeSession', JSON.stringify({
             ...session,
             remainingSeconds: remaining,
@@ -236,6 +265,40 @@ export default function Session() {
     useEffect(() => {
         localStorage.setItem(PAPER_NOTES_KEY, JSON.stringify({ checked: paperChecked, notes: paperNotes, title: paperTitle }));
     }, [paperChecked, paperNotes, paperTitle]);
+
+    useEffect(() => {
+        if (endConfirmStep === 'none') return;
+        const dialog = endDialogRef.current;
+        if (!dialog) return;
+        requestAnimationFrame(() => dialog.focus());
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && (endConfirmStep === 'confirm-stop' || endConfirmStep === 'confirm-save')) {
+                event.preventDefault();
+                closeEndDialog();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+            if (!controls.length) { event.preventDefault(); dialog.focus(); return; }
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        dialog.addEventListener('keydown', onKeyDown);
+        return () => dialog.removeEventListener('keydown', onKeyDown);
+    }, [endConfirmStep, pausedBeforeDialog]);
+
+    function closeEndDialog() {
+        setEndConfirmStep('none');
+        setPaused(pausedBeforeDialog);
+        requestAnimationFrame(() => endSessionButtonRef.current?.focus());
+    }
 
     // Timer loop: only counts down, never triggers side effects
     useEffect(() => {
@@ -252,13 +315,20 @@ export default function Session() {
     // Kept separate from the updater to respect React's pure-updater rule
     useEffect(() => {
         if (remaining === 0 && session && !paused) {
+            // Every phase waits at its boundary. In particular, PREP and BREAK
+            // must never start a WORK block while the learner is away.
+            setPaused(true);
             const block = session.draft[session.nowBlockIdx];
-            if (block?.type === 'WORK') {
-                // Keep the lesson open so the learner can extend a productive block.
-                setPaused(true);
-            } else {
-                handleBlockComplete();
-            }
+            void recordBehaviorEvent({
+                eventType: 'block_boundary_reached',
+                ...eventContext(block),
+                payload: {
+                    block_type: block?.type ?? null,
+                    block_index: session.nowBlockIdx,
+                    elapsed_seconds: (block?.minutes ?? 0) * 60,
+                },
+                dedupeKey: `block-boundary:${session.sessionId}:${block?.id ?? session.nowBlockIdx}`,
+            });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [remaining]);
@@ -319,42 +389,189 @@ export default function Session() {
         setIntervalTick(30);
     }, [session?.nowBlockIdx]);
 
-    function getCompletedChapters(completedAll: boolean): Array<{ id: string; name: string }> {
-        if (!session) return [];
+    function resolveStudiedChapters(pairs: StudiedChapterPair[]): Array<{ id: string; name: string }> {
         const seen = new Set<string>();
         const result: Array<{ id: string; name: string }> = [];
-        for (let i = 0; i <= session.nowBlockIdx; i++) {
-            const block = session.draft[i];
-            if (block.type === 'WORK' && block.subject_id && block.chapter_name) {
-                let mins = block.minutes;
-                if (i === session.nowBlockIdx && !completedAll) {
-                    mins = Math.floor((block.minutes * 60 - remaining) / 60);
-                }
-                if (mins > 0) {
-                    const chaps = getChaptersForSubject(block.subject_id);
-                    const ch = chaps.find((c: { name: string; id: string }) => c.name === block.chapter_name);
-                    if (ch && !seen.has(ch.id)) {
-                        seen.add(ch.id);
-                        result.push({ id: ch.id, name: ch.name });
-                    }
-                }
+        for (const pair of pairs) {
+            const chaps = getChaptersForSubject(pair.subject_id);
+            const chapter = chaps.find((item: { name: string; id: string }) => item.name === pair.chapter_name);
+            if (chapter && !seen.has(chapter.id)) {
+                seen.add(chapter.id);
+                result.push({ id: chapter.id, name: chapter.name });
             }
         }
         return result;
     }
 
-    function enterRatingStep(completedAll: boolean) {
-        const chaps = getCompletedChapters(completedAll);
-        if (chaps.length > 0) {
-            setRateChapterList(chaps);
+    function progressSnapshot(elapsedOverride?: Record<string, number>) {
+        if (!session) return null;
+        return buildSessionProgressSnapshot(
+            session.draft,
+            session.nowBlockIdx,
+            remaining,
+            elapsedOverride ?? session.elapsedSecondsByBlock ?? {},
+        );
+    }
+
+    function chapterIdForBlock(block: any): string | null {
+        if (!block?.subject_id || !block.chapter_name) return session?.analytics?.chapterId ?? null;
+        return getChaptersForSubject(block.subject_id)
+            .find((chapter: { id: string; name: string }) => chapter.name === block.chapter_name)?.id
+            ?? session?.analytics?.chapterId
+            ?? null;
+    }
+
+    function eventContext(block = session?.draft?.[session?.nowBlockIdx]) {
+        return {
+            opportunityId: session?.analytics?.opportunityId ?? null,
+            recommendationId: session?.analytics?.recommendationId ?? null,
+            sessionId: session?.sessionId ?? null,
+            blockId: block?.id ?? null,
+            subjectId: block?.subject_id ?? null,
+            chapterId: chapterIdForBlock(block),
+            policyId: session?.analytics?.policyId ?? null,
+            policyVersion: session?.analytics?.policyVersion ?? null,
+        };
+    }
+
+    useEffect(() => {
+        if (!session) return;
+        const block = session.draft[session.nowBlockIdx];
+        if (!block) return;
+        void recordBehaviorEvent({
+            eventType: 'block_started',
+            ...eventContext(block),
+            payload: {
+                block_type: block.type,
+                block_index: session.nowBlockIdx,
+                planned_seconds: block.minutes * 60,
+                timer_display_mode: 'countdown-visible',
+                prep_checklist_mode: 'optional',
+            },
+            dedupeKey: `block-started:${session.sessionId}:${block.id}`,
+        });
+        // The block identifiers fully describe this transition.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session?.sessionId, session?.nowBlockIdx]);
+
+    function openTotalRest() {
+        clearPreRecalls();
+        setRestCountdown(600);
+        setPostStudyStage('rest');
+        setEndConfirmStep('total-rest');
+    }
+
+    function enterRatingStep(completedAll: boolean, chapters: Array<{ id: string; name: string }>) {
+        if (chapters.length > 0) {
+            setRateChapterList(chapters);
             setRateChapterIdx(0);
-            setChapterRatings(new Map());
             setPendingCompletedAll(completedAll);
             setEndConfirmStep('rate-chapters');
         } else {
-            setRestCountdown(600);
-            setEndConfirmStep('total-rest');
+            openTotalRest();
         }
+    }
+
+    function rateCurrentChapter(rating: MasteryRating | null) {
+        if (!session || ratingInFlightRef.current) return;
+        const current = rateChapterList[rateChapterIdx];
+        const isLast = rateChapterIdx >= rateChapterList.length - 1;
+        ratingInFlightRef.current = true;
+        setRatingSaving(true);
+        if (current && rating) {
+            applyMasteryRating(current.id, rating);
+            saveRating({
+                chapterId: current.id,
+                sessionId: session.sessionId,
+                ratedAt: new Date().toISOString(),
+                rating,
+                preRecall: getPreRecall(current.id),
+            });
+            void recordBehaviorEvent({
+                eventType: 'rating_submitted',
+                ...eventContext(),
+                chapterId: current.id,
+                payload: { rating, pre_recall: getPreRecall(current.id) ?? null },
+            });
+        } else if (current) {
+            void recordBehaviorEvent({
+                eventType: 'rating_skipped',
+                ...eventContext(),
+                chapterId: current.id,
+            });
+        }
+        ratingInFlightRef.current = false;
+        setRatingSaving(false);
+        if (isLast) {
+            void markSessionEvaluated(session.sessionId);
+            openTotalRest();
+        }
+        else setRateChapterIdx(index => index + 1);
+    }
+
+    useEffect(() => {
+        if (endConfirmStep !== 'rate-chapters' || ratingSaving) return;
+        const shortcuts: Record<string, MasteryRating> = {
+            '1': 'forgot',
+            '2': 'hard',
+            '3': 'good',
+            '4': 'easy',
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.isComposing || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+            if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            const rating = shortcuts[event.key];
+            if (!rating) return;
+            event.preventDefault();
+            rateCurrentChapter(rating);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+        // The handler intentionally follows the chapter currently displayed.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [endConfirmStep, rateChapterIdx, rateChapterList, ratingSaving, session?.sessionId]);
+
+    useEffect(() => {
+        if (!session || endConfirmStep !== 'none') return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.isComposing || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+            if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
+            const block = session.draft[session.nowBlockIdx];
+            if (!block) return;
+            if (event.code === 'Space' && block.type !== 'PREP' && remaining > 0) {
+                event.preventDefault();
+                togglePaused('keyboard');
+                return;
+            }
+            if (event.key === 'Enter' && (block.type === 'PREP' || remaining === 0)) {
+                event.preventDefault();
+                void handleBlockComplete(block.type === 'PREP' ? 'ready' : 'timer-complete', 'keyboard');
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [endConfirmStep, remaining, session]);
+
+    useEffect(() => {
+        if (!session || endConfirmStep !== 'none') return;
+        requestAnimationFrame(() => primarySessionActionRef.current?.focus());
+    }, [endConfirmStep, session?.nowBlockIdx]);
+
+    function togglePaused(inputMethod: 'keyboard' | 'pointer') {
+        if (!session) return;
+        const block = session.draft[session.nowBlockIdx];
+        const nextPaused = !paused;
+        void recordBehaviorEvent({
+            eventType: nextPaused ? 'block_paused' : 'block_resumed',
+            ...eventContext(block),
+            payload: {
+                block_type: block?.type ?? null,
+                block_index: session.nowBlockIdx,
+                remaining_seconds: remaining,
+                input_method: inputMethod,
+            },
+        });
+        setPaused(nextPaused);
     }
 
     function extendCurrentBlock(minutes = 5) {
@@ -376,40 +593,178 @@ export default function Session() {
         });
         setRemaining(value => value + addedSeconds);
         if (wasExpired) setPaused(false);
+        const block = session.draft[session.nowBlockIdx];
+        void recordBehaviorEvent({
+            eventType: 'block_extended',
+            ...eventContext(block),
+            payload: {
+                block_type: block?.type ?? null,
+                block_index: session.nowBlockIdx,
+                extension_minutes: minutes,
+                remaining_seconds: remaining,
+                input_method: 'pointer',
+            },
+        });
     }
 
-    async function handleBlockComplete() {
+    async function persistSessionProgress(
+        completedAll: boolean,
+        elapsedOverride?: Record<string, number>,
+    ): Promise<Array<{ id: string; name: string }>> {
+        const snapshot = progressSnapshot(elapsedOverride);
+        const chapters = resolveStudiedChapters(snapshot?.studiedChapters ?? []);
+        if (persistedRef.current) return chapters;
+        if (persistInFlightRef.current) return persistInFlightRef.current;
+
+        const operation = (async () => {
+            if (!session || !snapshot) return chapters;
+            const endedAt = new Date().toISOString();
+            let cursor = new Date(session.startedAt).getTime();
+            const timedBlocks = session.draft.map((block: any) => {
+                const blockSeconds = snapshot.elapsedSecondsByBlock[block.id] ?? 0;
+                const startedAt = new Date(cursor).toISOString();
+                cursor += blockSeconds * 1000;
+                return { ...block, started_at: startedAt, ended_at: new Date(cursor).toISOString() };
+            });
+
+            await saveSession({
+                id: session.sessionId,
+                started_at: session.startedAt,
+                ended_at: endedAt,
+                template: session.template,
+                repeats: session.repeats,
+                planned_minutes: session.plannedMinutes,
+                actual_minutes: snapshot.actualWorkMinutes,
+                actual_seconds: snapshot.actualWorkSeconds,
+                status: classifySessionProgress(snapshot.actualWorkSeconds, completedAll),
+                evaluated_at: null,
+            }, timedBlocks, {});
+
+            await recordBehaviorEvent({
+                eventType: 'session_persisted',
+                ...eventContext(),
+                payload: {
+                    planning_mode: session.analytics?.planningMode ?? 'advanced',
+                    actual_work_seconds: snapshot.actualWorkSeconds,
+                    work_minutes: snapshot.actualWorkMinutes,
+                    planned_seconds: session.plannedMinutes * 60,
+                    status: classifySessionProgress(snapshot.actualWorkSeconds, completedAll),
+                    completed_all: completedAll,
+                },
+                dedupeKey: `session-persisted:${session.sessionId}`,
+            });
+
+            for (const [subjectId, minutes] of Object.entries(snapshot.workMinutesBySubject)) {
+                if (minutes > 0) await updateSubjectStats(subjectId, minutes, endedAt);
+            }
+            for (const chapter of chapters) incrementStudyCount(chapter.id);
+
+            setCompletedWorkMinutes(snapshot.workMinutesBySubject);
+            setDisplayedWorkMins(snapshot.actualWorkMinutes);
+            persistedRef.current = true;
+            localStorage.removeItem('activeSession');
+            return chapters;
+        })();
+
+        persistInFlightRef.current = operation;
+        try { return await operation; }
+        finally { persistInFlightRef.current = null; }
+    }
+
+    async function beginPostSession(
+        completedAll: boolean,
+        elapsedOverride?: Record<string, number>,
+    ) {
+        setPaused(true);
+        setPendingCompletedAll(completedAll);
+        setPostSaveError('');
+        setEndConfirmStep('saving');
+        try {
+            const chapters = await persistSessionProgress(completedAll, elapsedOverride);
+            enterRatingStep(completedAll, chapters);
+        } catch (error) {
+            console.error('Could not save the study session', error);
+            void recordBehaviorEvent({
+                eventType: 'session_persist_failed',
+                ...eventContext(),
+                qualityFlags: ['persistence-error'],
+            });
+            setPostSaveError(t('session.save_error'));
+            setEndConfirmStep('save-error');
+        }
+    }
+
+    useEffect(() => {
+        const requestReview = () => {
+            if (!session || persistedRef.current || persistInFlightRef.current) return;
+            localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY);
+            void beginPostSession(false);
+        };
+
+        window.addEventListener(SESSION_REVIEW_REQUEST_EVENT, requestReview);
+        if (localStorage.getItem(SESSION_REVIEW_REQUEST_KEY) === 'true') requestReview();
+        return () => window.removeEventListener(SESSION_REVIEW_REQUEST_EVENT, requestReview);
+        // A navigation request is consumed once for the active session.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session?.sessionId]);
+
+    async function handleBlockComplete(
+        completionReason: 'ready' | 'timer-complete' | 'skipped' = 'timer-complete',
+        inputMethod: 'keyboard' | 'pointer' = 'pointer',
+    ) {
         if (!session) return;
         const currentBlock = session.draft[session.nowBlockIdx];
+        const currentSeconds = Math.max(0, currentBlock.minutes * 60 - remaining);
+        const finalElapsed = {
+            ...(session.elapsedSecondsByBlock ?? {}),
+            [currentBlock.id]: currentSeconds,
+        };
 
-        // Accumulate actual work minutes (timer may not have reached zero if user skipped)
-        if (currentBlock.type === 'WORK' && currentBlock.subject_id) {
-            const actualMins = Math.floor((currentBlock.minutes * 60 - remaining) / 60);
-            if (actualMins > 0) {
-                setCompletedWorkMinutes(prev => ({
-                    ...prev,
-                    [currentBlock.subject_id]: (prev[currentBlock.subject_id] || 0) + actualMins
-                }));
-            }
-        }
+        const checked = currentBlock.type === 'PREP'
+            ? checkedItems.filter(Boolean).length
+            : currentBlock.type === 'BREAK'
+                ? breakCheckedItems.filter(Boolean).length
+                : null;
+        const total = currentBlock.type === 'PREP'
+            ? checkedItems.length
+            : currentBlock.type === 'BREAK'
+                ? breakCheckedItems.length
+                : null;
+        await recordBehaviorEvent({
+            eventType: 'block_completed',
+            ...eventContext(currentBlock),
+            payload: {
+                block_type: currentBlock.type,
+                block_index: session.nowBlockIdx,
+                planned_seconds: currentBlock.minutes * 60,
+                elapsed_seconds: currentSeconds,
+                completion_reason: completionReason,
+                checked_count: checked,
+                total_count: total,
+                input_method: inputMethod,
+            },
+        });
 
         const nextIdx = session.nowBlockIdx + 1;
         if (nextIdx >= session.draft.length) {
-            handleSessionComplete();
+            setSession({ ...session, elapsedSecondsByBlock: finalElapsed });
+            await handleSessionComplete(finalElapsed);
         } else {
             playSFX('glass_session_switch', theme);
             const newSession = {
                 ...session,
                 nowBlockIdx: nextIdx,
+                elapsedSecondsByBlock: finalElapsed,
             };
             setSession(newSession);
             setRemaining(session.draft[nextIdx].minutes * 60);
+            setPaused(false);
         }
     }
-    function handleSessionComplete() {
+    async function handleSessionComplete(elapsedOverride?: Record<string, number>) {
         playSFX('glass_session_end', theme);
         setPaused(true);
-        enterRatingStep(true);
+        await beginPostSession(true, elapsedOverride);
     }
 
     // Rest countdown
@@ -444,36 +799,8 @@ export default function Session() {
         if (!session) return;
 
         if (saveProgress) {
+            if (!persistedRef.current) await persistSessionProgress(completedAll);
             const endedAt = new Date().toISOString();
-
-            // Calculate final actual minutes
-            let actualMins = 0;
-            for (let i = 0; i <= session.nowBlockIdx; i++) {
-                if (i < session.nowBlockIdx) {
-                    actualMins += session.draft[i].minutes;
-                } else {
-                    actualMins += Math.floor((session.draft[i].minutes * 60 - remaining) / 60);
-                }
-            }
-
-            const currentBlock = session.draft[session.nowBlockIdx];
-            const finalCompletedWork = { ...completedWorkMinutes };
-            // Partial work block completion
-            if (!completedAll && currentBlock.type === 'WORK' && currentBlock.subject_id) {
-                const partialMins = Math.floor((currentBlock.minutes * 60 - remaining) / 60);
-                finalCompletedWork[currentBlock.subject_id] = (finalCompletedWork[currentBlock.subject_id] || 0) + partialMins;
-            }
-
-            // Save session to DB
-            await saveSession({
-                id: session.sessionId,
-                started_at: session.startedAt,
-                ended_at: endedAt,
-                template: session.template,
-                repeats: session.repeats,
-                planned_minutes: session.plannedMinutes,
-                actual_minutes: actualMins
-            }, session.draft, {});
 
             // Save each zone d'ombre item to error log
             if (zoneOmbreItems.length > 0) {
@@ -489,53 +816,30 @@ export default function Session() {
                     });
                 }
             }
-
-            // Update subjects
-            for (const [subjId, mins] of Object.entries(finalCompletedWork)) {
-                if (mins > 0) {
-                    await updateSubjectStats(subjId, mins as number, endedAt);
-                }
-            }
-
-            // Track completed chapters
-            const completedChapterIds = new Set<string>();
-
-            for (let i = 0; i <= session.nowBlockIdx; i++) {
-                const block = session.draft[i];
-                if (block.type === 'WORK' && block.subject_id && block.chapter_name) {
-                    const isCurrent = i === session.nowBlockIdx;
-                    let mins = block.minutes;
-                    if (isCurrent && !completedAll) {
-                        mins = Math.floor((block.minutes * 60 - remaining) / 60);
-                    }
-                    if (mins > 0) {
-                        const chaps = getChaptersForSubject(block.subject_id);
-                        const ch = chaps.find(c => c.name === block.chapter_name);
-                        if (ch) completedChapterIds.add(ch.id);
-                    }
-                }
-            }
-
-            for (const id of completedChapterIds) {
-                incrementStudyCount(id);
-                const rating = chapterRatings.get(id);
-                if (rating) {
-                    applyMasteryRating(id, rating);
-                    saveRating({
-                        chapterId: id,
-                        sessionId: session.sessionId,
-                        ratedAt: new Date().toISOString(),
-                        rating,
-                        preRecall: getPreRecall(id),
-                    });
-                }
-            }
         }
+
+        if (!saveProgress && !persistedRef.current) {
+            await recordBehaviorEvent({
+                eventType: 'session_discarded',
+                ...eventContext(),
+                payload: { completed_all: completedAll },
+                dedupeKey: `session-discarded:${session.sessionId}`,
+            });
+        }
+        await recordBehaviorEvent({
+            eventType: 'session_closed',
+            ...eventContext(),
+            payload: { completed_all: completedAll },
+            dedupeKey: `session-closed:${session.sessionId}`,
+        });
 
         clearPreRecalls();
         localStorage.removeItem('activeSession');
+        localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY);
         setEndConfirmStep('none');
-        navigate('/');
+        const returnPath = localStorage.getItem(SESSION_RETURN_PATH_KEY) || '/';
+        localStorage.removeItem(SESSION_RETURN_PATH_KEY);
+        navigate(returnPath);
     }
 
     const hasPaperNotes = PAPER_QUESTIONS.some(q => (paperNotes[q.id] || '').trim().length > 0);
@@ -582,7 +886,6 @@ export default function Session() {
     const tech = currentBlock.technique_id ? TECHNIQUES.find(t => t.id === currentBlock.technique_id) : null;
     const totalSeconds = (currentBlock.minutes ?? 0) * 60;
     const elapsed = Math.max(0, totalSeconds - remaining);
-    const isWorkExpired = currentBlock.type === 'WORK' && remaining === 0;
     const fiveMinTicks = totalSeconds > 0
         ? Array.from({ length: Math.floor(totalSeconds / 300) }, (_, i) => i + 1).filter(i => i * 300 < totalSeconds)
         : [];
@@ -591,16 +894,48 @@ export default function Session() {
         const ch = getChaptersForSubject(currentBlock.subject_id).find(c => c.name === currentBlock.chapter_name);
         return ch?.sources ?? [];
     })();
+    const phaseId = currentBlock.type.toLowerCase() as 'prep' | 'work' | 'break';
+    const phaseTitle = t(`session.phase_${phaseId}`);
+    const phaseIntro = t(`session.phase_${phaseId}_intro`);
+    const nextBlock = session.draft[session.nowBlockIdx + 1];
+    const contextBlock = currentBlock.type === 'WORK'
+        ? currentBlock
+        : session.draft.slice(session.nowBlockIdx + 1).find((block: any) => block.type === 'WORK');
+    const contextSubject = contextBlock?.subject_id ? subjectNames[contextBlock.subject_id] : '';
+    const isBlockExpired = remaining === 0;
+    const checkedPrepCount = checkedItems.filter(Boolean).length;
+    const checkedBreakCount = breakCheckedItems.filter(Boolean).length;
+    const phaseNameFor = (block: any) => block ? t(`session.phase_${String(block.type).toLowerCase()}`) : t('session.session_complete');
+    const advanceLabel = currentBlock.type === 'PREP'
+        ? t('session.ready_start')
+        : nextBlock?.type === 'WORK'
+            ? t('session.start_next_focus')
+            : nextBlock?.type === 'BREAK'
+                ? t('session.start_break')
+                : t('session.end_session');
 
     return (
-        <div className="session-page session-main-container">
-            <div className="glass session-panel">
-                <h2 className="session-block-type">
-                    {currentBlock.type}
-                </h2>
+        <div className={`session-page session-main-container session-phase-${phaseId}`}>
+            <div className={`glass session-panel session-runner session-runner--${phaseId}`}>
+                <section className="session-runner-content">
+                    <header className="session-phase-header">
+                        <div>
+                            <span className="session-block-type">{phaseTitle}</span>
+                            <h1>{phaseIntro}</h1>
+                            <p>{t('session.phase_step', { current: session.nowBlockIdx + 1, total: session.draft.length })}</p>
+                        </div>
+                        {(contextSubject || contextBlock?.chapter_name) && (
+                            <div className="session-phase-context">
+                                <span>{currentBlock.type === 'WORK' ? phaseTitle : t('session.up_next')}</span>
+                                {contextSubject && <strong>{contextSubject}</strong>}
+                                {contextBlock?.chapter_name && <small>{contextBlock.chapter_name}</small>}
+                            </div>
+                        )}
+                    </header>
 
                 {currentBlock.type === 'WORK' && (
                     <div className="session-work-container">
+                        <div className="session-context-grid">
                         {currentBlock.chapter_name && (
                             <div className="session-info-card">
                                 <div className="session-info-label">📖 {t('session.chapter')}</div>
@@ -626,6 +961,7 @@ export default function Session() {
                                 <div className="session-info-value">{currentBlock.objective}</div>
                             </div>
                         )}
+                        </div>
                         {tech?.timerMode === 'interval_30_30' ? (
                             <div className="interval-3030-panel">
                                 <div className="session-info-label">⚡ {tech.name}</div>
@@ -709,14 +1045,16 @@ export default function Session() {
 
                         {/* Metacognition Reminder */}
                         {currentBlock.technique_id && METACOGNITION_QUESTIONS[currentBlock.technique_id] && (
-                            <div className={`meta-check-card ${METACOGNITION_QUESTIONS[currentBlock.technique_id].tier === 'F' || METACOGNITION_QUESTIONS[currentBlock.technique_id].tier === 'D' ? 'warning' : 'normal'}`}>
-                                <div className="meta-check-label">🧠 {t('session.meta_check')}</div>
-                                {METACOGNITION_QUESTIONS[currentBlock.technique_id].questions.map((q, qi) => (
-                                    <div key={qi} className={`meta-check-question ${qi < METACOGNITION_QUESTIONS[currentBlock.technique_id].questions.length - 1 ? 'spaced' : ''}`}>
-                                        {q}
-                                    </div>
-                                ))}
-                            </div>
+                            <details className={`meta-check-card ${METACOGNITION_QUESTIONS[currentBlock.technique_id].tier === 'F' || METACOGNITION_QUESTIONS[currentBlock.technique_id].tier === 'D' ? 'warning' : 'normal'}`}>
+                                <summary className="meta-check-label">🧠 {t('session.meta_check')}</summary>
+                                <div className="meta-check-body">
+                                    {METACOGNITION_QUESTIONS[currentBlock.technique_id].questions.map((q, qi) => (
+                                        <div key={qi} className={`meta-check-question ${qi < METACOGNITION_QUESTIONS[currentBlock.technique_id].questions.length - 1 ? 'spaced' : ''}`}>
+                                            {q}
+                                        </div>
+                                    ))}
+                                </div>
+                            </details>
                         )}
                     </div>
                 )}
@@ -725,7 +1063,11 @@ export default function Session() {
                     let globalIdx = 0;
                     return (
                         <div className="prep-checklist-card">
-                            <div className="prep-checklist-title">{t('session.prep_checklist')}</div>
+                            <div className="session-checklist-heading">
+                                <div className="prep-checklist-title">{t('session.prep_checklist')}</div>
+                                <span>{checkedPrepCount} / {checkedItems.length}</span>
+                            </div>
+                            <div className="checklist-sections-grid">
                             {PREP_SECTIONS.map(section => (
                                 <div key={section.labelKey} className="checklist-section">
                                     <div className="checklist-section-header">
@@ -760,40 +1102,51 @@ export default function Session() {
                                                     ) : t(item.labelKey as any)}
                                                 </span>
                                                 {item.tooltipKey && (
-                                                    <span className="checklist-info-icon" data-tooltip={t(item.tooltipKey as any)}>ⓘ</span>
+                                                    <span
+                                                        className="checklist-info-icon"
+                                                        data-tooltip={t(item.tooltipKey as any)}
+                                                        tabIndex={0}
+                                                        role="note"
+                                                        aria-label={t(item.tooltipKey as any)}
+                                                    >ⓘ</span>
                                                 )}
                                             </label>
                                         );
                                     })}
                                 </div>
                             ))}
+                            </div>
+                            <details className="session-custom-details">
+                                <summary>{t('session.other_ideas')}</summary>
                             {/* Custom items */}
                             {customPrepItems.length > 0 && (
                                 <div className="checklist-section">
                                     {customPrepItems.map((item, customIdx) => {
                                         const idx = PREP_ITEM_COUNT + customIdx;
                                         return (
-                                            <label
+                                            <div
                                                 key={customIdx}
-                                                className={`prep-item-label bordered ${checkedItems[idx] ? 'checked' : ''}`}
+                                                className="prep-custom-item-row"
                                             >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={checkedItems[idx] || false}
-                                                    onChange={() => {
-                                                        const next = [...checkedItems];
-                                                        next[idx] = !next[idx];
-                                                        setCheckedItems(next);
-                                                        if (next[idx]) playSFX('glass_ui_check', theme);
-                                                    }}
-                                                    className="prep-item-checkbox"
-                                                />
-                                                <span className="prep-item-checkmark" />
-                                                <span className="prep-item-text">{item.emoji} {item.label}</span>
+                                                <label className={`prep-item-label ${checkedItems[idx] ? 'checked' : ''}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checkedItems[idx] || false}
+                                                        onChange={() => {
+                                                            const next = [...checkedItems];
+                                                            next[idx] = !next[idx];
+                                                            setCheckedItems(next);
+                                                            if (next[idx]) playSFX('glass_ui_check', theme);
+                                                        }}
+                                                        className="prep-item-checkbox"
+                                                    />
+                                                    <span className="prep-item-checkmark" />
+                                                    <span className="prep-item-text">{item.emoji} {item.label}</span>
+                                                </label>
                                                 <button
+                                                    type="button"
                                                     className="prep-item-remove-btn"
-                                                    onClick={e => {
-                                                        e.preventDefault(); e.stopPropagation();
+                                                    onClick={() => {
                                                         const newCustom = customPrepItems.filter((_, i) => i !== customIdx);
                                                         setCustomPrepItems(newCustom);
                                                         saveCustomPrepItems(newCustom);
@@ -801,9 +1154,9 @@ export default function Session() {
                                                         newChecked.splice(idx, 1);
                                                         setCheckedItems(newChecked);
                                                     }}
-                                                    title={t('session.remove_item')}
+                                                    aria-label={`${t('session.remove_item')} : ${item.label}`}
                                                 >✕</button>
-                                            </label>
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -842,6 +1195,7 @@ export default function Session() {
                                     {t('session.add')}
                                 </button>
                             </div>
+                            </details>
                         </div>
                     );
                 })()}
@@ -850,7 +1204,11 @@ export default function Session() {
                     let globalIdx = 0;
                     return (
                         <div className="break-checklist-card">
-                            <div className="break-checklist-title">{t('session.break_checklist')}</div>
+                            <div className="session-checklist-heading">
+                                <div className="break-checklist-title">{t('session.break_checklist')}</div>
+                                <span>{checkedBreakCount} / {breakCheckedItems.length}</span>
+                            </div>
+                            <div className="checklist-sections-grid">
                             {BREAK_SECTIONS.map(section => (
                                 <div key={section.labelKey} className="checklist-section">
                                     <div className="checklist-section-header">
@@ -880,39 +1238,50 @@ export default function Session() {
                                                     {item.emoji} {t(item.labelKey as any)}
                                                 </span>
                                                 {item.tooltipKey && (
-                                                    <span className="checklist-info-icon" data-tooltip={t(item.tooltipKey as any)}>ⓘ</span>
+                                                    <span
+                                                        className="checklist-info-icon"
+                                                        data-tooltip={t(item.tooltipKey as any)}
+                                                        tabIndex={0}
+                                                        role="note"
+                                                        aria-label={t(item.tooltipKey as any)}
+                                                    >ⓘ</span>
                                                 )}
                                             </label>
                                         );
                                     })}
                                 </div>
                             ))}
+                            </div>
+                            <details className="session-custom-details">
+                                <summary>{t('session.other_ideas')}</summary>
                             {customBreakItems.length > 0 && (
                                 <div className="checklist-section">
                                     {customBreakItems.map((item, customIdx) => {
                                         const idx = BREAK_ITEM_COUNT + customIdx;
                                         return (
-                                            <label
+                                            <div
                                                 key={customIdx}
-                                                className={`prep-item-label bordered ${breakCheckedItems[idx] ? 'checked' : ''}`}
+                                                className="prep-custom-item-row"
                                             >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={breakCheckedItems[idx] || false}
-                                                    onChange={() => {
-                                                        const next = [...breakCheckedItems];
-                                                        next[idx] = !next[idx];
-                                                        setBreakCheckedItems(next);
-                                                        if (next[idx]) playSFX('glass_ui_check', theme);
-                                                    }}
-                                                    className="prep-item-checkbox"
-                                                />
-                                                <span className="prep-item-checkmark" />
-                                                <span className="prep-item-text">{item.emoji} {item.label}</span>
+                                                <label className={`prep-item-label ${breakCheckedItems[idx] ? 'checked' : ''}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={breakCheckedItems[idx] || false}
+                                                        onChange={() => {
+                                                            const next = [...breakCheckedItems];
+                                                            next[idx] = !next[idx];
+                                                            setBreakCheckedItems(next);
+                                                            if (next[idx]) playSFX('glass_ui_check', theme);
+                                                        }}
+                                                        className="prep-item-checkbox"
+                                                    />
+                                                    <span className="prep-item-checkmark" />
+                                                    <span className="prep-item-text">{item.emoji} {item.label}</span>
+                                                </label>
                                                 <button
+                                                    type="button"
                                                     className="prep-item-remove-btn"
-                                                    onClick={e => {
-                                                        e.preventDefault(); e.stopPropagation();
+                                                    onClick={() => {
                                                         const newCustom = customBreakItems.filter((_, i) => i !== customIdx);
                                                         setCustomBreakItems(newCustom);
                                                         saveCustomBreakItems(newCustom);
@@ -920,9 +1289,9 @@ export default function Session() {
                                                         newChecked.splice(idx, 1);
                                                         setBreakCheckedItems(newChecked);
                                                     }}
-                                                    title={t('session.remove_item')}
+                                                    aria-label={`${t('session.remove_item')} : ${item.label}`}
                                                 >✕</button>
-                                            </label>
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -961,6 +1330,7 @@ export default function Session() {
                                     {t('session.add')}
                                 </button>
                             </div>
+                            </details>
                         </div>
                     );
                 })()}
@@ -1003,7 +1373,14 @@ export default function Session() {
                     );
                 })()}
 
-                <div className="session-timer-footer">
+                </section>
+
+                <aside className="session-timer-dock" aria-label={t('session.timer_label')}>
+                <div className="session-timer-footer session-timer-dock-inner">
+                    <div className="session-timeline-caption">
+                        <span>{phaseTitle}</span>
+                        <small>{t('session.phase_step', { current: session.nowBlockIdx + 1, total: session.draft.length })}</small>
+                    </div>
                     {/* Mini timeline */}
                     <div className="timeline-container">
                         {session.draft.map((b: any, i: number) => {
@@ -1039,45 +1416,55 @@ export default function Session() {
                         </div>
                     )}
 
-                    <div className={`timer-display ${paused ? 'paused' : 'running'}${!paused && remaining < 60 ? ' critical' : !paused && remaining < 300 ? ' warning' : ''}`}>
+                    <span className="session-timer-label">{isBlockExpired ? t('session.time_up') : paused ? t('session.timer_paused') : t('session.timer_running')}</span>
+                    <div className={`timer-display ${paused ? 'paused' : 'running'}${!paused && remaining < 60 ? ' critical' : !paused && remaining < 300 ? ' warning' : ''}`} role="timer" aria-label={`${t('session.timer_label')} ${formatSecondsMMSS(remaining)}`}>
                         {(() => { const [mm, ss] = formatSecondsMMSS(remaining).split(':'); return <>{mm}<span className="timer-colon">:</span>{ss}</>; })()}
                     </div>
 
-                    {isWorkExpired && (
+                    {isBlockExpired && (
                         <div className="session-time-expired" role="status">
                             <strong>{t('session.time_up')}</strong>
-                            <span>{t('session.time_up_hint')}</span>
+                            <span>{t('session.up_next')} : {phaseNameFor(nextBlock)}</span>
                         </div>
                     )}
 
                     <div className="session-controls">
+                        {(currentBlock.type === 'PREP' || isBlockExpired) && (
+                            <button ref={primarySessionActionRef} className="btn btn-primary session-next-btn" aria-keyshortcuts="Enter" onClick={() => {
+                                playSFX('glass_ui_check', theme);
+                                void handleBlockComplete(currentBlock.type === 'PREP' ? 'ready' : 'timer-complete', 'pointer');
+                            }}>
+                                {advanceLabel}
+                            </button>
+                        )}
+                        {!isBlockExpired && currentBlock.type !== 'PREP' && (
+                            <button
+                                ref={primarySessionActionRef}
+                                className={`btn pause-resume-btn ${paused ? 'btn-primary' : 'btn-secondary'}`}
+                                aria-keyshortcuts="Space"
+                                onClick={() => togglePaused('pointer')}
+                            >
+                                {paused ? t('session.resume') : t('session.pause')}
+                            </button>
+                        )}
                         {currentBlock.type === 'WORK' && (
                             <button
-                                className={`btn add-time-btn ${isWorkExpired ? 'btn-primary' : 'btn-secondary'}`}
+                                className="btn btn-secondary add-time-btn"
                                 onClick={() => { playSFX('glass_ui_check', theme); extendCurrentBlock(5); }}
                             >
                                 {t('session.add_five_minutes')}
                             </button>
                         )}
-                        {!isWorkExpired && (
-                            <button
-                                className={`btn pause-resume-btn ${paused ? 'btn-primary' : 'btn-secondary'}`}
-                                onClick={() => { playSFX('glass_session_end', theme); setPaused(!paused); }}
-                            >
-                                {paused ? t('session.resume') : t('session.pause')}
-                            </button>
-                        )}
-                        <button className="btn btn-secondary" onClick={() => {
+                        {!isBlockExpired && currentBlock.type !== 'PREP' && <button className="btn btn-secondary session-skip-btn" onClick={() => {
                             playSFX('glass_ui_cancel', theme);
-                            if (isWorkExpired) setPaused(false);
-                            handleBlockComplete();
-                        }}>
-                            {isWorkExpired ? t('session.next_block') : t('session.skip_block')}
-                        </button>
+                            void handleBlockComplete('skipped', 'pointer');
+                        }}>{t('session.skip_block')}</button>}
                         <button
+                            ref={endSessionButtonRef}
                             className="btn end-session-btn"
                             onClick={() => {
                                 playSFX('glass_ui_cancel', theme);
+                                setPausedBeforeDialog(paused);
                                 setPaused(true);
                                 setEndConfirmStep('confirm-stop');
                             }}
@@ -1086,12 +1473,25 @@ export default function Session() {
                         </button>
                     </div>
                 </div>
+                </aside>
             </div>
 
             {/* End Session Confirmation Modal */}
             {endConfirmStep !== 'none' && (
-                <div className="modal-overlay" onClick={() => { playSFX(SFX.CANCEL, theme); setEndConfirmStep('none'); setPaused(false); }}>
-                    <div className="modal-content confirm-modal-content" onClick={e => e.stopPropagation()}>
+                <div className="modal-overlay" onClick={() => {
+                    if (endConfirmStep !== 'confirm-stop' && endConfirmStep !== 'confirm-save') return;
+                    playSFX(SFX.CANCEL, theme);
+                    closeEndDialog();
+                }}>
+                    <div
+                        ref={endDialogRef}
+                        className={`modal-content confirm-modal-content${endConfirmStep === 'rate-chapters' ? ' confirm-modal-content--rating' : ''}${endConfirmStep === 'total-rest' ? ` confirm-modal-content--post confirm-modal-content--${postStudyStage}` : ''}`}
+                        role="dialog"
+                        aria-modal="true"
+                        tabIndex={-1}
+                        aria-label={endConfirmStep === 'rate-chapters' ? t('session.rate_chapters') : endConfirmStep === 'total-rest' ? t('session.total_rest') : t('session.end_session')}
+                        onClick={e => e.stopPropagation()}
+                    >
                         {endConfirmStep === 'confirm-stop' && (
                             <>
                                 <h2 className="confirm-modal-title">⏸️ {t('session.stop_title')}</h2>
@@ -1099,7 +1499,7 @@ export default function Session() {
                                     {t('session.stop_text')}
                                 </p>
                                 <div className="confirm-modal-actions">
-                                    <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={() => { setEndConfirmStep('none'); setPaused(false); }}>
+                                    <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={closeEndDialog}>
                                         {t('session.keep_studying')}
                                     </button>
                                     <button className="btn btn-secondary confirm-btn-danger" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={() => { playSFX(SFX.SESSION_END, theme); setEndConfirmStep('confirm-save'); }}>
@@ -1116,7 +1516,7 @@ export default function Session() {
                                     {t('session.save_text')}
                                 </p>
                                 <div className="confirm-modal-actions">
-                                    <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={() => { playSFX(SFX.CHECK, theme); enterRatingStep(false); }}>
+                                    <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={() => { playSFX(SFX.CHECK, theme); void beginPostSession(false); }}>
                                         {t('session.save_progress')}
                                     </button>
                                     <button className="btn btn-secondary" onMouseEnter={() => playSFX(SFX.HOVER, theme)} onClick={() => { playSFX(SFX.CANCEL, theme); finishSession(false, false); }}>
@@ -1126,181 +1526,148 @@ export default function Session() {
                             </>
                         )}
 
+                        {endConfirmStep === 'saving' && (
+                            <div className="session-saving-state" role="status" aria-live="polite">
+                                <span className="session-saving-mark" aria-hidden="true">拠</span>
+                                <h2>{t('session.save_title')}</h2>
+                                <p>{t('session.save_progress')}</p>
+                            </div>
+                        )}
+
+                        {endConfirmStep === 'save-error' && (
+                            <div className="session-saving-state session-saving-state--error" role="alert">
+                                <h2>{t('session.save_title')}</h2>
+                                <p>{postSaveError}</p>
+                                <div className="confirm-modal-actions">
+                                    <button className="btn btn-secondary" onClick={() => { setEndConfirmStep('none'); setPaused(pausedBeforeDialog); }}>{t('session.keep_studying')}</button>
+                                    <button className="btn btn-primary" onClick={() => void beginPostSession(pendingCompletedAll)}>{t('session.save_progress')}</button>
+                                </div>
+                            </div>
+                        )}
+
                         {endConfirmStep === 'rate-chapters' && (() => {
                             const current = rateChapterList[rateChapterIdx];
                             const isLast = rateChapterIdx >= rateChapterList.length - 1;
-                            function rateAndAdvance(rating: MasteryRating | null) {
-                                if (current && rating) {
-                                    setChapterRatings(prev => new Map(prev).set(current.id, rating));
-                                }
-                                if (isLast) {
-                                    setRestCountdown(600);
-                                    setEndConfirmStep('total-rest');
-                                } else {
-                                    setRateChapterIdx(i => i + 1);
-                                }
-                            }
+                            const ratingHints: Record<MasteryRating, string> = {
+                                forgot: t('session.mastery_forgot_hint'),
+                                hard: t('session.mastery_hard_hint'),
+                                good: t('session.mastery_good_hint'),
+                                easy: t('session.mastery_easy_hint'),
+                            };
                             return (
                                 <div className="rate-chapters-container">
-                                    <h2 className="rate-chapters-title">{t('session.rate_chapters')}</h2>
-                                    <p className="rate-chapters-progress">{rateChapterIdx + 1} / {rateChapterList.length}</p>
+                                    <header className="rate-chapters-header">
+                                        <span>{t('session.rating_kicker')}</span>
+                                        <p className="rate-chapters-progress">{rateChapterIdx + 1} / {rateChapterList.length}</p>
+                                        <h2 className="rate-chapters-title">{t('session.rate_chapters')}</h2>
+                                    </header>
                                     <div className="rate-chapters-chapter-name">{current?.name}</div>
                                     <p className="rate-chapters-how">{t('session.rate_how')}</p>
-                                    <div className="rate-chapters-buttons">
-                                        {(['forgot', 'hard', 'good', 'easy'] as MasteryRating[]).map(r => (
+                                    <p className="rate-chapters-explain">{t('session.rating_explain')}</p>
+                                    <div className="rate-chapters-buttons" role="group" aria-label={t('session.rate_how')}>
+                                        {(['forgot', 'hard', 'good', 'easy'] as MasteryRating[]).map((r, index) => (
                                             <button
                                                 key={r}
                                                 className={`btn rate-btn rate-btn-${r}`}
                                                 onMouseEnter={() => playSFX(SFX.HOVER, theme)}
-                                                onClick={() => rateAndAdvance(r)}
+                                                onClick={() => rateCurrentChapter(r)}
+                                                disabled={ratingSaving}
+                                                aria-keyshortcuts={String(index + 1)}
                                             >
-                                                {t(`session.mastery_${r}`)}
+                                                <span className="rate-btn-key" aria-hidden="true">{index + 1}</span>
+                                                <strong>{t(`session.mastery_${r}`)}</strong>
+                                                <small>{ratingHints[r]}</small>
                                             </button>
                                         ))}
                                     </div>
-                                    <button className="rate-chapters-skip" onClick={() => rateAndAdvance(null)}>
-                                        {isLast ? t('session.rating_done') : t('session.rating_next')}
-                                    </button>
+                                    <footer className="rate-chapters-actions">
+                                        <button className="rate-chapters-skip" onClick={() => rateCurrentChapter(null)} disabled={ratingSaving}>
+                                            {isLast ? t('session.rating_done') : t('session.rating_next')}
+                                        </button>
+                                    </footer>
                                 </div>
                             );
                         })()}
 
                         {endConfirmStep === 'total-rest' && (
                             <div className="total-rest-container">
-                                <h2 className="total-rest-title">{t('session.total_rest')}</h2>
-                                <p className="total-rest-subtitle">{t('session.session_complete')}</p>
-
-                                {Object.keys(completedWorkMinutes).length > 0 && (
-                                    <div className="total-rest-summary">
-                                        <span className="total-rest-work-mins">{displayedWorkMins}</span> {t('session.rest_min_label')}
-                                        {Object.keys(completedWorkMinutes).length > 1 && (
-                                            <> · {Object.keys(completedWorkMinutes).length} {t('session.rest_subjects')}</>
-                                        )}
-                                    </div>
-                                )}
-
-                                <img
-                                    src="/assets/images/learning center/01_mascot-diffuse-mode.png"
-                                    alt="Diffuse mode rest"
-                                    className="total-rest-img"
-                                />
-
-                                {/* Countdown */}
-                                <div className={`total-rest-countdown ${restCountdown === 0 ? 'done' : restCountdown < 120 ? 'urgent' : restCountdown < 360 ? 'mid' : 'calm'}`}>
-                                    {String(Math.floor(restCountdown / 60)).padStart(2, '0')}<span className="timer-colon">:</span>{String(restCountdown % 60).padStart(2, '0')}
-                                </div>
-
-                                {/* Post-study checklist */}
-                                {(() => {
-                                    let postIdx = 0;
-                                    return POST_STUDY_SECTIONS.map(section => (
-                                        <div key={section.labelKey} className="checklist-section post-study-section">
-                                            <div className="checklist-section-header">
-                                                <span className="checklist-section-icon">{section.icon}</span>
-                                                <span className="checklist-section-label">{t(section.labelKey as any)}</span>
+                                {postStudyStage === 'rest' ? (
+                                    <section className="total-rest-hero">
+                                        <header>
+                                            <span>{t('session.session_complete')}</span>
+                                            <h2 className="total-rest-title">{t('session.total_rest')}</h2>
+                                            {Object.keys(completedWorkMinutes).length > 0 && (
+                                                <p className="total-rest-summary">
+                                                    <strong className="total-rest-work-mins">{displayedWorkMins}</strong> {t('session.rest_min_label')}
+                                                    {Object.keys(completedWorkMinutes).length > 1 && <> · {Object.keys(completedWorkMinutes).length} {t('session.rest_subjects')}</>}
+                                                </p>
+                                            )}
+                                            {rateChapterList.length === 0 && (
+                                                <p className="total-rest-rating-note">{t('session.rating_threshold_hint')}</p>
+                                            )}
+                                        </header>
+                                        <div className="total-rest-visual">
+                                            <img src="/assets/images/learning center/01_mascot-diffuse-mode.png" alt="" className="total-rest-img" />
+                                            <div className={`total-rest-countdown ${restCountdown === 0 ? 'done' : 'calm'}`} role="timer" aria-label={`${t('session.timer_label')} ${formatSecondsMMSS(restCountdown)}`}>
+                                                {String(Math.floor(restCountdown / 60)).padStart(2, '0')}<span className="timer-colon">:</span>{String(restCountdown % 60).padStart(2, '0')}
                                             </div>
-                                            {section.items.map(item => {
-                                                const idx = postIdx++;
-                                                return (
-                                                    <label
-                                                        key={item.labelKey}
-                                                        className={`prep-item-label bordered ${postStudyChecked[idx] ? 'checked' : ''}`}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={postStudyChecked[idx] || false}
-                                                            onChange={() => {
-                                                                const next = [...postStudyChecked];
-                                                                next[idx] = !next[idx];
-                                                                setPostStudyChecked(next);
-                                                                if (next[idx]) playSFX('glass_ui_check', theme);
-                                                            }}
-                                                            className="prep-item-checkbox"
-                                                        />
-                                                        <span className="prep-item-checkmark" />
-                                                        <span className="prep-item-text">{item.emoji} {t(item.labelKey as any)}</span>
-                                                        {item.tooltipKey && (
-                                                            <span className="checklist-info-icon" data-tooltip={t(item.tooltipKey as any)}>ⓘ</span>
-                                                        )}
-                                                    </label>
-                                                );
-                                            })}
                                         </div>
-                                    ));
-                                })()}
-
-                                {/* Zone d'ombre — multi-item list */}
-                                <div className="post-zone-ombre-section">
-                                    <div className="post-zone-ombre-label">
-                                        🌑 {t('session.zone_ombre_label')}
-                                    </div>
-                                    <div className="post-zone-ombre-input-row">
-                                        <input
-                                            id="zone-ombre-input"
-                                            className="post-zone-ombre-input"
-                                            placeholder={t('session.zone_ombre_placeholder')}
-                                            value={zoneOmbreInput}
-                                            onChange={e => setZoneOmbreInput(e.target.value)}
-                                            onKeyDown={e => {
-                                                if (e.key === 'Enter' && zoneOmbreInput.trim()) {
-                                                    e.preventDefault();
-                                                    setZoneOmbreItems(prev => [...prev, zoneOmbreInput.trim()]);
-                                                    setZoneOmbreInput('');
-                                                }
-                                            }}
-                                        />
-                                        <button
-                                            className="btn btn-secondary zone-ombre-add-btn"
-                                            disabled={!zoneOmbreInput.trim()}
-                                            onClick={() => {
-                                                if (zoneOmbreInput.trim()) {
-                                                    setZoneOmbreItems(prev => [...prev, zoneOmbreInput.trim()]);
-                                                    setZoneOmbreInput('');
-                                                }
-                                            }}
-                                        >+</button>
-                                    </div>
-                                    {zoneOmbreItems.length > 0 && (
-                                        <ul className="post-zone-ombre-list">
-                                            {zoneOmbreItems.map((item, i) => (
-                                                <li key={i} className="post-zone-ombre-item">
-                                                    <span className="post-zone-ombre-item-text">{item}</span>
-                                                    <button
-                                                        className="post-zone-ombre-remove"
-                                                        onClick={() => setZoneOmbreItems(prev => prev.filter((_, j) => j !== i))}
-                                                        aria-label="Remove"
-                                                    >×</button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                    {zoneOmbreItems.length > 0 && (
-                                        <span className="post-zone-ombre-saved">{t('session.zone_ombre_saved')}</span>
-                                    )}
-                                </div>
-
-                                {hasPaperNotes && (
-                                    <div className="total-rest-paper-card">
-                                        <div className="total-rest-paper-label">📄 {paperTitle.trim() || t('session.paper_notes_card')}</div>
-                                        <div className="paper-copy-row">
-                                            <button className="btn btn-secondary paper-copy-btn" onClick={handleCopyPaperNotes}>
-                                                {paperCopied ? t('session.paper_copied') : t('session.paper_copy_btn')}
-                                            </button>
-                                            <button className="btn btn-secondary paper-copy-btn" onClick={handleCopyObsidian}>
-                                                {obsidianCopied ? t('session.paper_copied') : t('session.paper_obsidian_btn')}
-                                            </button>
+                                        <div className="total-rest-suggestions">
+                                            {POST_STUDY_SECTIONS[0].items.map(item => <span key={item.labelKey}>{item.emoji} {t(item.labelKey as any)}</span>)}
                                         </div>
-                                    </div>
+                                        <p className="total-rest-quote">{t('session.post_quote')}</p>
+                                        <div className="total-rest-actions">
+                                            <button className="btn btn-secondary" onClick={() => void finishSession(pendingCompletedAll, true)}>{t('session.post_finish_now')}</button>
+                                            <button className="btn btn-primary total-rest-btn" onClick={() => setPostStudyStage('review')}>{t('session.post_continue_review')}</button>
+                                        </div>
+                                    </section>
+                                ) : (
+                                    <section className="post-study-review">
+                                        <header className="post-study-review-header">
+                                            <span>{t('session.session_complete')}</span>
+                                            <h2>{t('session.post_review_title')}</h2>
+                                            <p>{t('session.post_review_intro')}</p>
+                                        </header>
+                                        <div className="post-study-review-grid">
+                                            <div className="post-study-checklist">
+                                                {(() => {
+                                                    let postIdx = POST_STUDY_SECTIONS[0].items.length;
+                                                    return POST_STUDY_SECTIONS.slice(1).map(section => (
+                                                        <div key={section.labelKey} className="checklist-section post-study-section">
+                                                            <div className="checklist-section-header"><span className="checklist-section-icon">{section.icon}</span><span className="checklist-section-label">{t(section.labelKey as any)}</span></div>
+                                                            {section.items.map(item => {
+                                                                const idx = postIdx++;
+                                                                return <label key={item.labelKey} className={`prep-item-label bordered ${postStudyChecked[idx] ? 'checked' : ''}`}>
+                                                                    <input type="checkbox" checked={postStudyChecked[idx] || false} onChange={() => { const next = [...postStudyChecked]; next[idx] = !next[idx]; setPostStudyChecked(next); if (next[idx]) playSFX('glass_ui_check', theme); }} className="prep-item-checkbox" />
+                                                                    <span className="prep-item-checkmark" /><span className="prep-item-text">{item.emoji} {t(item.labelKey as any)}</span>
+                                                                </label>;
+                                                            })}
+                                                        </div>
+                                                    ));
+                                                })()}
+                                            </div>
+                                            <div className="post-study-reflection">
+                                                <div className="post-zone-ombre-section">
+                                                    <label className="post-zone-ombre-label" htmlFor="zone-ombre-input">🌑 {t('session.zone_ombre_label')}</label>
+                                                    <div className="post-zone-ombre-input-row">
+                                                        <input id="zone-ombre-input" className="post-zone-ombre-input" placeholder={t('session.zone_ombre_placeholder')} value={zoneOmbreInput} onChange={e => setZoneOmbreInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && zoneOmbreInput.trim()) { e.preventDefault(); setZoneOmbreItems(prev => [...prev, zoneOmbreInput.trim()]); setZoneOmbreInput(''); } }} />
+                                                        <button className="btn btn-secondary zone-ombre-add-btn" disabled={!zoneOmbreInput.trim()} onClick={() => { if (zoneOmbreInput.trim()) { setZoneOmbreItems(prev => [...prev, zoneOmbreInput.trim()]); setZoneOmbreInput(''); } }}>+</button>
+                                                    </div>
+                                                    {zoneOmbreItems.length > 0 && <ul className="post-zone-ombre-list">{zoneOmbreItems.map((item, i) => <li key={i} className="post-zone-ombre-item"><span className="post-zone-ombre-item-text">{item}</span><button className="post-zone-ombre-remove" onClick={() => setZoneOmbreItems(prev => prev.filter((_, j) => j !== i))} aria-label={t('session.remove_item')}>×</button></li>)}</ul>}
+                                                    {zoneOmbreItems.length > 0 && <span className="post-zone-ombre-saved">{t('session.zone_ombre_saved')}</span>}
+                                                </div>
+                                                {hasPaperNotes && <div className="total-rest-paper-card"><div className="total-rest-paper-label">📄 {paperTitle.trim() || t('session.paper_notes_card')}</div><div className="paper-copy-row"><button className="btn btn-secondary paper-copy-btn" onClick={handleCopyPaperNotes}>{paperCopied ? t('session.paper_copied') : t('session.paper_copy_btn')}</button><button className="btn btn-secondary paper-copy-btn" onClick={handleCopyObsidian}>{obsidianCopied ? t('session.paper_copied') : t('session.paper_obsidian_btn')}</button></div></div>}
+                                            </div>
+                                        </div>
+                                        <div className="total-rest-actions post-study-review-actions">
+                                            <button className="btn btn-secondary post-study-back-btn" onClick={() => setPostStudyStage('rest')}>
+                                                <ArrowLeft size={17} aria-hidden="true" />
+                                                {t('session.post_back_to_rest')}
+                                            </button>
+                                            <button className="btn btn-primary total-rest-btn" onClick={() => void finishSession(pendingCompletedAll, true)}>{t('session.rested')}</button>
+                                        </div>
+                                    </section>
                                 )}
-
-                                {/* Quote */}
-                                <p className="total-rest-quote">{t('session.post_quote')}</p>
-
-                                <div className="total-rest-actions">
-                                    <button className="btn btn-primary btn-holographic total-rest-btn" onClick={() => finishSession(pendingCompletedAll, true)}>
-                                        {restCountdown === 0 ? t('session.rested') : t('session.skip_rest')}
-                                    </button>
-                                </div>
                             </div>
                         )}
                     </div>

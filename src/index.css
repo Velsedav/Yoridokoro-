@@ -1,9 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap');
 
 .sr-only {
   position: absolute !important;
@@ -18,8 +13,9 @@
 }
 
 :root {
-  --font-main: 'Plus Jakarta Sans', sans-serif;
-  --font-heading: 'Lora', Georgia, serif;
+  --font-main: 'Manrope', system-ui, sans-serif;
+  --font-heading: 'Newsreader', Georgia, serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
 
   /* Base fallback palette — Obsidian dark default */
   --bg-color: #0d1117;
@@ -43,6 +39,13 @@
   --border-radius: 6px;
   --border-radius-sm: 4px;
 
+  /* Shape grammar: enclosure → grouping → interaction → status. */
+  --radius-container: min(28px, calc(var(--border-radius) + var(--border-radius) + var(--border-radius)));
+  --radius-panel: min(18px, calc(var(--border-radius) + var(--border-radius)));
+  --radius-field: var(--border-radius-sm);
+  --radius-button: var(--border-radius);
+  --radius-pill: 999px;
+
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.5);
@@ -62,7 +65,18 @@
   --h-2: #006d32;
   --h-3: #26a641;
   --h-4: #39d353;
+
+  --scrollbar-thumb: color-mix(in srgb, var(--text-muted) 68%, var(--card-bg));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--primary) 72%, var(--text-dark));
 }
+
+/* Slim native scrollbars that inherit every theme without becoming decorative chrome. */
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { min-width: 38px; min-height: 38px; border: 2px solid transparent; border-radius: 999px; background: var(--scrollbar-thumb); background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: content-box; }
+*::-webkit-scrollbar-thumb:active { background: var(--primary); background-clip: content-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
 
 @keyframes nmDotPulse {
 
@@ -151,7 +165,7 @@ body {
 
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: var(--text-dark);
+  color: var(--accent-text, var(--bg-color));
   box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.4);
 }
 
@@ -171,7 +185,7 @@ body {
 
 .btn-secondary {
   background: var(--secondary);
-  color: var(--text-dark);
+  color: var(--accent-text, var(--bg-color));
 }
 
 .btn-secondary:hover {
@@ -1670,7 +1684,7 @@ input[type="checkbox"] {
   margin-top: auto;
   position: relative;
   padding: 10px 12px;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 0.78rem;
   line-height: 1.5;
   border: 1px solid currentColor;
@@ -1801,18 +1815,23 @@ input[type="checkbox"] {
   z-index: 1;
 }
 
-/* ── Anime-style quote rotation animations ── */
+/* Fast typewriter-style quote rotation, without moving its container. */
 .quote-visible {
   opacity: 1;
-  transform: scale(1) translateY(0);
 }
 
 .quote-exit {
-  animation: quoteBounceOut 0.3s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+  animation: quoteFadeOut 0.15s ease-out forwards;
 }
 
 .quote-enter {
-  animation: quoteBounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: quoteTypeIn 0.65s steps(22, end) forwards;
+}
+
+@keyframes quoteFadeOut { to { opacity: 0; } }
+@keyframes quoteTypeIn {
+  from { opacity: 1; clip-path: inset(0 100% 0 0); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
 }
 
 @keyframes quoteBounceOut {
@@ -2636,7 +2655,7 @@ input[type="checkbox"] {
 }
 
 .logo-code-icon {
-  font-family: monospace;
+  font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 1.4rem;
   font-weight: bold;
   color: var(--primary);
@@ -2729,6 +2748,7 @@ input[type="checkbox"] {
 }
 
 .custom-select-value {
+  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2740,6 +2760,8 @@ input[type="checkbox"] {
   font-family: inherit;
   transition: var(--transition);
   height: 100%;
+  cursor: pointer;
+  text-align: left;
 }
 
 .custom-select-value:hover,
@@ -2763,6 +2785,12 @@ input[type="checkbox"] {
 }
 
 .custom-select-option {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
   padding: 10px 12px;
   color: var(--text-dark);
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -5167,6 +5195,7 @@ input[type="checkbox"] {
   --text-muted: #b2a48f;
   --border-radius: 6px;
   --border-radius-sm: 4px;
+
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.42);
   --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -5265,3 +5294,22 @@ input[type="checkbox"] {
   background: var(--primary);
   color: var(--bg-color);
 }
+
+/* Yoridokoro uses one Konomi typography system in every palette. */
+:root {
+  --font-main: 'Manrope', system-ui, sans-serif !important;
+  --font-heading: 'Newsreader', Georgia, serif !important;
+  --font-mono: 'DM Mono', ui-monospace, monospace !important;
+}
+/* Last-resort renderer recovery screen. It deliberately has no dependency on a page theme. */
+.app-recovery { min-height: 100vh; padding: 40px; background: #f4f0e8; color: #24211d; display: grid; place-content: center; justify-items: start; gap: 12px; font-family: system-ui, sans-serif; }
+.app-recovery-mark { width: 48px; height: 48px; border-radius: 50%; background: #ad4f34; color: #fffaf3; display: grid; place-items: center; font: 700 20px Georgia, serif; }
+.app-recovery-kicker { margin: 0; color: #8c3f2b; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.app-recovery h1 { max-width: 700px; margin: 0; font: 600 clamp(36px, 7vw, 68px)/1 Georgia, serif; }
+.app-recovery > p:not(.app-recovery-kicker) { max-width: 620px; color: #69635b; line-height: 1.6; }
+.app-recovery > div { display: flex; flex-wrap: wrap; gap: 9px; }
+.app-recovery button { min-height: 44px; padding: 9px 16px; border: 1px solid #ad4f34; border-radius: 6px; background: #ad4f34; color: #fffaf3; cursor: pointer; font-weight: 700; }
+.app-recovery button.is-secondary { background: transparent; color: #8c3f2b; }
+.app-recovery details { max-width: 700px; color: #69635b; }
+.app-recovery pre { max-width: min(700px, 85vw); overflow: auto; white-space: pre-wrap; }
+.route-loading { min-height: 60vh; display: grid; place-items: center; color: var(--text-muted); font-size: 13px; }

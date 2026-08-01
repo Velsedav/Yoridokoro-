@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Zap } from 'lucide-react'
 import { TECHNIQUES, CATEGORY_LABELS, CATEGORY_COLORS, getTierColor } from '../lib/techniques'
@@ -6,7 +6,10 @@ import { getChaptersForSubject } from '../lib/chapters'
 import type { Chapter } from '../lib/chapters'
 import type { Subject } from '../lib/db'
 import { buildQuickStartSession } from '../lib/obsidian-utils'
+import { openEnabledSessionResources } from '../lib/sessionResources'
 import TechniquePickerModal from './TechniquePickerModal'
+import { useDialogFocus } from '../hooks/useDialogFocus'
+import { recordBehaviorEvent } from '../lib/behaviorAnalytics'
 import './ObsidianQuickStart.css'
 
 const DURATION_PRESETS = [25, 50, 90]
@@ -32,6 +35,7 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
   const [chapterName, setChapterName] = useState<string>(initialChapterName)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setChapters(getChaptersForSubject(subject.id))
@@ -39,11 +43,7 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
 
   const handleClose = useCallback(() => onClose(), [onClose])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [handleClose])
+  useDialogFocus(dialogRef, handleClose, '.oqs-launch')
 
   function selectPreset(mins: number) {
     setDuration(mins)
@@ -65,7 +65,7 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
     localStorage.setItem(LS_TECHNIQUE_KEY, id)
   }
 
-  function launch() {
+  async function launch() {
     const session = buildQuickStartSession(
       subject.id,
       duration,
@@ -73,6 +73,22 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
       chapterName || null,
     )
     localStorage.setItem('activeSession', JSON.stringify(session))
+    const chapterId = chapters.find(chapter => chapter.name === chapterName)?.id ?? null
+    await recordBehaviorEvent({
+      eventType: 'session_created',
+      sessionId: session.sessionId,
+      subjectId: subject.id,
+      chapterId,
+      payload: {
+        planning_mode: 'advanced',
+        planned_seconds: session.plannedMinutes * 60,
+        input_method: 'pointer',
+        timer_display_mode: 'countdown-visible',
+        prep_checklist_mode: 'optional',
+      },
+      dedupeKey: `session-created:${session.sessionId}`,
+    })
+    void openEnabledSessionResources()
     navigate('/session')
   }
 
@@ -82,9 +98,9 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
 
   return (
     <div className="oqs-overlay" onClick={handleClose}>
-      <div className="oqs-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div ref={dialogRef} className="oqs-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="oqs-title" tabIndex={-1}>
         <div className="oqs-header">
-          <span className="oqs-title">Start: {subject.name}</span>
+          <span className="oqs-title" id="oqs-title">Start: {subject.name}</span>
           <button className="oqs-close" onClick={handleClose} aria-label="Close modal"><X size={16} /></button>
         </div>
 
@@ -154,7 +170,7 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
           })()}
         </div>
 
-        <button className="oqs-launch" onClick={launch}>
+        <button className="oqs-launch" onClick={() => void launch()}>
           Launch Session
         </button>
       </div>

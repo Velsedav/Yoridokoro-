@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-    Check, ClipboardCopy, ExternalLink, FileText, Filter, Settings2, Target, Wrench,
+    ArrowRight, Check, ClipboardCopy, ExternalLink, FileText, Filter, Settings2, Target, Wrench,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { getMetacognitionLogs, type MetacognitionLog } from '../lib/db';
 import { useTranslation } from '../lib/i18n';
@@ -49,12 +50,27 @@ export default function ObsidianMetacognitionLogs() {
 
     if (totalEntries === 0) {
         return (
-            <div className="obs-meta-page">
-                <div className="obs-meta-empty">
-                    <Wrench size={36} />
-                    <h2>{t('metacog_logs.empty') || 'No metacognition logs yet'}</h2>
-                    <p>{t('metacog_logs.empty_sub') || 'Once you complete a pit-stop reflection, it will show up here.'}</p>
-                </div>
+            <div className="obs-meta-page obs-meta-page--empty">
+                <header className="obs-meta-empty-header">
+                    <span className="obs-meta-empty-eyebrow">
+                        <Wrench size={14} aria-hidden="true" />
+                        {t('metacog_logs.archive_label') || 'System memory'}
+                    </span>
+                    <h1>{t('metacog_logs.title') || 'Metacognition'}</h1>
+                    <p>{t('metacog_logs.archive_desc') || 'Review your decisions, obstacles and system changes over time.'}</p>
+                </header>
+
+                <section className="obs-meta-empty-card" aria-labelledby="obs-meta-empty-title">
+                    <div className="obs-meta-empty-icon" aria-hidden="true"><Wrench size={24} /></div>
+                    <div className="obs-meta-empty-copy">
+                        <h2 id="obs-meta-empty-title">{t('metacog_logs.empty') || 'No metacognition logs yet'}</h2>
+                        <p>{t('metacog_logs.empty_sub') || 'Once you complete a pit-stop reflection, it will show up here.'}</p>
+                    </div>
+                    <Link className="obs-meta-empty-action" to="/metacognition">
+                        {t('metacog_logs.start_reflection') || 'Start a reflection'}
+                        <ArrowRight size={16} aria-hidden="true" />
+                    </Link>
+                </section>
             </div>
         );
     }
@@ -107,6 +123,7 @@ export default function ObsidianMetacognitionLogs() {
                                     className={`obs-meta-rail-item${active ? ' is-active' : ''}`}
                                     onClick={() => setSelectedMonthKey(key)}
                                     onMouseEnter={() => playSFX(SFX.HOVER)}
+                                    aria-current={active ? 'page' : undefined}
                                 >
                                     <span className="obs-meta-rail-item-month">{formatMonthLabel(key)}</span>
                                     <span className="obs-meta-rail-item-count">

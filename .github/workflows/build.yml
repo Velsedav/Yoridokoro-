@@ -1,4 +1,4 @@
-name: Build & Release Study Buddy (Electron)
+name: Build & Release Yoridokoro
 
 on:
   pull_request:
@@ -45,6 +45,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node -e "if ('v' + require('./package.json').version !== process.env.GITHUB_REF_NAME) process.exit(1)"
+
       - name: Rebuild native modules for Electron
         run: npx electron-rebuild -f -w better-sqlite3
 
@@ -57,7 +61,7 @@ jobs:
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
-        run: npx electron-builder --win nsis --publish never --config.win.signAndEditExecutable=false
+        run: npx electron-builder --win nsis portable --publish never --config.win.signAndEditExecutable=false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -87,13 +91,14 @@ jobs:
           draft: true
           files: artifacts/**/*
           body: |
-            ## Study Buddy ${{ github.ref_name }} (Electron)
+            ## Yoridokoro ${{ github.ref_name }}
 
             ### Downloads
-            - **Windows**: `.exe` NSIS installer
+            - **Windows**: `.exe` installer or portable version
             - **Linux**: `.deb` package or `.AppImage`
 
             ### Installation
-            - **Windows**: Run the `.exe` installer
-            - **Linux (.deb)**: `sudo dpkg -i study-buddy_*.deb`
-            - **Linux (.AppImage)**: `chmod +x Study*.AppImage && ./Study*.AppImage`
+            - **Windows installer**: run `Yoridokoro Setup … .exe`
+            - **Windows portable**: run `Yoridokoro … Portable.exe`
+            - **Linux (.deb)**: `sudo dpkg -i yoridokoro_*.deb`
+            - **Linux (.AppImage)**: `chmod +x Yoridokoro*.AppImage && ./Yoridokoro*.AppImage`

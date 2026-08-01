@@ -1,13 +1,23 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, AlignJustify, Columns2, Wand2, Undo2, Redo2, Bell, BellOff, Plus, Zap, MoreVertical, Check, X } from 'lucide-react'
+import { Play, AlignJustify, Columns2, Wand2, Undo2, Redo2, Bell, BellOff, Plus, Zap, MoreVertical, Check, X, CalendarDays, ArrowRight, BookOpenCheck, Clock3, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { getSubjects, getAllTags, getAllSubjectTagsMap } from '../lib/db'
 import type { Subject, Tag } from '../lib/db'
-import { getChaptersForSubject } from '../lib/chapters'
+import { getAllChapters, getChaptersForSubject } from '../lib/chapters'
 import type { Chapter, FocusType } from '../lib/chapters'
 import { TECHNIQUES, CATEGORY_LABELS, CATEGORY_COLORS, getTierColor, type TierType, type TechCategory } from '../lib/techniques'
 import { useUndoRedo } from '../lib/undo'
 import { ANALYTICS_CATEGORY_COLORS } from '../lib/analytics-utils'
+import { buildPlannerRecommendations, type PlannerRecommendation } from '../lib/plannerRecommendations'
+import { buildGuidedDraft, guidedObjectiveKey } from '../lib/guidedSession'
+import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
+import { useTranslation } from '../lib/i18n'
+import {
+  ANALYTICS_POLICY_ID,
+  ANALYTICS_POLICY_VERSION,
+  recordBehaviorEvent,
+  type SessionAnalyticsContext,
+} from '../lib/behaviorAnalytics'
 import {
   generateBlocks,
   formatSessionSummary,
@@ -25,6 +35,10 @@ const LS_REPEATS_KEY = 'obsidian-planner-repeats'
 const LS_ALERT_KEY = 'obsidian-planner-alert'
 
 const SHAPE_NAMES: PlannerShapeName[] = ['25/5', '50/10', '90/15', 'Custom']
+
+function isEditingTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
+}
 
 interface ViewProps {
   blocks: PlannerBlock[]
@@ -63,6 +77,7 @@ function moveBlock(blocks: PlannerBlock[], id: string, dir: -1 | 1): PlannerBloc
 
 export default function ObsidianPlanner() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   const [view, setView] = useState<PlannerView>(() =>
     (localStorage.getItem(LS_VIEW_KEY) as PlannerView | null) ?? 'timeline'
@@ -82,19 +97,63 @@ export default function ObsidianPlanner() {
   const { present: blocks, set: setBlocks, undo, canUndo, redo, canRedo } = useUndoRedo<PlannerBlock[]>([])
 
   const [subjects, setSubjects] = useState<Subject[]>([])
+  const [chapters, setChapters] = useState<Chapter[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [subjectTagsMap, setSubjectTagsMap] = useState<Map<string, string[]>>(new Map())
+  const [dataReady, setDataReady] = useState(false)
+  const [suggestionIndex, setSuggestionIndex] = useState(0)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const guidedStartRef = useRef<HTMLButtonElement>(null)
+  const opportunityIdRef = useRef(crypto.randomUUID())
 
   useEffect(() => {
     let mounted = true
-    Promise.all([getSubjects(), getAllTags(), getAllSubjectTagsMap()]).then(([subs, tags, tagsMap]) => {
-      if (!mounted) return
-      setSubjects(subs.filter(s => !s.deleted_at && !s.archived))
-      setAllTags(tags)
-      setSubjectTagsMap(tagsMap)
-    })
+    Promise.all([getSubjects(), getAllTags(), getAllSubjectTagsMap()])
+      .then(([subs, tags, tagsMap]) => {
+        if (!mounted) return
+        setSubjects(subs.filter(s => !s.deleted_at && !s.archived))
+        setChapters(getAllChapters())
+        setAllTags(tags)
+        setSubjectTagsMap(tagsMap)
+      })
+      .catch(error => console.error('Could not load planner recommendations', error))
+      .finally(() => { if (mounted) setDataReady(true) })
     return () => { mounted = false }
   }, [])
+
+  const recommendations = useMemo(
+    () => buildPlannerRecommendations(subjects, chapters),
+    [subjects, chapters],
+  )
+  const visibleRecommendations = recommendations.slice(0, 3)
+  const selectedRecommendation = visibleRecommendations[Math.min(suggestionIndex, Math.max(0, visibleRecommendations.length - 1))]
+  const hasActiveSession = Boolean(localStorage.getItem('activeSession'))
+
+  useEffect(() => {
+    setSuggestionIndex(index => Math.min(index, Math.max(0, visibleRecommendations.length - 1)))
+  }, [visibleRecommendations.length])
+
+  useEffect(() => {
+    if (!dataReady || hasActiveSession || !selectedRecommendation) return
+    void recordBehaviorEvent({
+      eventType: 'recommendation_exposed',
+      opportunityId: opportunityIdRef.current,
+      recommendationId: selectedRecommendation.id,
+      subjectId: selectedRecommendation.subjectId,
+      chapterId: selectedRecommendation.chapterId,
+      policyId: ANALYTICS_POLICY_ID,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      payload: {
+        recommendation_kind: selectedRecommendation.kind,
+        recommendation_reason: selectedRecommendation.reason,
+        candidate_rank: suggestionIndex + 1,
+        candidate_count: visibleRecommendations.length,
+        timer_display_mode: 'countdown-visible',
+        prep_checklist_mode: 'optional',
+      },
+      dedupeKey: `recommendation-exposed:${opportunityIdRef.current}:${selectedRecommendation.id}`,
+    })
+  }, [dataReady, hasActiveSession, selectedRecommendation, suggestionIndex, visibleRecommendations.length])
 
   const activeShape = shapeName === 'Custom' ? customShape : PLANNER_SHAPES[shapeName]
 
@@ -134,6 +193,7 @@ export default function ObsidianPlanner() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing || e.repeat || isEditingTarget(e.target)) return
       if (e.ctrlKey && e.key === 'z') {
         if (e.shiftKey && canRedo) redo()
         else if (!e.shiftKey && canUndo) undo()
@@ -145,24 +205,148 @@ export default function ObsidianPlanner() {
 
   const canStart = blocks.some(b => b.type === 'WORK' && b.subject_id)
 
-  function startSession() {
-    if (!canStart) return
-    const planned = blocks.reduce((acc, b) => acc + b.minutes, 0)
+  async function launchSession(
+    draft: PlannerBlock[],
+    template: string,
+    repeatCount: number,
+    analytics: SessionAnalyticsContext,
+    inputMethod: 'keyboard' | 'pointer',
+  ) {
+    const planned = draft.reduce((acc, b) => acc + b.minutes, 0)
+    const sessionId = crypto.randomUUID()
+    const firstWorkBlock = draft.find(block => block.type === 'WORK')
     const session = {
-      sessionId: crypto.randomUUID(),
+      sessionId,
       startedAt: new Date().toISOString(),
       nowBlockIdx: 0,
-      remainingSeconds: blocks[0]?.minutes * 60 ?? 0,
+      remainingSeconds: (draft[0]?.minutes ?? 0) * 60,
       paused: false,
-      draft: blocks,
-      template: shapeName === 'Custom' ? 'Custom' : shapeName,
-      repeats,
+      draft,
+      template,
+      repeats: repeatCount,
       plannedMinutes: planned,
       fiveMinAlert,
+      elapsedSecondsByBlock: {},
+      analytics,
     }
+    localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
+    localStorage.removeItem(SESSION_RETURN_PATH_KEY)
     localStorage.setItem('activeSession', JSON.stringify(session))
+    await recordBehaviorEvent({
+      eventType: 'session_created',
+      opportunityId: analytics.opportunityId,
+      recommendationId: analytics.recommendationId,
+      sessionId,
+      subjectId: firstWorkBlock?.subject_id,
+      chapterId: analytics.chapterId,
+      policyId: analytics.policyId,
+      policyVersion: analytics.policyVersion,
+      payload: {
+        planning_mode: analytics.planningMode,
+        planned_seconds: planned * 60,
+        input_method: inputMethod,
+        timer_display_mode: 'countdown-visible',
+        prep_checklist_mode: 'optional',
+      },
+      dedupeKey: `session-created:${sessionId}`,
+    })
     navigate('/session')
   }
+
+  function startSession(inputMethod: 'keyboard' | 'pointer' = 'pointer') {
+    if (!canStart) return
+    void launchSession(
+      blocks,
+      shapeName === 'Custom' ? 'Custom' : shapeName,
+      repeats,
+      { planningMode: 'advanced' },
+      inputMethod,
+    )
+  }
+
+  function recommendationObjective(recommendation: PlannerRecommendation) {
+    return t(guidedObjectiveKey(recommendation))
+  }
+
+  async function startGuidedSession(inputMethod: 'keyboard' | 'pointer' = 'pointer') {
+    const fresh = buildPlannerRecommendations(subjects, getAllChapters())
+    const recommendation = fresh.find(item => item.id === selectedRecommendation?.id) ?? fresh[0]
+    if (!recommendation) return
+    await recordBehaviorEvent({
+      eventType: 'recommendation_accepted',
+      opportunityId: opportunityIdRef.current,
+      recommendationId: recommendation.id,
+      subjectId: recommendation.subjectId,
+      chapterId: recommendation.chapterId,
+      policyId: ANALYTICS_POLICY_ID,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      payload: {
+        recommendation_kind: recommendation.kind,
+        recommendation_reason: recommendation.reason,
+        input_method: inputMethod,
+      },
+      dedupeKey: `recommendation-accepted:${opportunityIdRef.current}`,
+    })
+    await launchSession(
+      buildGuidedDraft(recommendation, recommendationObjective(recommendation)),
+      '25/5',
+      1,
+      {
+        opportunityId: opportunityIdRef.current,
+        recommendationId: recommendation.id,
+        chapterId: recommendation.chapterId,
+        policyId: ANALYTICS_POLICY_ID,
+        policyVersion: ANALYTICS_POLICY_VERSION,
+        planningMode: 'guided',
+      },
+      inputMethod,
+    )
+  }
+
+  function requestOtherSuggestion() {
+    if (!selectedRecommendation || visibleRecommendations.length < 2) return
+    void recordBehaviorEvent({
+      eventType: 'recommendation_alternative_requested',
+      opportunityId: opportunityIdRef.current,
+      recommendationId: selectedRecommendation.id,
+      subjectId: selectedRecommendation.subjectId,
+      chapterId: selectedRecommendation.chapterId,
+      policyId: ANALYTICS_POLICY_ID,
+      policyVersion: ANALYTICS_POLICY_VERSION,
+      payload: {
+        candidate_rank: suggestionIndex + 1,
+        candidate_count: visibleRecommendations.length,
+        input_method: 'pointer',
+      },
+    })
+    setSuggestionIndex(index => (index + 1) % visibleRecommendations.length)
+  }
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.isComposing || event.repeat || isEditingTarget(event.target)) return
+      if (event.key === 'Escape' && advancedOpen) {
+        event.preventDefault()
+        setAdvancedOpen(false)
+        requestAnimationFrame(() => guidedStartRef.current?.focus())
+        return
+      }
+      if (event.ctrlKey && event.key === 'Enter' && advancedOpen && canStart) {
+        event.preventDefault()
+        startSession('keyboard')
+        return
+      }
+      if (event.key !== 'Enter' || event.ctrlKey || event.altKey || event.metaKey || advancedOpen) return
+      if (event.target instanceof HTMLElement && event.target.closest('button, a, summary')) return
+      event.preventDefault()
+      if (hasActiveSession) navigate('/session')
+      else void startGuidedSession('keyboard')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // The action intentionally follows the currently displayed stable proposal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advancedOpen, canStart, hasActiveSession, selectedRecommendation?.id, subjects])
 
   const [wizardStep, setWizardStep] = useState<1 | 2>(1)
   const [wizardSelected, setWizardSelected] = useState<string[]>([])
@@ -182,63 +366,188 @@ export default function ObsidianPlanner() {
     setWizardStep(2)
   }
 
+  function recommendationReason(recommendation: PlannerRecommendation) {
+    if (recommendation.reason === 'overdue') {
+      return t('planner.reason_overdue', { days: recommendation.daysOverdue })
+    }
+    return t(`planner.reason_${recommendation.reason.replace('-', '_')}`)
+  }
+
+  const selectedTechnique = TECHNIQUES.find(technique => technique.id === selectedRecommendation?.suggestedTechniqueId)
+  const activeSubjectIds = new Set(subjects.map(subject => subject.id))
+  const hasChapters = chapters.some(chapter => activeSubjectIds.has(chapter.subjectId) && !chapter.archived)
+
   return (
-    <div className="op-root">
-      <TopBar
-        view={view}
-        onViewChange={changeView}
-        canStart={canStart}
-        onStart={startSession}
-      />
-      <ConfigStrip
-        shapeName={shapeName}
-        customShape={customShape}
-        onCustomShapeChange={(s) => { setCustomShape(s); changeShape('Custom') }}
-        onShapeChange={changeShape}
-        repeats={repeats}
-        onRepeatsChange={changeRepeats}
-        summary={formatSessionSummary(blocks)}
-        canUndo={canUndo}
-        onUndo={undo}
-        canRedo={canRedo}
-        onRedo={redo}
-        fiveMinAlert={fiveMinAlert}
-        onToggleAlert={toggleAlert}
-      />
-      <div className="op-content">
-        {view === 'timeline' && (
-          <TimelineView
-            blocks={blocks} setBlocks={setBlocks}
-            subjects={subjects} allTags={allTags} subjectTagsMap={subjectTagsMap}
-            activeShape={activeShape} shapeName={shapeName}
-          />
+    <div className="op-root op-launchpad-root">
+      <header className="op-launchpad-page-header">
+        <div>
+          <span className="op-launchpad-eyebrow"><Sparkles size={14} /> {t('planner.eyebrow')}</span>
+          <h1>{t('planner.page_title')}</h1>
+          <p>{t('planner.page_intro')}</p>
+        </div>
+        <div className="op-keyboard-promise" aria-label={t('planner.keyboard_hint')}>
+          <kbd>↵</kbd>
+          <span>{t('planner.keyboard_hint')}</span>
+        </div>
+      </header>
+
+      <main className="op-launchpad-main">
+        {hasActiveSession ? (
+          <section className="op-resume-card" aria-labelledby="op-resume-title">
+            <span className="op-recommendation-kicker"><Clock3 size={14} /> {t('planner.session_active')}</span>
+            <h2 id="op-resume-title">{t('planner.resume_title')}</h2>
+            <p>{t('planner.resume_text')}</p>
+            <button ref={guidedStartRef} autoFocus className="op-guided-start" onClick={() => navigate('/session')} aria-keyshortcuts="Enter">
+              <Play size={17} fill="currentColor" /> {t('planner.resume_action')}
+            </button>
+          </section>
+        ) : !dataReady ? (
+          <section className="op-guided-loading" aria-live="polite" aria-busy="true">
+            <span className="op-guided-loading-mark" aria-hidden="true">拠</span>
+            <p>{t('planner.loading')}</p>
+          </section>
+        ) : selectedRecommendation ? (
+          <div className="op-guided-layout">
+            <article className="op-recommendation-card" aria-labelledby="op-recommendation-title">
+              <header className="op-recommendation-header">
+                <span className={`op-recommendation-kicker is-${selectedRecommendation.kind}`}>
+                  {selectedRecommendation.kind === 'progress' ? <ArrowRight size={14} /> : <BookOpenCheck size={14} />}
+                  {t(`planner.kind_${selectedRecommendation.kind}`)}
+                </span>
+              </header>
+
+              <div className="op-recommendation-copy">
+                <p className="op-recommendation-subject">{selectedRecommendation.subjectName}</p>
+                <h2 id="op-recommendation-title">{selectedRecommendation.chapterName}</h2>
+                <div className="op-recommendation-meta">
+                  <span>{t('planner.chapter_position', { current: selectedRecommendation.chapterPosition, total: selectedRecommendation.chapterCount })}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{t('planner.focus_duration')}</span>
+                </div>
+              </div>
+
+              <div className="op-guided-goal">
+                <span>{t('planner.goal_label')}</span>
+                <p>{recommendationObjective(selectedRecommendation)}</p>
+              </div>
+
+              <dl className="op-recommendation-details">
+                <div>
+                  <dt>{t('planner.why_label')}</dt>
+                  <dd>{recommendationReason(selectedRecommendation)}</dd>
+                </div>
+                <div>
+                  <dt>{t('planner.technique_label')}</dt>
+                  <dd>{selectedTechnique?.name ?? t('planner.technique_fallback')}</dd>
+                </div>
+              </dl>
+
+              <div className="op-guided-actions">
+                <button
+                  ref={guidedStartRef}
+                  autoFocus
+                  className="op-guided-start"
+                  onClick={() => void startGuidedSession('pointer')}
+                  aria-keyshortcuts="Enter"
+                >
+                  <Play size={17} fill="currentColor" />
+                  <span>{t('planner.start_preparation')}<small>{t('planner.session_structure')}</small></span>
+                  <kbd aria-hidden="true">↵</kbd>
+                </button>
+                <div className="op-guided-secondary-actions">
+                  {visibleRecommendations.length > 1 && (
+                    <button className="op-other-suggestion" onClick={requestOtherSuggestion}>
+                      {t('planner.other_suggestion')} <ArrowRight size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </article>
+
+            <aside className="op-guided-aside" aria-label={t('planner.decision_label')}>
+              <section className="op-decision-rule">
+                <span>{t('planner.decision_label')}</span>
+                <h2>{t('planner.decision_title')}</h2>
+                <p>{t('planner.decision_text')}</p>
+              </section>
+            </aside>
+          </div>
+        ) : (
+          <section className="op-empty-launchpad" aria-labelledby="op-empty-title">
+            <span className="op-recommendation-kicker"><BookOpenCheck size={14} /> {t('planner.setup_kicker')}</span>
+            <h2 id="op-empty-title">
+              {subjects.length === 0
+                ? t('planner.no_subject_title')
+                : hasChapters
+                  ? t('planner.all_caught_up_title')
+                  : t('planner.no_chapter_title')}
+            </h2>
+            <p>
+              {subjects.length === 0
+                ? t('planner.no_subject_text')
+                : hasChapters
+                  ? t('planner.all_caught_up_text')
+                  : t('planner.no_chapter_text')}
+            </p>
+            <button ref={guidedStartRef} autoFocus className="op-guided-start" onClick={() => navigate('/study')}>
+              <ArrowRight size={17} />
+              {subjects.length === 0 ? t('planner.create_subject') : t('planner.add_next_chapter')}
+            </button>
+          </section>
         )}
-        {view === 'split' && (
-          <SplitView
-            blocks={blocks} setBlocks={setBlocks}
-            subjects={subjects} allTags={allTags} subjectTagsMap={subjectTagsMap}
-            activeShape={activeShape} shapeName={shapeName}
-          />
-        )}
-        {view === 'wizard' && (
-          <WizardView
-            blocks={blocks} setBlocks={setBlocks}
-            subjects={subjects} allTags={allTags} subjectTagsMap={subjectTagsMap}
-            activeShape={activeShape} shapeName={shapeName}
-            step={wizardStep}
-            selected={wizardSelected}
-            tagFilter={wizardTagFilter}
-            onTagFilterChange={setWizardTagFilter}
-            onToggleSubject={(id) => {
-              setWizardSelected(prev =>
-                prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-              )
-            }}
-            onBuild={buildWizardPlan}
-            onBack={() => { setWizardStep(1); setWizardSelected([]) }}
-          />
-        )}
-      </div>
+      </main>
+
+      {!hasActiveSession && (
+        <details
+          className="op-advanced-shell"
+          open={advancedOpen}
+          onToggle={event => setAdvancedOpen(event.currentTarget.open)}
+        >
+          <summary>
+            <span><SlidersHorizontal size={16} /><span><strong>{t('planner.adjust_session')}</strong><small>{t('planner.adjust_hint')}</small></span></span>
+            <ArrowRight className="op-advanced-chevron" size={16} />
+          </summary>
+          <div className="op-advanced-workspace" id="op-advanced-workspace">
+            <TopBar
+              view={view}
+              onViewChange={changeView}
+              canStart={canStart}
+              onStart={() => startSession('pointer')}
+            />
+            <ConfigStrip
+              shapeName={shapeName}
+              customShape={customShape}
+              onCustomShapeChange={(s) => { setCustomShape(s); changeShape('Custom') }}
+              onShapeChange={changeShape}
+              repeats={repeats}
+              onRepeatsChange={changeRepeats}
+              summary={formatSessionSummary(blocks)}
+              canUndo={canUndo}
+              onUndo={undo}
+              canRedo={canRedo}
+              onRedo={redo}
+              fiveMinAlert={fiveMinAlert}
+              onToggleAlert={toggleAlert}
+            />
+            <div className="op-content">
+              {view === 'timeline' && (
+                <TimelineView blocks={blocks} setBlocks={setBlocks} subjects={subjects} allTags={allTags} subjectTagsMap={subjectTagsMap} activeShape={activeShape} shapeName={shapeName} />
+              )}
+              {view === 'split' && (
+                <SplitView blocks={blocks} setBlocks={setBlocks} subjects={subjects} allTags={allTags} subjectTagsMap={subjectTagsMap} activeShape={activeShape} shapeName={shapeName} />
+              )}
+              {view === 'wizard' && (
+                <WizardView
+                  blocks={blocks} setBlocks={setBlocks} subjects={subjects} allTags={allTags} subjectTagsMap={subjectTagsMap} activeShape={activeShape} shapeName={shapeName}
+                  step={wizardStep} selected={wizardSelected} tagFilter={wizardTagFilter} onTagFilterChange={setWizardTagFilter}
+                  onToggleSubject={(id) => setWizardSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+                  onBuild={buildWizardPlan} onBack={() => { setWizardStep(1); setWizardSelected([]) }}
+                />
+              )}
+            </div>
+          </div>
+        </details>
+      )}
     </div>
   )
 }
@@ -251,25 +560,15 @@ function TopBar({ view, onViewChange, canStart, onStart }: {
 }) {
   return (
     <div className="op-topbar">
-      <div className="op-view-pills">
-        <button className={`op-view-pill${view === 'timeline' ? ' op-view-pill-active' : ''}`} onClick={() => onViewChange('timeline')}>
-          <AlignJustify size={14} /> Timeline
-        </button>
-        <button className={`op-view-pill${view === 'split' ? ' op-view-pill-active' : ''}`} onClick={() => onViewChange('split')}>
-          <Columns2 size={14} /> Split
-        </button>
-        <button className={`op-view-pill${view === 'wizard' ? ' op-view-pill-active' : ''}`} onClick={() => onViewChange('wizard')}>
-          <Wand2 size={14} /> Wizard
-        </button>
+      <div className="op-topbar-identity"><span><CalendarDays size={13} /> Construire la session</span><strong>Pomodoro</strong></div>
+      <div className="op-topbar-controls">
+        <div className="op-view-pills" aria-label="Mode de planification">
+          <button className={`op-view-pill${view === 'timeline' ? ' op-view-pill-active' : ''}`} onClick={() => onViewChange('timeline')} aria-pressed={view === 'timeline'}><AlignJustify size={14} /> Chronologie</button>
+          <button className={`op-view-pill${view === 'split' ? ' op-view-pill-active' : ''}`} onClick={() => onViewChange('split')} aria-pressed={view === 'split'}><Columns2 size={14} /> Partagée</button>
+          <button className={`op-view-pill${view === 'wizard' ? ' op-view-pill-active' : ''}`} onClick={() => onViewChange('wizard')} aria-pressed={view === 'wizard'}><Wand2 size={14} /> Assistant</button>
+        </div>
+        <button className="op-start-btn" onClick={onStart} disabled={!canStart} title={!canStart ? 'Ajoutez au moins une matière pour démarrer' : undefined}><Play size={14} fill="currentColor" /> Démarrer</button>
       </div>
-      <button
-        className="op-start-btn"
-        onClick={onStart}
-        disabled={!canStart}
-        title={!canStart ? 'Add at least one subject to start' : undefined}
-      >
-        <Play size={14} fill="currentColor" /> Start Session
-      </button>
     </div>
   )
 }
@@ -520,12 +819,14 @@ interface PlanBlockProps {
   onMoveDown: () => void
   canMoveUp: boolean
   canMoveDown: boolean
+  openPopoversUpward?: boolean
 }
 
 function PlanBlock({
   block, subjects, isExpanded, isMenuOpen, isPulsing, isNextTarget = false,
   onToggleExpand, onMenuToggle, onUpdate,
   onDuplicate, onDelete, onMoveUp, onMoveDown, canMoveUp, canMoveDown,
+  openPopoversUpward = false,
 }: PlanBlockProps) {
   const subject = subjects.find(s => s.id === block.subject_id)
   const tech = TECHNIQUES.find(t => t.id === block.technique_id)
@@ -572,29 +873,38 @@ function PlanBlock({
   const typeClass = { PREP: 'op-block-prep', WORK: 'op-block-work', BREAK: 'op-block-break' }[block.type]
 
   return (
-    <div className={`op-block ${typeClass}${isPulsing ? ' op-block-pulsing' : ''}${isNextTarget ? ' op-block-next-target' : ''}`}>
-      <div className="op-block-collapsed" onClick={onToggleExpand}>
-        <span className="op-block-type-icon">{typeIcon}</span>
-        <span className="op-block-type-label">{typeLabel}</span>
-        <span className="op-block-mins">{block.minutes}m</span>
-        {block.type === 'WORK' && (
-          subject
-            ? <span className="op-block-subject">{subject.name}</span>
-            : <span className="op-block-subject op-block-subject-empty">
-                {isNextTarget ? '← click a subject' : '+ Assign subject'}
-              </span>
-        )}
-        {block.type !== 'WORK' && <span className="op-block-spacer" />}
-        {block.type === 'WORK' && subject && (tech || block.chapter_name) && (
-          <span className="op-block-meta">
-            {[tech?.name, block.chapter_name].filter(Boolean).join(' · ')}
-          </span>
-        )}
+    <div className={`op-block ${typeClass}${isPulsing ? ' op-block-pulsing' : ''}${isNextTarget ? ' op-block-next-target' : ''}${openPopoversUpward ? ' op-block-popovers-up' : ''}`}>
+      <div className="op-block-collapsed">
+        <button
+          type="button"
+          className="op-block-toggle"
+          onClick={onToggleExpand}
+          aria-expanded={isExpanded}
+          aria-controls={`op-block-details-${block.id}`}
+        >
+          <span className="op-block-type-icon">{typeIcon}</span>
+          <span className="op-block-type-label">{typeLabel}</span>
+          <span className="op-block-mins">{block.minutes}m</span>
+          {block.type === 'WORK' && (
+            subject
+              ? <span className="op-block-subject">{subject.name}</span>
+              : <span className="op-block-subject op-block-subject-empty">
+                  {isNextTarget ? '← click a subject' : '+ Assign subject'}
+                </span>
+          )}
+          {block.type !== 'WORK' && <span className="op-block-spacer" />}
+          {block.type === 'WORK' && subject && (tech || block.chapter_name) && (
+            <span className="op-block-meta">
+              {[tech?.name, block.chapter_name].filter(Boolean).join(' · ')}
+            </span>
+          )}
+        </button>
         <div className="op-block-menu-wrap">
           <button
             className="op-block-menu-btn"
             onClick={e => { e.stopPropagation(); onMenuToggle(e) }}
             aria-label="Block options"
+            aria-expanded={isMenuOpen}
           >
             <MoreVertical size={14} />
           </button>
@@ -610,7 +920,7 @@ function PlanBlock({
       </div>
 
       {isExpanded && block.type === 'WORK' && (
-        <div className="op-block-expand">
+        <div className="op-block-expand" id={`op-block-details-${block.id}`}>
           <div className="op-expand-field">
             <label className="op-expand-label">Subject</label>
             <div className="op-subject-combo">
@@ -631,9 +941,9 @@ function PlanBlock({
               {showSubjectDropdown && filteredSubjects.length > 0 && (
                 <div className="op-subject-dropdown">
                   {filteredSubjects.map(s => (
-                    <div key={s.id} className="op-subject-option" onMouseDown={() => selectSubject(s)}>
+                    <button type="button" key={s.id} className="op-subject-option" onMouseDown={() => selectSubject(s)}>
                       {s.name}
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -746,6 +1056,7 @@ function TimelineView({ blocks, setBlocks, subjects, activeShape }: ViewProps) {
           onMoveDown={() => { setBlocks(moveBlock(blocks, block.id, 1)); setMenuId(null) }}
           canMoveUp={idx > 0}
           canMoveDown={idx < blocks.length - 1}
+          openPopoversUpward={blocks.length > 2 && idx >= blocks.length - 2}
         />
       ))}
       <button className="op-add-block-btn" onClick={addWorkBlock}>
@@ -834,9 +1145,9 @@ function SplitView({ blocks, setBlocks, subjects, allTags: _allTags, subjectTags
             <div className="op-empty" style={{ padding: '20px 8px' }}>No subjects found</div>
           )}
           {filteredSubjects.map(s => (
-            <div key={s.id} className={`op-subject-item${!hasEmptySlot ? ' op-subject-item-disabled' : ''}`} onClick={() => assignSubject(s)}>
+            <button type="button" key={s.id} className={`op-subject-item${!hasEmptySlot ? ' op-subject-item-disabled' : ''}`} onClick={() => assignSubject(s)} disabled={!hasEmptySlot}>
               {s.name}
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -866,6 +1177,7 @@ function SplitView({ blocks, setBlocks, subjects, allTags: _allTags, subjectTags
               onMoveDown={() => { setBlocks(moveBlock(blocks, block.id, 1)); setMenuId(null) }}
               canMoveUp={idx > 0}
               canMoveDown={idx < blocks.length - 1}
+              openPopoversUpward={blocks.length > 2 && idx >= blocks.length - 2}
             />
           </div>
         ))}
@@ -934,6 +1246,7 @@ function WizardView({
                   key={s.id}
                   className={`op-wizard-subject-card${isSelected ? ' op-wizard-subject-selected' : ''}`}
                   onClick={() => onToggleSubject(s.id)}
+                  aria-pressed={isSelected}
                 >
                   <span className="op-wizard-check">
                     {isSelected && <Check size={10} />}
@@ -973,6 +1286,7 @@ function WizardView({
               onMoveDown={() => { setBlocks(moveBlock(blocks, block.id, 1)); setMenuId(null) }}
               canMoveUp={idx > 0}
               canMoveDown={idx < blocks.length - 1}
+              openPopoversUpward={blocks.length > 2 && idx >= blocks.length - 2}
             />
           ))}
         </>
