@@ -66,13 +66,20 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
   }
 
   async function launch() {
-    const chapterId = chapters.find(chapter => chapter.name === chapterName)?.id ?? null
+    const selectedChapter = chapters.find(chapter => chapter.name === chapterName)
+    const chapterId = selectedChapter?.id ?? null
+    const activeChapters = chapters.filter(chapter => !chapter.archived)
+    const chapterPosition = selectedChapter ? activeChapters.findIndex(chapter => chapter.id === selectedChapter.id) + 1 : null
     const session = buildQuickStartSession(
       subject.id,
       duration,
       techniqueId || null,
       chapterId,
       chapterName || null,
+      chapterPosition && chapterPosition > 0 ? chapterPosition : null,
+      activeChapters.length || null,
+      selectedChapter?.studyCount ?? null,
+      Boolean(selectedChapter?.resumePoint?.trim()),
     )
     localStorage.setItem('activeSession', JSON.stringify(session))
     await recordBehaviorEvent({

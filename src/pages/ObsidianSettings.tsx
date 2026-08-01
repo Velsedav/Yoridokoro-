@@ -223,7 +223,7 @@ function ObservationDataPanel() {
             if (result) {
                 setStatus({
                     type: 'success',
-                    message: `${result.eventCount} événements exportés dans ${result.folder}. Joignez les fichiers Markdown et CSV à ChatGPT.`,
+                    message: `${result.eventCount} événements exportés dans ${result.folder}. Joignez le Markdown et les trois CSV à ChatGPT.`,
                 });
             }
         } catch (error) {
@@ -290,7 +290,7 @@ function ObservationDataPanel() {
 
             <section className="obs-settings-section">
                 <h2 className="obs-settings-section-label">Exporter pour analyse</h2>
-                <p className="obs-settings-hint">Yoridokoro crée un rapport Markdown explicatif et un CSV structuré. Vérifiez-les avant de les joindre à ChatGPT ou à un autre outil.</p>
+                <p className="obs-settings-hint">Yoridokoro crée un rapport Markdown et trois CSV : événements, opportunités et sessions. Vérifiez-les avant de les joindre à ChatGPT ou à un autre outil.</p>
                 <div className="observation-export-options">
                     <label className="obs-settings-field">
                         <span>Période</span>
@@ -307,7 +307,7 @@ function ObservationDataPanel() {
                 </div>
                 <div className="obs-settings-row observation-export-actions">
                     <button type="button" className="btn btn-primary" onClick={() => void handleExport()} disabled={working || !summary?.event_count}>
-                        <FileDown size={15} /> {working ? 'Création…' : 'Créer Markdown + CSV'}
+                        <FileDown size={15} /> {working ? 'Création…' : 'Créer Markdown + 3 CSV'}
                     </button>
                     <button type="button" className="btn btn-secondary" onClick={() => void handleCopyPrompt()}>
                         <ClipboardCopy size={15} /> Copier seulement le prompt

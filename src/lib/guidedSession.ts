@@ -66,6 +66,27 @@ export function createActiveSession(
     fiveMinAlert,
     elapsedSecondsByBlock: {},
     analytics,
+    runnerEntered: false,
+  }
+}
+
+export function recommendationObservationContext(
+  recommendation: PlannerRecommendation,
+  surface: 'today' | 'planner' | 'subject_creation',
+  entrySource: 'guided' | 'just_five' | 'create_and_start',
+  studyCountBefore: number | null,
+): Pick<SessionAnalyticsContext,
+  'surface' | 'entrySource' | 'recommendationKind' | 'recommendationReason' |
+  'chapterPosition' | 'chapterCount' | 'studyCountBefore' | 'resumePointPresent'> {
+  return {
+    surface,
+    entrySource,
+    recommendationKind: recommendation.kind,
+    recommendationReason: recommendation.reason,
+    chapterPosition: recommendation.chapterPosition,
+    chapterCount: recommendation.chapterCount,
+    studyCountBefore,
+    resumePointPresent: Boolean(recommendation.resumePoint?.trim()),
   }
 }
 

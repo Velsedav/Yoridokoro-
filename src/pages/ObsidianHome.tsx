@@ -11,7 +11,7 @@ import SubjectEditorModal from '../components/SubjectEditorModal'
 import NextStudyStep from '../components/NextStudyStep'
 import { buildPlannerRecommendations, type PlannerRecommendation } from '../lib/plannerRecommendations'
 import { usePlannerAllocation } from '../lib/plannerAllocation'
-import { buildGuidedDraft, createActiveSession, createFiveMinuteSession, guidedObjectiveKey } from '../lib/guidedSession'
+import { buildGuidedDraft, createActiveSession, createFiveMinuteSession, guidedObjectiveKey, recommendationObservationContext } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
 import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
@@ -179,6 +179,9 @@ export default function ObsidianHome() {
       payload: {
         recommendation_kind: recommendation.kind,
         recommendation_reason: recommendation.reason,
+        surface: 'planner', chapter_position: recommendation.chapterPosition,
+        study_count_before: allChapters.find(chapter => chapter.id === recommendation.chapterId)?.studyCount ?? null,
+        resume_point_present: Boolean(recommendation.resumePoint?.trim()),
         candidate_rank: suggestionIndex + 1,
         candidate_count: recommendations.length,
         timer_display_mode: 'countdown-visible',
@@ -229,7 +232,12 @@ export default function ObsidianHome() {
     setAllChapters(getAllChapters())
   }
 
-  async function launchRecommendation(target: PlannerRecommendation, justFive = false, inputMethod: 'keyboard' | 'pointer' = 'pointer') {
+  async function launchRecommendation(
+    target: PlannerRecommendation,
+    justFive = false,
+    inputMethod: 'keyboard' | 'pointer' = 'pointer',
+    origin: 'planner' | 'subject_creation' = 'planner',
+  ) {
     const objective = t(guidedObjectiveKey(target))
     const draft = buildGuidedDraft(target, objective)
     const analytics = {
@@ -239,6 +247,12 @@ export default function ObsidianHome() {
       policyId: ANALYTICS_POLICY_ID,
       policyVersion: ANALYTICS_POLICY_VERSION,
       planningMode: 'guided' as const,
+      ...recommendationObservationContext(
+        target,
+        origin,
+        origin === 'subject_creation' ? 'create_and_start' : justFive ? 'just_five' : 'guided',
+        allChapters.find(chapter => chapter.id === target.chapterId)?.studyCount ?? null,
+      ),
     }
     await recordBehaviorEvent({
       eventType: 'recommendation_accepted',
@@ -303,7 +317,7 @@ export default function ObsidianHome() {
       suggestedTechniqueId: chapter.focusType === 'skill' ? 's6' : chapter.focusType === 'memorisation' ? 't1' : 'disc1',
       allocationInfluenced: false,
       allocationDeficit: 0,
-    })
+    }, false, 'pointer', 'subject_creation')
   }
 
   function requestOtherRecommendation() {

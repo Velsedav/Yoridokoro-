@@ -2,6 +2,7 @@ import { getDb } from './db'
 
 export const ANALYTICS_POLICY_ID = 'yoridokoro-next-step'
 export const ANALYTICS_POLICY_VERSION = '1.0.0'
+export const OBSERVATION_FEATURE_VERSION = 'observation-v2'
 export const OBSERVATION_PREFERENCES_KEY = 'yoridokoro-observation-preferences-v1'
 
 export type BehaviorEventType =
@@ -21,6 +22,8 @@ export type BehaviorEventType =
   | 'rating_submitted'
   | 'rating_skipped'
   | 'session_closed'
+  | 'five_minute_decision'
+  | 'session_recovered'
 
 export interface SessionAnalyticsContext {
   opportunityId?: string
@@ -29,6 +32,14 @@ export interface SessionAnalyticsContext {
   policyId?: string
   policyVersion?: string
   planningMode: 'guided' | 'advanced'
+  surface?: 'today' | 'planner' | 'quick_start' | 'subject_creation'
+  entrySource?: 'guided' | 'just_five' | 'manual' | 'create_and_start' | 'recovered'
+  recommendationKind?: string | null
+  recommendationReason?: string | null
+  chapterPosition?: number | null
+  chapterCount?: number | null
+  studyCountBefore?: number | null
+  resumePointPresent?: boolean
 }
 
 export interface BehaviorEventRow {
@@ -84,6 +95,10 @@ let visitId: string | null = null
 function getVisitId() {
   if (!visitId) visitId = crypto.randomUUID()
   return visitId
+}
+
+export function getBehaviorVisitId() {
+  return getVisitId()
 }
 
 function safePayload(payload: Record<string, unknown> | undefined): Record<string, string | number | boolean | null> {

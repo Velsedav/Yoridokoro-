@@ -21,6 +21,7 @@ describe('idempotent session persistence', () => {
     }
     const blocks = [{
       id: 'draft-work', type: 'WORK', minutes: 25,
+      actual_seconds: 180,
       subject_id: 'subject-1', technique_id: 't1',
       chapter_id: 'chapter-1', chapter_name: 'Chapter 1',
       started_at: session.started_at, ended_at: session.ended_at,
@@ -34,7 +35,8 @@ describe('idempotent session persistence', () => {
     expect(first[0].sql).toContain('INSERT OR IGNORE INTO sessions')
     expect(first[1].sql).toContain('INSERT OR IGNORE INTO session_blocks')
     expect(first[1].params[0]).toBe('session-1:block:0')
-    expect(first[1].params[7]).toBe('chapter-1')
+    expect(first[1].params[5]).toBe(180)
+    expect(first[1].params[8]).toBe('chapter-1')
     expect(second[1].params[0]).toBe(first[1].params[0])
     expect(first.some((statement: { sql: string }) => statement.sql.includes("effect_type,target_id"))).toBe(true)
     expect(first.some((statement: { sql: string }) => statement.sql.includes('applied = 0'))).toBe(true)

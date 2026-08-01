@@ -10,7 +10,7 @@ import { useUndoRedo } from '../lib/undo'
 import { ANALYTICS_CATEGORY_COLORS } from '../lib/analytics-utils'
 import { buildPlannerRecommendations, type PlannerRecommendation } from '../lib/plannerRecommendations'
 import { usePlannerAllocation } from '../lib/plannerAllocation'
-import { buildFiveMinuteDraft, buildGuidedDraft, guidedObjectiveKey } from '../lib/guidedSession'
+import { buildFiveMinuteDraft, buildGuidedDraft, guidedObjectiveKey, recommendationObservationContext } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
 import {
@@ -148,6 +148,9 @@ export default function ObsidianPlanner() {
       payload: {
         recommendation_kind: selectedRecommendation.kind,
         recommendation_reason: selectedRecommendation.reason,
+        surface: 'planner', chapter_position: selectedRecommendation.chapterPosition,
+        study_count_before: getAllChapters().find(chapter => chapter.id === selectedRecommendation.chapterId)?.studyCount ?? null,
+        resume_point_present: Boolean(selectedRecommendation.resumePoint?.trim()),
         candidate_rank: suggestionIndex + 1,
         candidate_count: visibleRecommendations.length,
         timer_display_mode: 'countdown-visible',
@@ -231,6 +234,7 @@ export default function ObsidianPlanner() {
       fiveMinAlert: entryMode ? false : fiveMinAlert,
       elapsedSecondsByBlock: {},
       analytics,
+      runnerEntered: false,
       ...(entryMode ? { entryMode, fiveMinuteDecisionMade: false } : {}),
     }
     localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
@@ -260,11 +264,21 @@ export default function ObsidianPlanner() {
 
   function startSession(inputMethod: 'keyboard' | 'pointer' = 'pointer') {
     if (!canStart) return
+    const firstWork = blocks.find(block => block.type === 'WORK')
+    const chapter = firstWork?.chapter_id ? chapters.find(item => item.id === firstWork.chapter_id) : undefined
+    const subjectChapters = firstWork?.subject_id ? chapters.filter(item => item.subjectId === firstWork.subject_id && !item.archived) : []
+    const chapterPosition = chapter ? subjectChapters.findIndex(item => item.id === chapter.id) + 1 : null
     void launchSession(
       blocks,
       shapeName === 'Custom' ? 'Custom' : shapeName,
       repeats,
-      { planningMode: 'advanced' },
+      {
+        planningMode: 'advanced', surface: 'planner', entrySource: 'manual',
+        chapterPosition: chapterPosition && chapterPosition > 0 ? chapterPosition : null,
+        chapterCount: subjectChapters.length || null,
+        studyCountBefore: chapter?.studyCount ?? null,
+        resumePointPresent: Boolean(chapter?.resumePoint?.trim()),
+      },
       inputMethod,
     )
   }
@@ -303,6 +317,10 @@ export default function ObsidianPlanner() {
         policyId: ANALYTICS_POLICY_ID,
         policyVersion: ANALYTICS_POLICY_VERSION,
         planningMode: 'guided',
+        ...recommendationObservationContext(
+          recommendation, 'planner', 'guided',
+          getAllChapters().find(chapter => chapter.id === recommendation.chapterId)?.studyCount ?? null,
+        ),
       },
       inputMethod,
     )
@@ -322,7 +340,11 @@ export default function ObsidianPlanner() {
     await launchSession(
       buildFiveMinuteDraft(recommendation, recommendationObjective(recommendation)), '5-minute-start', 1,
       { opportunityId: opportunityIdRef.current, recommendationId: recommendation.id, chapterId: recommendation.chapterId,
-        policyId: ANALYTICS_POLICY_ID, policyVersion: ANALYTICS_POLICY_VERSION, planningMode: 'guided' },
+        policyId: ANALYTICS_POLICY_ID, policyVersion: ANALYTICS_POLICY_VERSION, planningMode: 'guided',
+        ...recommendationObservationContext(
+          recommendation, 'planner', 'just_five',
+          getAllChapters().find(chapter => chapter.id === recommendation.chapterId)?.studyCount ?? null,
+        ) },
       inputMethod, 'five-minute',
     )
   }

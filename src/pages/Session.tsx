@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { formatSecondsMMSS } from '../lib/time';
-import { getSubjects, saveSession, saveErrorLogEntry, markSessionEvaluated, saveSessionEvidence } from '../lib/db';
+import { getSubjects, getSessions, saveSession, saveErrorLogEntry, markSessionEvaluated, saveSessionEvidence, saveSessionContext, setSessionReturnSupportTag } from '../lib/db';
 import { TECHNIQUES } from '../lib/techniques';
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 const openPath = (path: string) => (window as any).electronAPI.shell.openPath(path);
@@ -22,7 +22,8 @@ import {
     SESSION_RETURN_PATH_KEY,
     type StudiedChapterPair,
 } from '../lib/sessionProgress';
-import { recordBehaviorEvent } from '../lib/behaviorAnalytics';
+import { getBehaviorVisitId, OBSERVATION_FEATURE_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics';
+import { clearedReturnSupportTag, inferSessionRecoveryStage, shouldAskReturnSupport } from '../lib/observationMetrics';
 import './Session.css';
 
 function readActiveSession(): any | null {
@@ -155,6 +156,29 @@ const POST_ITEM_COUNT = POST_STUDY_SECTIONS.reduce((n, s) => n + s.items.length,
 const CUSTOM_PREP_KEY = 'study-buddy-custom-prep';
 const CUSTOM_BREAK_KEY = 'study-buddy-custom-break';
 
+const RETURN_SUPPORT_CHOICES = [
+    ['clear_next_action', 'Une prochaine action claire'],
+    ['just_five', 'Juste 5 minutes'],
+    ['external_pressure', 'Une pression extérieure'],
+    ['interest', 'L’intérêt du moment'],
+    ['routine', 'La routine'],
+    ['unsure', 'Je ne sais pas'],
+] as const;
+
+function localDayNumber(value: string) {
+    const date = new Date(value);
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+}
+
+function previousSignificantSessionGap(sessions: Array<{ id: string; started_at: string; actual_seconds: number; status: string }>, sessionId: string) {
+    const current = sessions.find(item => item.id === sessionId);
+    if (!current || current.status === 'abandoned' || current.actual_seconds < 60) return null;
+    const previous = sessions
+        .filter(item => item.id !== sessionId && item.status !== 'abandoned' && item.actual_seconds >= 60 && item.started_at < current.started_at)
+        .sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
+    return previous ? Math.max(0, localDayNumber(current.started_at) - localDayNumber(previous.started_at)) : null;
+}
+
 function loadCustomPrepItems(): CustomPrepItem[] {
     try {
         const saved = localStorage.getItem(CUSTOM_PREP_KEY);
@@ -245,6 +269,8 @@ export default function Session() {
     const [resumePointInput, setResumePointInput] = useState('');
     const [evidenceSaving, setEvidenceSaving] = useState(false);
     const [evidenceError, setEvidenceError] = useState('');
+    const [returnGapDays, setReturnGapDays] = useState<number | null>(null);
+    const [returnSupportTag, setReturnSupportTag] = useState<string | null>(null);
     const [postSaveError, setPostSaveError] = useState('');
     const [pausedBeforeDialog, setPausedBeforeDialog] = useState(false);
     const persistInFlightRef = useRef<Promise<Array<{ id: string; name: string }>> | null>(null);
@@ -259,7 +285,11 @@ export default function Session() {
     useEffect(() => {
         const parsed = readActiveSession();
         if (parsed) {
-            setSession(parsed);
+            const currentVisitId = getBehaviorVisitId();
+            const wasRecovered = parsed.runnerEntered === true && parsed.runnerVisitId !== currentVisitId;
+            const entered = { ...parsed, runnerEntered: true, runnerVisitId: currentVisitId };
+            localStorage.setItem('activeSession', JSON.stringify(entered));
+            setSession(entered);
             setRemaining(parsed.remainingSeconds);
             setPaused(parsed.paused || false);
             if (parsed.progressPersisted) persistedRef.current = true;
@@ -279,7 +309,35 @@ export default function Session() {
                     });
                 }
                 setResumePointInput(typeof post.resumePoint === 'string' ? post.resumePoint : '');
+                setReturnGapDays(Number.isInteger(post.returnGapDays) ? post.returnGapDays : null);
+                setReturnSupportTag(typeof post.returnSupportTag === 'string' ? post.returnSupportTag : null);
                 setEndConfirmStep(post.step);
+            }
+            const analytics = parsed.analytics ?? {};
+            const now = new Date().toISOString();
+            void saveSessionContext({
+                session_id: parsed.sessionId,
+                surface: analytics.surface ?? null,
+                entry_source: analytics.entrySource ?? (wasRecovered ? 'recovered' : parsed.entryMode === 'five-minute' ? 'just_five' : 'manual'),
+                app_version: __APP_VERSION__, feature_version: OBSERVATION_FEATURE_VERSION,
+                recommendation_kind: analytics.recommendationKind ?? null,
+                recommendation_reason: analytics.recommendationReason ?? null,
+                chapter_position: analytics.chapterPosition ?? null,
+                chapter_count: analytics.chapterCount ?? null,
+                study_count_before: analytics.studyCountBefore ?? null,
+                resume_point_present: analytics.resumePointPresent ? 1 : 0,
+                return_support_tag: null,
+                created_at: parsed.startedAt, updated_at: now,
+            });
+            if (wasRecovered) {
+                const stage = inferSessionRecoveryStage(parsed);
+                void recordBehaviorEvent({
+                    eventType: 'session_recovered', sessionId: parsed.sessionId,
+                    blockId: parsed.draft?.[parsed.nowBlockIdx]?.id ?? null,
+                    subjectId: parsed.draft?.[parsed.nowBlockIdx]?.subject_id ?? null,
+                    chapterId: parsed.draft?.[parsed.nowBlockIdx]?.chapter_id ?? null,
+                    payload: { stage },
+                });
             }
         }
     }, []);
@@ -308,7 +366,7 @@ export default function Session() {
         persistPostSessionCheckpoint({
             step: 'total-rest', stage: postStudyStage, chapters: rateChapterList,
             index: rateChapterIdx, completedAll: pendingCompletedAll,
-            completedWorkMinutes, displayedWorkMins, restCountdown,
+            completedWorkMinutes, displayedWorkMins, restCountdown, returnGapDays, returnSupportTag,
         });
         // Persist the recovery checkpoint as the rest/review screen evolves.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -319,11 +377,11 @@ export default function Session() {
         persistPostSessionCheckpoint({
             step: 'evidence', chapters: rateChapterList, index: rateChapterIdx,
             completedAll: pendingCompletedAll, completedWorkMinutes, displayedWorkMins,
-            evidence: evidenceDraft, resumePoint: resumePointInput,
+            evidence: evidenceDraft, resumePoint: resumePointInput, returnGapDays, returnSupportTag,
         });
         // Keep every optional line recoverable without requiring a submit.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [endConfirmStep, evidenceDraft, resumePointInput]);
+    }, [endConfirmStep, evidenceDraft, resumePointInput, returnGapDays, returnSupportTag]);
 
     // Persist paper reading notes to localStorage
     useEffect(() => {
@@ -343,7 +401,7 @@ export default function Session() {
             }
             if (event.key === 'Escape' && endConfirmStep === 'evidence' && !evidenceSaving) {
                 event.preventDefault();
-                openTotalRest();
+                void skipEvidenceAndContinue();
                 return;
             }
             if (event.key !== 'Tab') return;
@@ -553,7 +611,7 @@ export default function Session() {
         persistPostSessionCheckpoint({
             step: 'total-rest', stage: 'rest', chapters,
             index: rateChapterIdx, completedAll,
-            completedWorkMinutes, displayedWorkMins, restCountdown: 600,
+            completedWorkMinutes, displayedWorkMins, restCountdown: 600, returnGapDays, returnSupportTag,
         });
     }
 
@@ -570,8 +628,20 @@ export default function Session() {
         persistPostSessionCheckpoint({
             step: 'evidence', chapters, index: rateChapterIdx, completedAll,
             completedWorkMinutes, displayedWorkMins, evidence: evidenceDraft,
-            resumePoint: storedResumePoint,
+            resumePoint: storedResumePoint, returnGapDays, returnSupportTag,
         });
+    }
+
+    async function chooseReturnSupport(tag: string) {
+        if (!session) return;
+        setReturnSupportTag(tag);
+        await setSessionReturnSupportTag(session.sessionId, tag);
+    }
+
+    async function skipEvidenceAndContinue() {
+        if (session && returnSupportTag) await setSessionReturnSupportTag(session.sessionId, null);
+        setReturnSupportTag(clearedReturnSupportTag());
+        openTotalRest();
     }
 
     async function saveEvidenceAndContinue() {
@@ -755,6 +825,19 @@ export default function Session() {
         const addedSeconds = minutes * 60;
         const wasExpired = remaining === 0;
         const breakBlockId = appendStandardBreak ? crypto.randomUUID() : null;
+        if (session.entryMode === 'five-minute' && !session.fiveMinuteDecisionMade && wasExpired) {
+            void recordBehaviorEvent({
+                eventType: 'five_minute_decision',
+                ...eventContext(session.draft[session.nowBlockIdx]),
+                payload: {
+                    choice: appendStandardBreak ? 'plus_20_with_break' : 'plus_10',
+                    elapsed_seconds: session.elapsedSecondsByBlock?.[session.draft[session.nowBlockIdx].id]
+                        ?? session.draft[session.nowBlockIdx].minutes * 60,
+                    input_method: inputMethod,
+                },
+                dedupeKey: `five-minute-decision:${session.sessionId}`,
+            });
+        }
         setSession((current: any) => {
             if (!current) return current;
             const draft = current.draft.map((block: any, index: number) =>
@@ -810,7 +893,7 @@ export default function Session() {
                 const blockSeconds = snapshot.elapsedSecondsByBlock[block.id] ?? 0;
                 const startedAt = new Date(cursor).toISOString();
                 cursor += blockSeconds * 1000;
-                return { ...block, started_at: startedAt, ended_at: new Date(cursor).toISOString() };
+                return { ...block, actual_seconds: blockSeconds, started_at: startedAt, ended_at: new Date(cursor).toISOString() };
             });
 
             await saveSession({
@@ -840,6 +923,10 @@ export default function Session() {
                 dedupeKey: `session-persisted:${session.sessionId}`,
             });
 
+            const savedSessions = await getSessions();
+            const gapDays = previousSignificantSessionGap(savedSessions, session.sessionId);
+            setReturnGapDays(gapDays);
+
             for (const chapter of chapters) incrementStudyCountForSession(chapter.id, session.sessionId);
 
             setCompletedWorkMinutes(snapshot.workMinutesBySubject);
@@ -852,6 +939,7 @@ export default function Session() {
                 progressPersisted: true,
                 completedWorkMinutes: snapshot.workMinutesBySubject,
                 displayedWorkMins: snapshot.actualWorkMinutes,
+                returnGapDays: gapDays,
             }));
             return chapters;
         })();
@@ -920,6 +1008,14 @@ export default function Session() {
             : currentBlock.type === 'BREAK'
                 ? breakCheckedItems.length
                 : null;
+        if (session.entryMode === 'five-minute' && !session.fiveMinuteDecisionMade && currentBlock.type === 'WORK') {
+            await recordBehaviorEvent({
+                eventType: 'five_minute_decision',
+                ...eventContext(currentBlock),
+                payload: { choice: 'stop', elapsed_seconds: currentSeconds, input_method: inputMethod },
+                dedupeKey: `five-minute-decision:${session.sessionId}`,
+            });
+        }
         await recordBehaviorEvent({
             eventType: 'block_completed',
             ...eventContext(currentBlock),
@@ -1831,9 +1927,21 @@ export default function Session() {
                                     <span>{t('session.resume_prompt')}</span>
                                     <input value={resumePointInput} onChange={event => setResumePointInput(event.target.value)} placeholder={t('session.resume_placeholder')} />
                                 </label>}
+                                {shouldAskReturnSupport(returnGapDays) && (
+                                    <fieldset className="session-return-support">
+                                        <legend>Qu’est-ce qui a le plus aidé votre retour aujourd’hui ?</legend>
+                                        <div>
+                                            {RETURN_SUPPORT_CHOICES.map(([tag, label]) => (
+                                                <button key={tag} type="button" className={returnSupportTag === tag ? 'selected' : ''}
+                                                    aria-pressed={returnSupportTag === tag} onClick={() => void chooseReturnSupport(tag)}>{label}</button>
+                                            ))}
+                                        </div>
+                                        <small>Facultatif · vous revenez après {returnGapDays} jours.</small>
+                                    </fieldset>
+                                )}
                                 {evidenceError && <p className="session-evidence-error" role="alert">{evidenceError}</p>}
                                 <footer>
-                                    <button type="button" className="btn btn-secondary" onClick={() => openTotalRest()} disabled={evidenceSaving}>{t('session.evidence_skip')} <kbd>Esc</kbd></button>
+                                    <button type="button" className="btn btn-secondary" onClick={() => void skipEvidenceAndContinue()} disabled={evidenceSaving}>{t('session.evidence_skip')} <kbd>Esc</kbd></button>
                                     <button className="btn btn-primary" disabled={evidenceSaving}>{evidenceSaving ? t('app.saving') : t('session.evidence_save')}</button>
                                 </footer>
                             </form>

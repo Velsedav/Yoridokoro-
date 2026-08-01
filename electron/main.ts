@@ -65,6 +65,7 @@ function applyMainSchema(db: Database.Database) {
     );
     CREATE TABLE IF NOT EXISTS session_blocks(
       id TEXT PRIMARY KEY, session_id TEXT, idx INT, type TEXT, minutes INT,
+      actual_seconds INTEGER NOT NULL DEFAULT 0,
       subject_id TEXT NULL, technique_id TEXT NULL, started_at TEXT NULL, ended_at TEXT NULL,
       chapter_id TEXT NULL, chapter_name TEXT NULL, confidence_score INTEGER NULL,
       FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
@@ -84,6 +85,23 @@ function applyMainSchema(db: Database.Database) {
       FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_session_evidence_created_at ON session_evidence(created_at DESC);
+    CREATE TABLE IF NOT EXISTS session_context(
+      session_id TEXT PRIMARY KEY,
+      surface TEXT NULL,
+      entry_source TEXT NOT NULL,
+      app_version TEXT NOT NULL,
+      feature_version TEXT NOT NULL,
+      recommendation_kind TEXT NULL,
+      recommendation_reason TEXT NULL,
+      chapter_position INTEGER NULL,
+      chapter_count INTEGER NULL,
+      study_count_before INTEGER NULL,
+      resume_point_present INTEGER NOT NULL DEFAULT 0,
+      return_support_tag TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_session_context_created_at ON session_context(created_at DESC);
     CREATE TABLE IF NOT EXISTS quotes(
       id TEXT PRIMARY KEY, text TEXT NOT NULL, idx INT NOT NULL DEFAULT 0
     );
@@ -213,6 +231,7 @@ function applyMainSchema(db: Database.Database) {
     ensureColumn('session_blocks', 'chapter_id', 'TEXT NULL')
     ensureColumn('session_blocks', 'chapter_name', 'TEXT NULL')
     ensureColumn('session_blocks', 'confidence_score', 'INTEGER NULL')
+    ensureColumn('session_blocks', 'actual_seconds', 'INTEGER NOT NULL DEFAULT 0')
     ensureColumn('session_effects', 'applied', 'INTEGER NOT NULL DEFAULT 0')
     ensureColumn('metacognition_logs', 'free_time_hours', 'REAL NULL')
     ensureColumn('metacognition_logs', 'priority_subject_ids', 'TEXT NULL')
@@ -230,7 +249,7 @@ function applyMainSchema(db: Database.Database) {
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_session_blocks_session_idx ON session_blocks(session_id, idx)')
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_source_ref ON time_entries(source_ref) WHERE source_ref IS NOT NULL')
     db.exec('UPDATE subjects SET importance_weight = 5 WHERE importance_weight IS NULL OR importance_weight < 1 OR importance_weight > 10')
-    db.pragma('user_version = 5')
+    db.pragma('user_version = 6')
   })
   migrate()
 }

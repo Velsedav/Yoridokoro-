@@ -8,7 +8,7 @@ import { createEisenhowerTask, deleteEisenhowerTask, EISENHOWER_QUADRANTS, getEi
 import { getAllChapters } from '../lib/chapters'
 import { buildPlannerRecommendations } from '../lib/plannerRecommendations'
 import { usePlannerAllocation } from '../lib/plannerAllocation'
-import { buildGuidedDraft, createActiveSession, createFiveMinuteSession, guidedObjectiveKey } from '../lib/guidedSession'
+import { buildGuidedDraft, createActiveSession, createFiveMinuteSession, guidedObjectiveKey, recommendationObservationContext } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
 import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
@@ -155,6 +155,9 @@ export default function TodayDashboard() {
       payload: {
         recommendation_kind: recommendation.kind,
         recommendation_reason: recommendation.reason,
+        surface: 'today', chapter_position: recommendation.chapterPosition,
+        study_count_before: getAllChapters().find(chapter => chapter.id === recommendation.chapterId)?.studyCount ?? null,
+        resume_point_present: Boolean(recommendation.resumePoint?.trim()),
         candidate_rank: suggestionIndex + 1,
         candidate_count: recommendations.length,
         timer_display_mode: 'countdown-visible',
@@ -250,6 +253,10 @@ export default function TodayDashboard() {
       policyId: ANALYTICS_POLICY_ID,
       policyVersion: ANALYTICS_POLICY_VERSION,
       planningMode: 'guided' as const,
+      ...recommendationObservationContext(
+        recommendation, 'today', justFive ? 'just_five' : 'guided',
+        getAllChapters().find(chapter => chapter.id === recommendation.chapterId)?.studyCount ?? null,
+      ),
     }
     await recordBehaviorEvent({
       eventType: 'recommendation_accepted',

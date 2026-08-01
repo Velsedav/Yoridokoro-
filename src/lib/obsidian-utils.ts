@@ -27,7 +27,16 @@ export interface QuickStartSession {
   repeats: number
   plannedMinutes: number
   fiveMinAlert: boolean
-  analytics: { planningMode: 'advanced' }
+  analytics: {
+    planningMode: 'advanced'
+    surface: 'quick_start'
+    entrySource: 'manual'
+    chapterPosition: number | null
+    chapterCount: number | null
+    studyCountBefore: number | null
+    resumePointPresent: boolean
+  }
+  runnerEntered: boolean
 }
 
 export function groupByTag(subjects: (Subject & { tags: Tag[] })[]): TagGroup[] {
@@ -71,6 +80,10 @@ export function buildQuickStartSession(
   techniqueId: string | null,
   chapterId: string | null,
   chapterName: string | null,
+  chapterPosition: number | null = null,
+  chapterCount: number | null = null,
+  studyCountBefore: number | null = null,
+  resumePointPresent = false,
 ): QuickStartSession {
   const sessionId = crypto.randomUUID()
   const draft: QuickStartBlock[] = [
@@ -106,6 +119,10 @@ export function buildQuickStartSession(
     repeats: 1,
     plannedMinutes: QUICK_START_PREP_MINUTES + minutes,
     fiveMinAlert: false,
-    analytics: { planningMode: 'advanced' },
+    analytics: {
+      planningMode: 'advanced', surface: 'quick_start', entrySource: 'manual',
+      chapterPosition, chapterCount, studyCountBefore, resumePointPresent,
+    },
+    runnerEntered: false,
   }
 }

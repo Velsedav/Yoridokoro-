@@ -115,7 +115,7 @@ function utcDayDiff(a: Date, b: Date): number {
 export function computeStreaks(sessions: Session[]): Streaks {
   const dates = new Set<string>()
   sessions.forEach(s => {
-    if (s.actual_minutes > 0) dates.add(toLocalDateStr(new Date(s.started_at)))
+    if (s.status !== 'abandoned' && s.actual_seconds >= 60) dates.add(toLocalDateStr(new Date(s.started_at)))
   })
   const sorted = Array.from(dates).sort()
   if (sorted.length === 0) return { current: 0, best: 0 }
@@ -154,7 +154,8 @@ export function computeWeeklyStats(sessions: Session[], weekStart: 'monday' | 's
   sessions.forEach(s => {
     const sd = new Date(s.started_at)
     if (sd >= startOfWeek) {
-      minutes += s.actual_minutes
+      if (s.status === 'abandoned' || s.actual_seconds < 60) return
+      minutes += s.actual_seconds / 60
       count++
       days.add(toLocalDateStr(sd))
     }
@@ -176,9 +177,9 @@ export function computeSubjectBreakdown(
 
   const minuteMap: Record<string, number> = {}
   blocks.forEach(b => {
-    if (b.type !== 'WORK' || !b.subject_id) return
+    if (b.type !== 'WORK' || !b.subject_id || b.actual_seconds <= 0) return
     if (periodStart && !validSessionIds.has(b.session_id)) return
-    minuteMap[b.subject_id] = (minuteMap[b.subject_id] ?? 0) + b.minutes
+    minuteMap[b.subject_id] = (minuteMap[b.subject_id] ?? 0) + b.actual_seconds / 60
   })
 
   const total = Object.values(minuteMap).reduce((a, v) => a + v, 0)
@@ -202,8 +203,8 @@ export function computeDeadlineUrgency(subjects: Subject[], blocks: SessionBlock
 
   const hoursMap: Record<string, number> = {}
   blocks.forEach(b => {
-    if (b.type === 'WORK' && b.subject_id) {
-      hoursMap[b.subject_id] = (hoursMap[b.subject_id] ?? 0) + b.minutes / 60
+    if (b.type === 'WORK' && b.subject_id && b.actual_seconds > 0) {
+      hoursMap[b.subject_id] = (hoursMap[b.subject_id] ?? 0) + b.actual_seconds / 3600
     }
   })
 
@@ -236,10 +237,10 @@ export function computeFocusTypeBreakdown(blocks: SessionBlock[], techniques: Te
   const result: FocusBreakdown = { comprendre: 0, memoriser: 0, faire: 0 }
   const techMap = new Map(techniques.map(t => [t.id, t]))
   blocks.forEach(b => {
-    if (b.type !== 'WORK' || !b.technique_id) return
+    if (b.type !== 'WORK' || !b.technique_id || b.actual_seconds <= 0) return
     const tech = techMap.get(b.technique_id)
     if (!tech?.category) return
-    result[tech.category] += b.minutes
+    result[tech.category] += b.actual_seconds / 60
   })
   return result
 }
@@ -262,11 +263,11 @@ export function computeTechTierBreakdown(
   let total = 0
 
   blocks.forEach(b => {
-    if (!validSessionIds.has(b.session_id) || b.type !== 'WORK' || !b.technique_id) return
+    if (!validSessionIds.has(b.session_id) || b.type !== 'WORK' || !b.technique_id || b.actual_seconds <= 0) return
     const tech = techMap.get(b.technique_id)
     if (!tech?.tier || !(tech.tier in tierMap)) return
-    tierMap[tech.tier] += b.minutes
-    total += b.minutes
+    tierMap[tech.tier] += b.actual_seconds / 60
+    total += b.actual_seconds / 60
   })
 
   if (total === 0) return { data: [], total: 0, dfRatio: 0 }
@@ -285,7 +286,8 @@ export function computeTimeOfDay(sessions: Session[]): TimeOfDay {
   const result: TimeOfDay = { morning: 0, afternoon: 0, evening: 0, night: 0 }
   sessions.forEach(s => {
     const hour = new Date(s.started_at).getHours()
-    const mins = s.actual_minutes
+    if (s.status === 'abandoned' || s.actual_seconds < 60) return
+    const mins = s.actual_seconds / 60
     if (hour >= 6 && hour < 12) result.morning += mins
     else if (hour >= 12 && hour < 18) result.afternoon += mins
     else if (hour >= 18) result.evening += mins
@@ -316,7 +318,7 @@ export function computeTimeline(sessions: Session[], filterMonths: number): Time
     const sd = new Date(s.started_at)
     if (sd >= startPeriod && sd <= now) {
       const key = toLocalDateStr(sd)
-      if (key in dailyTotals) dailyTotals[key] += s.actual_minutes
+      if (key in dailyTotals && s.status !== 'abandoned' && s.actual_seconds >= 60) dailyTotals[key] += s.actual_seconds / 60
     }
   })
 
@@ -368,10 +370,10 @@ export function computeTagBreakdown(
   const tagMinutes: Record<string, number> = {}
 
   blocks.forEach(b => {
-    if (!validSessionIds.has(b.session_id) || b.type !== 'WORK' || !b.subject_id) return
+    if (!validSessionIds.has(b.session_id) || b.type !== 'WORK' || !b.subject_id || b.actual_seconds <= 0) return
     const tags = subjectTagsMap.get(b.subject_id)
     if (!tags || tags.length === 0) return
-    tags.forEach(tag => { tagMinutes[tag] = (tagMinutes[tag] ?? 0) + b.minutes })
+    tags.forEach(tag => { tagMinutes[tag] = (tagMinutes[tag] ?? 0) + b.actual_seconds / 60 })
   })
 
   const data: TagRow[] = Object.entries(tagMinutes)
@@ -397,18 +399,19 @@ export function computeWeekTrend(
   thisWeekStart.setDate(diff)
   thisWeekStart.setHours(0, 0, 0, 0)
 
-  // Previous 7-day window: 14 to 7 days before today (rolling, not calendar-aligned)
-  const prevWindowEnd = new Date(today)
-  prevWindowEnd.setDate(today.getDate() - 7)
-  prevWindowEnd.setHours(0, 0, 0, 0)
-  const prevWindowStart = new Date(prevWindowEnd)
+  // Compare the elapsed part of this week with the exact same elapsed period
+  // one week earlier; a partial Tuesday is never compared with seven full days.
+  const prevWindowStart = new Date(thisWeekStart)
   prevWindowStart.setDate(prevWindowStart.getDate() - 7)
+  const prevWindowEnd = new Date(today)
+  prevWindowEnd.setDate(prevWindowEnd.getDate() - 7)
 
   let lastMins = 0, lastCount = 0
   sessions.forEach(s => {
     const sd = new Date(s.started_at)
     if (sd >= prevWindowStart && sd < prevWindowEnd) {
-      lastMins += s.actual_minutes
+      if (s.status === 'abandoned' || s.actual_seconds < 60) return
+      lastMins += s.actual_seconds / 60
       lastCount++
     }
   })

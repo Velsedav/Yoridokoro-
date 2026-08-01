@@ -14,7 +14,7 @@ const LAST_EXPORT_KEY = 'study-buddy-last-export';
 const LAST_ART_HTML_EXPORT_KEY = 'yoridokoro-last-art-html-export';
 const EXPORT_FILENAME = 'yoridokoro-backup.json';
 const ART_HTML_FILENAME = 'yoridokoro-art.html';
-export const YORIDOKORO_BACKUP_VERSION = 3;
+export const YORIDOKORO_BACKUP_VERSION = 4;
 
 export function validateBackupShape(value: unknown): asserts value is { version: number; study_buddy: Record<string, any[]>; bingoals: Record<string, any[]>; art?: { items?: unknown[]; matches?: unknown[] }; local_storage?: Record<string, string | null> } {
   if (!value || typeof value !== 'object') throw new Error('Invalid backup file — expected a JSON object.');
@@ -75,7 +75,7 @@ function base64ToBytes(dataUrl: string): Uint8Array {
 
 async function dumpStudyBuddyDb() {
   const db = await getDb();
-  const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, quotes, metacognition_logs, error_log,
+  const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events] = await Promise.all([
     db.select<any[]>('SELECT * FROM subjects'),
     db.select('SELECT * FROM tags'),
@@ -85,6 +85,7 @@ async function dumpStudyBuddyDb() {
     db.select('SELECT * FROM session_blocks ORDER BY session_id, idx'),
     db.select('SELECT * FROM session_effects ORDER BY session_id, effect_type, target_id'),
     db.select('SELECT * FROM session_evidence ORDER BY created_at'),
+    db.select('SELECT * FROM session_context ORDER BY created_at'),
     db.select('SELECT * FROM quotes ORDER BY idx'),
     db.select('SELECT * FROM metacognition_logs ORDER BY created_at'),
     db.select('SELECT * FROM error_log ORDER BY created_at'),
@@ -114,7 +115,7 @@ async function dumpStudyBuddyDb() {
     } catch {}
   }
 
-  return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, quotes, metacognition_logs, error_log,
+  return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, subject_covers };
 }
 
@@ -169,6 +170,7 @@ export const PORTABLE_LOCAL_STORAGE_KEYS = [
 const PORTABLE_LOCAL_STORAGE_PREFIXES = ['study-buddy-', 'yoridokoro-', 'obsidian-', 'bingoals.'];
 
 export function isPortableLocalStorageKey(key: string): boolean {
+  if (key === 'yoridokoro-observation-pseudonym-salt-v1') return false;
   return PORTABLE_LOCAL_STORAGE_KEYS.includes(key)
     || PORTABLE_LOCAL_STORAGE_PREFIXES.some(prefix => key.startsWith(prefix));
 }
@@ -381,8 +383,8 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
   for (const b of data.session_blocks ?? []) {
     try {
       await db.execute(
-        `INSERT OR IGNORE INTO session_blocks (id,session_id,idx,type,minutes,subject_id,technique_id,chapter_id,started_at,ended_at,chapter_name,confidence_score) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [b.id, b.session_id, b.idx, b.type, b.minutes, b.subject_id, b.technique_id, b.chapter_id ?? null, b.started_at ?? null, b.ended_at ?? null, b.chapter_name ?? null, b.confidence_score ?? null]
+        `INSERT OR IGNORE INTO session_blocks (id,session_id,idx,type,minutes,actual_seconds,subject_id,technique_id,chapter_id,started_at,ended_at,chapter_name,confidence_score) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [b.id, b.session_id, b.idx, b.type, b.minutes, b.actual_seconds ?? 0, b.subject_id, b.technique_id, b.chapter_id ?? null, b.started_at ?? null, b.ended_at ?? null, b.chapter_name ?? null, b.confidence_score ?? null]
       );
     } catch {}
   }
@@ -403,6 +405,19 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
         [evidence.session_id, evidence.subject_id ?? null, evidence.chapter_id ?? null, evidence.chapter_name ?? null,
          evidence.created_at, evidence.did_text ?? null, evidence.action_text ?? null, evidence.result_text ?? null,
          evidence.meaning_text ?? null, evidence.resume_point ?? null]
+      );
+    } catch {}
+  }
+  for (const context of data.session_context ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR REPLACE INTO session_context
+         (session_id,surface,entry_source,app_version,feature_version,recommendation_kind,recommendation_reason,chapter_position,chapter_count,study_count_before,resume_point_present,return_support_tag,created_at,updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [context.session_id,context.surface??null,context.entry_source??'recovered',context.app_version??'unknown',context.feature_version??'unknown',
+         context.recommendation_kind??null,context.recommendation_reason??null,context.chapter_position??null,context.chapter_count??null,
+         context.study_count_before??null,context.resume_point_present??0,context.return_support_tag??null,
+         context.created_at??new Date().toISOString(),context.updated_at??context.created_at??new Date().toISOString()]
       );
     } catch {}
   }

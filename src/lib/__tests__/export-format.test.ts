@@ -45,12 +45,14 @@ describe('Yoridokoro backup format', () => {
     storage.setItem('study-buddy-observations', '["note"]')
     storage.setItem('study-buddy-workout-sets', '{"squat":3}')
     storage.setItem('yoridokoro-new-setting', 'yes')
+    storage.setItem('yoridokoro-observation-pseudonym-salt-v1', 'never-export-me')
     storage.setItem('unrelated-extension-token', 'secret')
 
     const dump = dumpPortableLocalStorage(storage)
     expect(dump['study-buddy-observations']).toBe('["note"]')
     expect(dump['study-buddy-workout-sets']).toBe('{"squat":3}')
     expect(dump['yoridokoro-new-setting']).toBe('yes')
+    expect(dump).not.toHaveProperty('yoridokoro-observation-pseudonym-salt-v1')
     expect(dump).not.toHaveProperty('unrelated-extension-token')
   })
 
@@ -63,12 +65,18 @@ describe('Yoridokoro backup format', () => {
     expect(exportSource).toContain("db.select('SELECT * FROM session_evidence")
     expect(exportSource).toContain('data.session_evidence ?? []')
     expect(exportSource).toContain('INSERT OR REPLACE INTO session_evidence')
+    expect(exportSource).toContain("db.select('SELECT * FROM session_context")
+    expect(exportSource).toContain('data.session_context ?? []')
+    expect(exportSource).toContain('INSERT OR REPLACE INTO session_context')
+    expect(exportSource).toContain('b.actual_seconds ?? 0')
   })
 
   it('creates durable session evidence with the database migration', () => {
     const mainSource = readFileSync(resolve(process.cwd(), 'electron/main.ts'), 'utf8')
     expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS session_evidence')
-    expect(mainSource).toContain("db.pragma('user_version = 5')")
+    expect(mainSource).toContain("db.pragma('user_version = 6')")
+    expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS session_context')
+    expect(mainSource).toContain("ensureColumn('session_blocks', 'actual_seconds'")
   })
 
   it('navigates directly between collections and combines Top, year, and decade filters', () => {

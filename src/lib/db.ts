@@ -85,17 +85,13 @@ export type SubjectWorkAllocation = Record<string, number>
 export async function getSubjectWorkSecondsSince(since: string): Promise<SubjectWorkAllocation> {
   const db = await getDb()
   const rows = await db.select<Array<{ subject_id: string; work_seconds: number }>>(`
-    SELECT b.subject_id,
-      COALESCE(SUM(MAX(0, ROUND((
-        julianday(b.ended_at) - julianday(CASE WHEN b.started_at < $1 THEN $1 ELSE b.started_at END)
-      ) * 86400))), 0) AS work_seconds
+    SELECT b.subject_id, COALESCE(SUM(b.actual_seconds), 0) AS work_seconds
     FROM session_blocks b
     JOIN sessions s ON s.id = b.session_id
     WHERE b.type = 'WORK'
       AND b.subject_id IS NOT NULL
-      AND b.started_at IS NOT NULL
-      AND b.ended_at IS NOT NULL
-      AND b.ended_at > $1
+      AND b.actual_seconds > 0
+      AND s.started_at >= $1
       AND COALESCE(s.status, 'completed') <> 'abandoned'
     GROUP BY b.subject_id
   `, [since])
@@ -256,9 +252,9 @@ export async function saveSession(
     const b = blocks[i]
     const confidence = confidenceScores?.[b.id] ?? null
     statements.push({
-      sql: `INSERT OR IGNORE INTO session_blocks (id, session_id, idx, type, minutes, subject_id, technique_id, chapter_id, chapter_name, confidence_score, started_at, ended_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      params: [`${session.id}:block:${i}`, session.id, i, b.type, b.minutes, b.subject_id ?? null, b.technique_id ?? null, b.chapter_id ?? null, b.chapter_name ?? null, confidence, b.started_at ?? null, b.ended_at ?? null],
+      sql: `INSERT OR IGNORE INTO session_blocks (id, session_id, idx, type, minutes, actual_seconds, subject_id, technique_id, chapter_id, chapter_name, confidence_score, started_at, ended_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      params: [`${session.id}:block:${i}`, session.id, i, b.type, b.minutes, Math.max(0, Math.round(Number(b.actual_seconds) || 0)), b.subject_id ?? null, b.technique_id ?? null, b.chapter_id ?? null, b.chapter_name ?? null, confidence, b.started_at ?? null, b.ended_at ?? null],
     })
   }
   for (const [subjectId, minutes] of Object.entries(subjectMinutes)) {
@@ -333,6 +329,64 @@ export async function getSessionEvidence(from?: Date, to?: Date): Promise<Sessio
     ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''}
     ORDER BY e.created_at DESC
   `, params)
+}
+
+export type SessionSurface = 'today' | 'planner' | 'quick_start' | 'subject_creation'
+export type SessionEntrySource = 'guided' | 'just_five' | 'manual' | 'create_and_start' | 'recovered'
+
+export interface SessionContext {
+  session_id: string
+  surface: SessionSurface | null
+  entry_source: SessionEntrySource
+  app_version: string
+  feature_version: string
+  recommendation_kind: string | null
+  recommendation_reason: string | null
+  chapter_position: number | null
+  chapter_count: number | null
+  study_count_before: number | null
+  resume_point_present: number
+  return_support_tag: string | null
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Creates the immutable launch snapshot. A retry never replaces launch facts;
+ * only return_support_tag may later change through its dedicated function.
+ */
+export async function saveSessionContext(context: SessionContext): Promise<void> {
+  const db = await getDb()
+  await db.execute(
+    `INSERT INTO session_context
+      (session_id,surface,entry_source,app_version,feature_version,recommendation_kind,recommendation_reason,
+       chapter_position,chapter_count,study_count_before,resume_point_present,return_support_tag,created_at,updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+     ON CONFLICT(session_id) DO NOTHING`,
+    [context.session_id, context.surface, context.entry_source, context.app_version, context.feature_version,
+      context.recommendation_kind, context.recommendation_reason, context.chapter_position, context.chapter_count,
+      context.study_count_before, context.resume_point_present ? 1 : 0, context.return_support_tag,
+      context.created_at, context.updated_at],
+  )
+}
+
+export async function getSessionContext(sessionId: string): Promise<SessionContext | null> {
+  const db = await getDb()
+  const rows = await db.select<SessionContext[]>('SELECT * FROM session_context WHERE session_id = $1', [sessionId])
+  return rows[0] ?? null
+}
+
+export async function getAllSessionContexts(): Promise<SessionContext[]> {
+  const db = await getDb()
+  return db.select<SessionContext[]>('SELECT * FROM session_context ORDER BY created_at')
+}
+
+export async function setSessionReturnSupportTag(sessionId: string, tag: string | null): Promise<void> {
+  const db = await getDb()
+  await db.execute(
+    'UPDATE session_context SET return_support_tag = $1, updated_at = $2 WHERE session_id = $3',
+    [tag, new Date().toISOString(), sessionId],
+  )
 }
 
 export interface Tag {
@@ -477,6 +531,7 @@ export interface SessionBlock {
   idx: number
   type: string
   minutes: number
+  actual_seconds: number
   subject_id: string | null
   technique_id: string | null
   chapter_id?: string | null
@@ -490,8 +545,8 @@ export async function saveSessionBlocks(sessionId: string, blocks: Omit<SessionB
   const db = await getDb()
   for (const b of blocks) {
     await db.execute(
-      `INSERT INTO session_blocks (id,session_id,idx,type,minutes,subject_id,technique_id,chapter_id,chapter_name,confidence_score,started_at,ended_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [crypto.randomUUID(), sessionId, b.idx, b.type, b.minutes, b.subject_id, b.technique_id, b.chapter_id ?? null, b.chapter_name ?? null, b.confidence_score ?? null, b.started_at ?? null, b.ended_at ?? null]
+      `INSERT INTO session_blocks (id,session_id,idx,type,minutes,actual_seconds,subject_id,technique_id,chapter_id,chapter_name,confidence_score,started_at,ended_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [crypto.randomUUID(), sessionId, b.idx, b.type, b.minutes, Math.max(0, Math.round(b.actual_seconds || 0)), b.subject_id, b.technique_id, b.chapter_id ?? null, b.chapter_name ?? null, b.confidence_score ?? null, b.started_at ?? null, b.ended_at ?? null]
     )
   }
 }
@@ -615,6 +670,7 @@ export async function renameChapterInDb(subjectId: string, oldName: string, newN
 export async function deleteAllData() {
   const db = await getDb()
   await db.execute(`DELETE FROM analytics_events`)
+  await db.execute(`DELETE FROM session_context`)
   await db.execute(`DELETE FROM study_data_snapshots`)
   await db.execute(`DELETE FROM eisenhower_tasks`)
   await db.execute(`DELETE FROM time_entries`)

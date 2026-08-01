@@ -15,7 +15,7 @@ import type { Technique } from '../techniques'
 // ── factories ──────────────────────────────────────────────────────────────
 
 function makeSession(id: string, started_at: string, actual_minutes: number): Session {
-  return { id, started_at, ended_at: null, template: 'Custom', repeats: 1, planned_minutes: actual_minutes, actual_minutes }
+  return { id, started_at, ended_at: null, template: 'Custom', repeats: 1, planned_minutes: actual_minutes, actual_minutes, actual_seconds: actual_minutes * 60, status: actual_minutes ? 'completed' : 'abandoned', evaluated_at: null }
 }
 
 function makeSubject(id: string, name: string, deadline: string | null = null): Subject {
@@ -23,7 +23,7 @@ function makeSubject(id: string, name: string, deadline: string | null = null): 
 }
 
 function makeBlock(sessionId: string, subjectId: string | null, minutes: number, techniqueId: string | null = null): SessionBlock {
-  return { id: 'b-' + Math.random(), session_id: sessionId, idx: 0, type: 'WORK', minutes, subject_id: subjectId, technique_id: techniqueId, chapter_name: null, confidence_score: null, started_at: null, ended_at: null }
+  return { id: 'b-' + Math.random(), session_id: sessionId, idx: 0, type: 'WORK', minutes, actual_seconds: minutes * 60, subject_id: subjectId, technique_id: techniqueId, chapter_name: null, confidence_score: null, started_at: null, ended_at: null }
 }
 
 function makeTech(id: string, category: 'memoriser' | 'comprendre' | 'faire', tier: 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' = 'A'): Technique {

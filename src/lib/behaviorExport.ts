@@ -1,5 +1,5 @@
 import { getAllChapters } from './chapters'
-import { getSessionEvidence, getSubjects, type SessionEvidence } from './db'
+import { getAllSessionBlocks, getAllSessionContexts, getSessionEvidence, getSessions, getSubjects, type Session, type SessionBlock, type SessionContext, type SessionEvidence } from './db'
 import {
   getBehaviorEvents,
   loadObservationPreferences,
@@ -22,11 +22,17 @@ export interface BehaviorExportSource {
   generatedAt: string
   appVersion: string
   evidence?: SessionEvidence[]
+  sessions?: Session[]
+  blocks?: SessionBlock[]
+  contexts?: SessionContext[]
+  pseudonymSalt?: string
 }
 
 export interface BehaviorExportBundle {
   markdown: string
   csv: string
+  opportunitiesCsv: string
+  sessionsCsv: string
   eventCount: number
   sessionCount: number
 }
@@ -37,7 +43,7 @@ Yoridokoro organise les sujets et leurs chapitres, propose une prochaine étape 
 
 L’utilisateur se sert de Yoridokoro pour diminuer la friction avant de commencer, réduire l’overthinking et le perfectionnisme, reprendre plus facilement après une interruption et continuer vers les chapitres suivants au lieu de réviser indéfiniment le même contenu jusqu’à l’épuisement.
 
-Analyse le fichier CSV joint comme des observations personnelles sur cette interaction avec le logiciel, pas comme des données diagnostiques.
+Analyse les trois fichiers CSV joints comme des observations personnelles sur cette interaction avec le logiciel, pas comme des données diagnostiques. Le fichier événements conserve la chronologie détaillée ; opportunités décrit chaque suggestion affichée ; sessions résume chaque séance avec son WORK réellement mesuré.
 
 Considère toute donnée manquante comme inconnue, jamais comme un échec. N’établis aucun diagnostic de TDAH, CDS, dépression ou burnout.
 
@@ -63,7 +69,19 @@ const SAFE_PAYLOAD_KEYS = new Set([
   'completion_reason', 'checked_count', 'total_count', 'extension_minutes', 'input_method',
   'actual_work_seconds', 'work_minutes', 'status', 'completed_all', 'rating', 'pre_recall',
   'timer_display_mode', 'prep_checklist_mode', 'started_from',
+  'choice', 'stage',
+  'surface', 'chapter_position', 'study_count_before', 'resume_point_present',
 ])
+
+export const OBSERVATION_PSEUDONYM_SALT_KEY = 'yoridokoro-observation-pseudonym-salt-v1'
+
+export function getObservationPseudonymSalt(storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage) {
+  const existing = storage.getItem(OBSERVATION_PSEUDONYM_SALT_KEY)
+  if (existing) return existing
+  const salt = crypto.randomUUID()
+  storage.setItem(OBSERVATION_PSEUDONYM_SALT_KEY, salt)
+  return salt
+}
 
 function safePayloadJson(raw: string) {
   try {
@@ -86,12 +104,112 @@ function escapeCsv(value: unknown) {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
-function createAliases(prefix: string) {
-  const aliases = new Map<string, string>()
-  return (value: string | null) => {
-    if (!value) return ''
-    if (!aliases.has(value)) aliases.set(value, `${prefix} ${String(aliases.size + 1).padStart(2, '0')}`)
-    return aliases.get(value)!
+function stablePseudonym(prefix: string, value: string | null | undefined, salt: string) {
+  if (!value) return ''
+  let hash = 2166136261
+  const input = `${salt}:${value}`
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `${prefix}-${(hash >>> 0).toString(36).padStart(7, '0')}`
+}
+
+function parseEventPayload(event: BehaviorEventRow) {
+  return safePayloadJson(event.payload_json)
+}
+
+function localTimestamp(iso: string, offsetMinutes: number) {
+  const time = new Date(iso).getTime() + offsetMinutes * 60_000
+  return Number.isFinite(time) ? new Date(time).toISOString().replace('Z', '') : ''
+}
+
+function calendarDay(value: string) {
+  const date = new Date(value)
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000
+}
+
+function buildObservationCsvs(source: BehaviorExportSource, events: BehaviorEventRow[], limit: number) {
+  const sessions = (source.sessions ?? []).filter(session => new Date(session.started_at).getTime() >= limit)
+  const blocks = source.blocks ?? []
+  const contexts = source.contexts ?? []
+  const evidence = source.evidence ?? []
+  const salt = source.pseudonymSalt ?? 'test-observation-salt'
+  const contextBySession = new Map(contexts.map(context => [context.session_id, context]))
+  const blocksBySession = new Map<string, SessionBlock[]>()
+  for (const block of blocks) blocksBySession.set(block.session_id, [...(blocksBySession.get(block.session_id) ?? []), block])
+  const eventPayload = new Map(events.map(event => [event.id, parseEventPayload(event)]))
+  const eventsBySession = new Map<string, BehaviorEventRow[]>()
+  for (const event of events) if (event.session_id) eventsBySession.set(event.session_id, [...(eventsBySession.get(event.session_id) ?? []), event])
+  const workSeconds = (sessionId: string) => (blocksBySession.get(sessionId) ?? [])
+    .filter(block => block.type === 'WORK').reduce((sum, block) => sum + Math.max(0, block.actual_seconds || 0), 0)
+
+  const opportunityHeaders = [
+    'opportunity','surface','local_time','recommendation_kind','recommendation_reason','chapter_position',
+    'study_count_before','resume_point_present','alternatives_requested','accepted','entry_source',
+    'active_delay_ms','session_created','work_at_least_60_seconds',
+  ]
+  const opportunityIds = [...new Set(events.map(event => event.opportunity_id).filter((value): value is string => Boolean(value)))]
+  const opportunityRows = opportunityIds.map(opportunityId => {
+    const group = events.filter(event => event.opportunity_id === opportunityId)
+    const exposed = group.find(event => event.event_type === 'recommendation_exposed')
+    const accepted = group.find(event => event.event_type === 'recommendation_accepted')
+    const created = group.find(event => event.event_type === 'session_created')
+    const context = created?.session_id ? contextBySession.get(created.session_id) : undefined
+    const exposedPayload = exposed ? eventPayload.get(exposed.id) ?? {} : {}
+    const acceptedPayload = accepted ? eventPayload.get(accepted.id) ?? {} : {}
+    const sameVisitDelay = exposed && accepted && exposed.visit_id === accepted.visit_id
+      && exposed.monotonic_ms != null && accepted.monotonic_ms != null
+      ? Math.max(0, Math.round(accepted.monotonic_ms - exposed.monotonic_ms)) : ''
+    return [
+      stablePseudonym('opp', opportunityId, salt), context?.surface ?? exposedPayload.surface ?? '',
+      exposed ? localTimestamp(exposed.occurred_at, exposed.timezone_offset_minutes) : '',
+      context?.recommendation_kind ?? exposedPayload.recommendation_kind ?? acceptedPayload.recommendation_kind ?? '',
+      context?.recommendation_reason ?? exposedPayload.recommendation_reason ?? acceptedPayload.recommendation_reason ?? '',
+      context?.chapter_position ?? exposedPayload.chapter_position ?? '', context?.study_count_before ?? exposedPayload.study_count_before ?? '', context?.resume_point_present ?? exposedPayload.resume_point_present ?? '',
+      group.filter(event => event.event_type === 'recommendation_alternative_requested').length,
+      accepted ? 1 : 0, context?.entry_source ?? '', sameVisitDelay, created ? 1 : 0,
+      created?.session_id && workSeconds(created.session_id) >= 60 ? 1 : 0,
+    ].map(escapeCsv).join(',')
+  })
+
+  const sessionHeaders = [
+    'session','surface','entry_source','recommendation_kind','recommendation_reason','subject','chapter',
+    'planned_seconds','actual_work_seconds','status','days_since_previous_significant','five_minute_decision',
+    'new_or_revisit','study_count_before','rating','evidence_present','return_support_tag','recovered',
+    'app_version','feature_version',
+  ]
+  const significant = sessions
+    .filter(session => session.status !== 'abandoned' && workSeconds(session.id) >= 60)
+    .sort((a, b) => a.started_at.localeCompare(b.started_at))
+  const previousGap = new Map<string, number | null>()
+  significant.forEach((session, index) => previousGap.set(session.id, index ? Math.max(0, calendarDay(session.started_at) - calendarDay(significant[index - 1].started_at)) : null))
+  const evidenceSessions = new Set(evidence.map(item => item.session_id))
+  const sessionRows = sessions.map(session => {
+    const context = contextBySession.get(session.id)
+    const work = (blocksBySession.get(session.id) ?? []).filter(block => block.type === 'WORK')
+    const firstWork = work[0]
+    const relatedEvents = eventsBySession.get(session.id) ?? []
+    const createdEvent = relatedEvents.find(event => event.event_type === 'session_created')
+    const decision = relatedEvents.find(event => event.event_type === 'five_minute_decision')
+    const rating = relatedEvents.find(event => event.event_type === 'rating_submitted')
+    const studyCount = context?.study_count_before
+    return [
+      stablePseudonym('session', session.id, salt), context?.surface ?? '', context?.entry_source ?? '',
+      context?.recommendation_kind ?? '', context?.recommendation_reason ?? '',
+      stablePseudonym('subject', firstWork?.subject_id, salt), stablePseudonym('chapter', firstWork?.chapter_id, salt),
+      Number(createdEvent ? eventPayload.get(createdEvent.id)?.planned_seconds : null) || Math.max(0, session.planned_minutes || 0) * 60,
+      workSeconds(session.id), session.status,
+      previousGap.get(session.id) ?? '', decision ? eventPayload.get(decision.id)?.choice ?? '' : '',
+      studyCount == null ? '' : studyCount === 0 ? 'new' : 'revisit', studyCount ?? '',
+      rating ? eventPayload.get(rating.id)?.rating ?? '' : '', evidenceSessions.has(session.id) ? 1 : 0,
+      context?.return_support_tag ?? '', relatedEvents.some(event => event.event_type === 'session_recovered') ? 1 : 0,
+      context?.app_version ?? '', context?.feature_version ?? '',
+    ].map(escapeCsv).join(',')
+  })
+  return {
+    opportunitiesCsv: [opportunityHeaders.join(','), ...opportunityRows].join('\r\n'),
+    sessionsCsv: [sessionHeaders.join(','), ...sessionRows].join('\r\n'),
   }
 }
 
@@ -125,13 +243,14 @@ export function buildBehaviorExportBundle(source: BehaviorExportSource, options:
     .filter(event => new Date(event.occurred_at).getTime() >= limit)
     .map(event => ({ ...event, payload: safePayloadJson(event.payload_json) }))
 
-  const subjectAlias = createAliases('Sujet')
-  const chapterAlias = createAliases('Chapitre')
-  const sessionAlias = createAliases('Session')
-  const opportunityAlias = createAliases('Opportunité')
-  const recommendationAlias = createAliases('Recommandation')
-  const blockAlias = createAliases('Bloc')
-  const visitAlias = createAliases('Visite')
+  const salt = source.pseudonymSalt ?? 'test-observation-salt'
+  const subjectAlias = (id: string | null) => stablePseudonym('subject', id, salt)
+  const chapterAlias = (id: string | null) => stablePseudonym('chapter', id, salt)
+  const sessionAlias = (id: string | null) => stablePseudonym('session', id, salt)
+  const opportunityAlias = (id: string | null) => stablePseudonym('opp', id, salt)
+  const recommendationAlias = (id: string | null) => stablePseudonym('rec', id, salt)
+  const blockAlias = (id: string | null) => stablePseudonym('block', id, salt)
+  const visitAlias = (id: string | null) => stablePseudonym('visit', id, salt)
 
   const subjectLabel = (id: string | null) => {
     if (!id) return ''
@@ -165,6 +284,7 @@ export function buildBehaviorExportBundle(source: BehaviorExportSource, options:
     event.quality_flags,
   ].map(escapeCsv).join(','))
   const csv = [headers.join(','), ...csvRows].join('\r\n')
+  const observationCsvs = buildObservationCsvs(source, events, limit)
 
   const sessionCount = new Set(events.map(event => event.session_id).filter(Boolean)).size
   const opportunityCount = new Set(events.map(event => event.opportunity_id).filter(Boolean)).size
@@ -231,21 +351,24 @@ Libellés : ${options.pseudonymizeLabels ? 'pseudonymisés' : 'noms d’étude i
 
 ${evidenceMarkdown}
 
-## Dictionnaire du fichier CSV
+## Dictionnaire des fichiers CSV
 
-- Une ligne correspond à un événement fonctionnel dans Yoridokoro.
+- evenements : une ligne correspond à un événement fonctionnel dans Yoridokoro.
 - occurred_at_utc et timezone_offset_minutes permettent une analyse selon l’heure locale.
 - opportunity relie l’affichage d’une suggestion à son acceptation éventuelle.
 - session et block relient les transitions du minuteur sans exposer les identifiants internes.
 - payload_json contient uniquement des mesures autorisées : durées, type de bloc, motif de transition, agrégat de checklist et évaluation du rappel.
 - monotonic_ms sert à calculer des délais à l’intérieur d’une même visite sans dépendre des changements de l’horloge système.
+- opportunites : une ligne par suggestion, de son affichage jusqu’à l’acceptation éventuelle et l’atteinte de 60 secondes de WORK.
+- sessions : une ligne par séance, avec contexte de démarrage, WORK réel, reprise, évaluation et présence éventuelle d’une micro-preuve.
+- Les valeurs de 0 seconde dans actual_work_seconds ne sont jamais remplacées par les durées planifiées.
 
 ## Prompt conseillé
 
 ${BEHAVIOR_ANALYSIS_PROMPT}
 `
 
-  return { markdown, csv, eventCount: events.length, sessionCount }
+  return { markdown, csv, ...observationCsvs, eventCount: events.length, sessionCount }
 }
 
 function folderFilePath(folder: string, filename: string) {
@@ -261,7 +384,9 @@ export async function exportBehaviorAnalyticsBundle(options: BehaviorExportOptio
   const folder = await dialog.openDirectory() as string | null
   if (!folder) return null
 
-  const [events, subjects, evidence] = await Promise.all([getBehaviorEvents(), getSubjects(), getSessionEvidence()])
+  const [events, subjects, evidence, sessions, blocks, contexts] = await Promise.all([
+    getBehaviorEvents(), getSubjects(), getSessionEvidence(), getSessions(), getAllSessionBlocks(), getAllSessionContexts(),
+  ])
   const chapters = getAllChapters()
   const generatedAt = new Date().toISOString()
   const bundle = buildBehaviorExportBundle({
@@ -272,14 +397,22 @@ export async function exportBehaviorAnalyticsBundle(options: BehaviorExportOptio
     generatedAt,
     appVersion: __APP_VERSION__,
     evidence,
+    sessions,
+    blocks,
+    contexts,
+    pseudonymSalt: getObservationPseudonymSalt(),
   }, options)
 
   const stamp = generatedAt.slice(0, 16).replace('T', '-').replace(':', '')
   const markdownPath = folderFilePath(folder, `yoridokoro-analyse-${stamp}.md`)
   const csvPath = folderFilePath(folder, `yoridokoro-evenements-${stamp}.csv`)
+  const opportunitiesPath = folderFilePath(folder, `yoridokoro-opportunites-${stamp}.csv`)
+  const sessionsPath = folderFilePath(folder, `yoridokoro-sessions-${stamp}.csv`)
   await Promise.all([
     fs.writeTextFileAtomic(markdownPath, bundle.markdown),
     fs.writeTextFileAtomic(csvPath, bundle.csv),
+    fs.writeTextFileAtomic(opportunitiesPath, bundle.opportunitiesCsv),
+    fs.writeTextFileAtomic(sessionsPath, bundle.sessionsCsv),
   ])
-  return { folder, markdownPath, csvPath, ...bundle }
+  return { folder, markdownPath, csvPath, opportunitiesPath, sessionsPath, ...bundle }
 }
