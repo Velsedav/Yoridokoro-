@@ -30,4 +30,20 @@
 .ac-progress-list p { margin: 3px 0 0; color: var(--ac-muted); font-size: 10px; }
 .ac-progress-empty { margin: 12px 0 0; padding: 14px; color: var(--ac-muted); border: 1px dashed var(--ac-line); border-radius: 6px; font-size: 11px; }
 
-@media(max-width:700px){.ac-progress-list li{grid-template-columns:4px 62px minmax(0,1fr);gap:8px;padding-inline:8px}}
+.ac-evidence { order: 3; margin-top: 24px; padding: 18px; border: 1px solid var(--ac-line); border-radius: 8px; background: var(--ac-surface); }
+.ac-evidence .ac-section-head > small { color: var(--ac-muted); font: 600 9px var(--font-mono, monospace); text-transform: uppercase; }
+.ac-evidence-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ac-evidence-list > li { padding: 14px; border: 1px solid var(--ac-line); border-radius: 7px; background: var(--ac-raised); }
+.ac-evidence-list header { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; }
+.ac-evidence-list time { color: var(--ac-accent); font: 700 9px var(--font-mono, monospace); text-transform: uppercase; }
+.ac-evidence-list header div { display: grid; gap: 2px; }
+.ac-evidence-list header strong { font: 600 17px var(--font-heading, Georgia, serif); }
+.ac-evidence-list header span { color: var(--ac-muted); font-size: 10px; }
+.ac-evidence-list dl { margin: 13px 0 0; display: grid; gap: 7px; }
+.ac-evidence-list dl > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; padding-top: 7px; border-top: 1px solid var(--ac-line); }
+.ac-evidence-list dt { color: var(--ac-muted); font: 700 8px var(--font-mono, monospace); letter-spacing: .05em; text-transform: uppercase; }
+.ac-evidence-list dd { margin: 0; color: var(--ac-text); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.ac-evidence-list .ac-evidence-resume { padding: 9px; border: 1px solid color-mix(in srgb, var(--ac-accent) 30%, var(--ac-line)); border-radius: 5px; background: color-mix(in srgb, var(--ac-accent) 6%, transparent); }
+
+@media(max-width:800px){.ac-evidence-list{grid-template-columns:1fr}}
+@media(max-width:700px){.ac-progress-list li{grid-template-columns:4px 62px minmax(0,1fr);gap:8px;padding-inline:8px}.ac-evidence-list dl>div{grid-template-columns:1fr;gap:3px}}

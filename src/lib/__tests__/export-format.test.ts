@@ -60,6 +60,15 @@ describe('Yoridokoro backup format', () => {
     expect(exportSource).toContain('s.importance_weight ?? 5')
     expect(exportSource).toContain('b.chapter_id ?? null')
     expect(exportSource).toContain('data.session_effects ?? []')
+    expect(exportSource).toContain("db.select('SELECT * FROM session_evidence")
+    expect(exportSource).toContain('data.session_evidence ?? []')
+    expect(exportSource).toContain('INSERT OR REPLACE INTO session_evidence')
+  })
+
+  it('creates durable session evidence with the database migration', () => {
+    const mainSource = readFileSync(resolve(process.cwd(), 'electron/main.ts'), 'utf8')
+    expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS session_evidence')
+    expect(mainSource).toContain("db.pragma('user_version = 5')")
   })
 
   it('navigates directly between collections and combines Top, year, and decade filters', () => {

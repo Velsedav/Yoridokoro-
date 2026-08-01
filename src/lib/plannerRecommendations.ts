@@ -18,6 +18,7 @@ export interface PlannerRecommendation {
   suggestedTechniqueId: string
   allocationInfluenced: boolean
   allocationDeficit: number
+  resumePoint?: string
 }
 
 type RecommendationSubject = Pick<
@@ -139,6 +140,7 @@ export function buildPlannerRecommendations(
         suggestedTechniqueId: techniqueFor('progress', chapter.focusType),
         allocationInfluenced: false,
         allocationDeficit: allocationDeficits.get(subject.id) ?? 0,
+        resumePoint: chapter.resumePoint,
         subject,
       })
     }
@@ -161,6 +163,7 @@ export function buildPlannerRecommendations(
         suggestedTechniqueId: techniqueFor('review', chapter.focusType),
         allocationInfluenced: false,
         allocationDeficit: allocationDeficits.get(subject.id) ?? 0,
+        resumePoint: chapter.resumePoint,
         subject,
         critical: daysOverdue >= Math.max(2, status.currentIntervalDays),
       })
@@ -212,5 +215,6 @@ export function buildPlannerRecommendations(
     suggestedTechniqueId: item.suggestedTechniqueId,
     allocationInfluenced: item.allocationInfluenced,
     allocationDeficit: item.allocationDeficit,
+    resumePoint: item.resumePoint,
   }))
 }

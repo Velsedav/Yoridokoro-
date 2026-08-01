@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, BarChart3, BookOpen, Brain, CalendarDays, Check, Heart, Pause, Play, Plus, Sparkles, Target, Trash2, X } from 'lucide-react'
+import { ArrowRight, Brain, Check, Heart, NotebookPen, Pause, Play, Plus, RefreshCcw, Sparkles, Target, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { getSessions, getSubjects, type Session, type Subject } from '../lib/db'
-import ObsidianQuickStart from '../components/ObsidianQuickStart'
+import { getSessionEvidence, getSessions, getSubjects, type Session, type SessionEvidence, type Subject } from '../lib/db'
 import NextStudyStep from '../components/NextStudyStep'
 import { daysSinceContact, getPeople, type Person } from '../lib/relations'
 import { createEisenhowerTask, deleteEisenhowerTask, EISENHOWER_QUADRANTS, getEisenhowerTasks, moveEisenhowerTask, setEisenhowerTaskDone, type EisenhowerQuadrant, type EisenhowerTask } from '../lib/eisenhower'
 import { getAllChapters } from '../lib/chapters'
 import { buildPlannerRecommendations } from '../lib/plannerRecommendations'
 import { usePlannerAllocation } from '../lib/plannerAllocation'
-import { buildGuidedDraft, createActiveSession, guidedObjectiveKey } from '../lib/guidedSession'
+import { buildGuidedDraft, createActiveSession, createFiveMinuteSession, guidedObjectiveKey } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
 import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
@@ -48,6 +47,13 @@ function isToday(iso: string) {
   return new Date(iso).toDateString() === new Date().toDateString()
 }
 
+function calendarDaysSince(iso: string, now = new Date()) {
+  const then = new Date(iso)
+  const localThen = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime()
+  const localNow = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  return Math.max(0, Math.round((localNow - localThen) / 86_400_000))
+}
+
 const ADHD_SPRINT_KEY = 'yoridokoro-adhd-sprint-v1'
 
 type AdhdSprint = { label: string; durationMinutes: number; endsAt: number }
@@ -76,6 +82,7 @@ export default function TodayDashboard() {
   const { t } = useTranslation()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
+  const [studyEvidence, setStudyEvidence] = useState<SessionEvidence[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [eisenhowerTasks, setEisenhowerTasks] = useState<EisenhowerTask[]>([])
   const [taskDrafts, setTaskDrafts] = useState<Record<EisenhowerQuadrant, string>>({ do: '', schedule: '', delegate: '', eliminate: '' })
@@ -85,7 +92,6 @@ export default function TodayDashboard() {
   const [focusStatus, setFocusStatus] = useState('')
   const [activityNow, setActivityNow] = useState(new Date())
   const [active, setActive] = useState<ActiveSession | null>(readActiveSession)
-  const [quickStart, setQuickStart] = useState<Subject | null>(null)
   const [loading, setLoading] = useState(true)
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   const opportunityIdRef = useRef(crypto.randomUUID())
@@ -93,15 +99,17 @@ export default function TodayDashboard() {
   useEffect(() => {
     let mounted = true
     void (async () => {
-      const [nextSubjects, nextSessions, nextPeople, nextTasks] = await Promise.all([
+      const [nextSubjects, nextSessions, nextPeople, nextTasks, nextEvidence] = await Promise.all([
         getSubjects().catch(() => [] as Subject[]),
         getSessions().catch(() => [] as Session[]),
         getPeople().catch(() => [] as Person[]),
         getEisenhowerTasks().catch(() => [] as EisenhowerTask[]),
+        getSessionEvidence().catch(() => [] as SessionEvidence[]),
       ])
       if (!mounted) return
       setSubjects(nextSubjects.filter(subject => !subject.archived && !subject.deleted_at))
       setSessions(nextSessions)
+      setStudyEvidence(nextEvidence)
       setPeople(nextPeople)
       setEisenhowerTasks(nextTasks)
       setLoading(false)
@@ -117,14 +125,16 @@ export default function TodayDashboard() {
     setFocusStatus(`Sprint terminé : ${adhdSprint.label}. Prenez dix secondes pour choisir la suite.`)
   }, [activityNow, adhdSprint])
 
-  const todayMinutes = useMemo(
-    () => sessions.filter(session => isToday(session.started_at) && session.status !== 'abandoned').reduce((total, session) => total + (session.actual_seconds || session.actual_minutes * 60 || 0) / 60, 0),
-    [sessions],
-  )
-
-  const quickSubjects = useMemo(() => [...subjects]
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.last_studied_at || 0).getTime() - new Date(a.last_studied_at || 0).getTime())
-    .slice(0, 6), [subjects])
+  const meaningfulSessions = useMemo(() => sessions.filter(session => session.status !== 'abandoned'
+    && (session.actual_seconds || session.actual_minutes * 60 || 0) >= 60), [sessions])
+  const todaySessions = useMemo(() => meaningfulSessions.filter(session => isToday(session.started_at)), [meaningfulSessions])
+  const todayMinutes = useMemo(() => todaySessions.reduce(
+    (total, session) => total + (session.actual_seconds || session.actual_minutes * 60 || 0) / 60, 0,
+  ), [todaySessions])
+  const todayEvidenceCount = useMemo(() => studyEvidence.filter(item => isToday(item.created_at)).length, [studyEvidence])
+  const latestEvidence = studyEvidence[0] ?? null
+  const lastReturnSession = meaningfulSessions[0] ?? null
+  const daysSinceLastReturn = lastReturnSession ? calendarDaysSince(lastReturnSession.started_at, activityNow) : null
 
   const recommendations = useMemo(
     () => buildPlannerRecommendations(subjects, getAllChapters(), new Date(), { workSecondsBySubject }).slice(0, 3),
@@ -154,11 +164,6 @@ export default function TodayDashboard() {
     })
   }, [active, loading, recommendation, recommendations.length, suggestionIndex])
 
-  const neglected = useMemo(() => [...subjects]
-    .filter(subject => subject.last_studied_at)
-    .sort((a, b) => new Date(a.last_studied_at || 0).getTime() - new Date(b.last_studied_at || 0).getTime())
-    .slice(0, 3), [subjects])
-
   const deadlines = useMemo(() => subjects
     .filter(subject => subject.deadline && new Date(subject.deadline).getTime() >= Date.now() - 86400000)
     .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime())
@@ -179,12 +184,12 @@ export default function TodayDashboard() {
   useEffect(() => {
     if (loading || active || !recommendation) return
     const handleEnter = (event: KeyboardEvent) => {
-      if (event.key !== 'Enter' || event.repeat || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return
+      if (!['Enter', '5'].includes(event.key) || event.repeat || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return
       const target = event.target instanceof HTMLElement ? event.target : null
       if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], .modal-overlay, .oqs-overlay')) return
       event.preventDefault()
       event.stopPropagation()
-      void startRecommendation('keyboard')
+      void startRecommendation('keyboard', event.key === '5')
     }
     window.addEventListener('keydown', handleEnter, true)
     return () => window.removeEventListener('keydown', handleEnter, true)
@@ -217,7 +222,7 @@ export default function TodayDashboard() {
   }
 
   function startFocusSprint() {
-    const label = nextAction.trim() || eisenhowerTasks.find(task => task.quadrant === 'do' && !task.done)?.title || deadlines[0]?.name || quickSubjects[0]?.name
+    const label = nextAction.trim() || eisenhowerTasks.find(task => task.quadrant === 'do' && !task.done)?.title || deadlines[0]?.name || recommendation?.subjectName
     if (!label) {
       setFocusStatus('Écrivez une action minuscule et concrète avant de démarrer.')
       return
@@ -235,7 +240,7 @@ export default function TodayDashboard() {
     setFocusStatus(completed ? 'Action terminée. C’est suffisant pour avancer.' : 'Sprint arrêté sans jugement. Vous pouvez recommencer plus petit.')
   }
 
-  async function startRecommendation(inputMethod: 'keyboard' | 'pointer' = 'pointer') {
+  async function startRecommendation(inputMethod: 'keyboard' | 'pointer' = 'pointer', justFive = false) {
     if (!recommendation) return
     const draft = buildGuidedDraft(recommendation, t(guidedObjectiveKey(recommendation)))
     const analytics = {
@@ -258,10 +263,13 @@ export default function TodayDashboard() {
         recommendation_kind: recommendation.kind,
         recommendation_reason: recommendation.reason,
         input_method: inputMethod,
+        started_from: justFive ? 'just-five' : 'guided',
       },
       dedupeKey: `recommendation-accepted:${analytics.opportunityId}`,
     })
-    const nextSession = createActiveSession(draft, true, analytics)
+    const nextSession = justFive
+      ? createFiveMinuteSession(recommendation, t(guidedObjectiveKey(recommendation)), analytics)
+      : createActiveSession(draft, true, analytics)
     localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
     localStorage.removeItem(SESSION_RETURN_PATH_KEY)
     localStorage.setItem('activeSession', JSON.stringify(nextSession))
@@ -279,7 +287,8 @@ export default function TodayDashboard() {
         planned_seconds: nextSession.plannedMinutes * 60,
         input_method: inputMethod,
         timer_display_mode: 'countdown-visible',
-        prep_checklist_mode: 'optional',
+        prep_checklist_mode: justFive ? 'skipped-by-design' : 'optional',
+        started_from: justFive ? 'just-five' : 'guided',
       },
       dedupeKey: `session-created:${nextSession.sessionId}`,
     })
@@ -308,8 +317,7 @@ export default function TodayDashboard() {
   return (
     <div className="yd-page">
       <header className="yd-header">
-        <div><span className="yd-eyebrow"><Sparkles size={14} /> Votre point d’appui</span><h1>Aujourd’hui</h1><p>{dateLabel} · Décider, démarrer et garder l’essentiel visible au même endroit.</p></div>
-        <button className="yd-secondary-button" onClick={() => navigate('/analytics')}><BarChart3 size={16} /> Voir les analyses</button>
+        <div><span className="yd-eyebrow"><Sparkles size={14} /> Votre point d’appui</span><h1>Aujourd’hui</h1><p>{dateLabel} · Une seule prochaine étape, puis le droit de s’arrêter.</p></div>
       </header>
 
       {active ? (
@@ -324,6 +332,7 @@ export default function TodayDashboard() {
           <NextStudyStep
             recommendation={recommendation}
             onStart={() => void startRecommendation('pointer')}
+            onJustFive={() => void startRecommendation('pointer', true)}
             onOther={recommendations.length > 1 ? requestOtherRecommendation : undefined}
             autoFocus
             compact
@@ -335,6 +344,35 @@ export default function TodayDashboard() {
           </section>
         )
       )}
+
+      <section className="yd-continuity-row" aria-label="Continuité de l’étude">
+        <article className="yd-continuity" aria-labelledby="continuity-title">
+          <header><span className="yd-eyebrow"><NotebookPen size={14} /> Continuité</span><h2 id="continuity-title">Là où vous en étiez</h2></header>
+          {latestEvidence ? <>
+            <p className="yd-continuity-context"><strong>{latestEvidence.subject_name || 'Dernière séance'}</strong>{latestEvidence.chapter_name && <span>{latestEvidence.chapter_name}</span>}<time>{new Date(latestEvidence.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</time></p>
+            <dl>
+              {latestEvidence.did_text && <div><dt>Ce que j’ai fait</dt><dd>{latestEvidence.did_text}</dd></div>}
+              {latestEvidence.result_text && <div><dt>Résultat</dt><dd>{latestEvidence.result_text}</dd></div>}
+              {latestEvidence.resume_point && <div className="is-resume"><dt>Point de reprise</dt><dd>{latestEvidence.resume_point}</dd></div>}
+            </dl>
+          </> : <p className="yd-continuity-empty">Votre prochaine micro-preuve apparaîtra ici. Une phrase suffit pour retrouver le fil.</p>}
+        </article>
+
+        <aside className="yd-return-sign" aria-labelledby="return-sign-title">
+          <span><RefreshCcw size={14} /> Retour, pas série parfaite</span>
+          <h2 id="return-sign-title">Jours depuis le dernier retour</h2>
+          <strong>{daysSinceLastReturn ?? '—'}</strong>
+          <p>{lastReturnSession
+            ? daysSinceLastReturn === 0 ? 'Vous êtes revenu aujourd’hui.' : 'Cinq minutes suffisent pour remettre le compteur à zéro.'
+            : 'La première minute de travail lancera ce compteur.'}</p>
+        </aside>
+      </section>
+
+      <p className="yd-today-summary">
+        <strong>Aujourd’hui</strong><span>{formatMinutes(todayMinutes)}</span><i aria-hidden="true" />
+        <span>{todaySessions.length} session{todaySessions.length > 1 ? 's' : ''}</span><i aria-hidden="true" />
+        <span>{todayEvidenceCount} preuve{todayEvidenceCount > 1 ? 's' : ''}</span>
+      </p>
 
       <details className="yd-organize">
         <summary><Target size={16} /><span><strong>Organiser ma journée</strong><small>Tâches, démarrage libre et aperçu</small></span><ArrowRight size={16} className="yd-organize-chevron" /></summary>
@@ -401,32 +439,9 @@ export default function TodayDashboard() {
         <ul className="yd-focus-principles" aria-label="Principes du mode démarrage"><li><b>1.</b> Externaliser</li><li><b>2.</b> Réduire</li><li><b>3.</b> Commencer</li></ul>
       </section>
 
-      <section className="yd-section" aria-labelledby="favorites-title">
-        <div className="yd-section-heading"><div><span className="yd-eyebrow"><BookOpen size={14} /> Sujets</span><h2 id="favorites-title">Sujets récents</h2></div><button className="yd-text-button" onClick={() => navigate('/study')}>Tous les sujets <ArrowRight size={15} /></button></div>
-        <div className="yd-quick-grid">
-          {quickSubjects.map((subject, index) => (
-            <button key={subject.id} className="yd-quick-card" onClick={() => setQuickStart(subject)}>
-              <span className="yd-quick-index">{String(index + 1).padStart(2, '0')}</span>
-              <span><strong>{subject.name}</strong><small>{subject.last_studied_at ? `Dernière session ${new Date(subject.last_studied_at).toLocaleDateString('fr-FR')}` : 'Prêt à commencer'}</small></span>
-              <Play size={17} aria-hidden="true" />
-            </button>
-          ))}
-          {quickSubjects.length === 0 && <button className="yd-empty-action" onClick={() => navigate('/study')}><Plus size={18} /> Créer votre première matière</button>}
-        </div>
-      </section>
-
       <section className="yd-section yd-overview-section" aria-labelledby="overview-title">
-        <div className="yd-section-heading"><div><span className="yd-eyebrow"><Sparkles size={14} /> Garder le cap</span><h2 id="overview-title">À garder en vue</h2><p className="yd-section-description">Votre journée, vos échéances et les éléments qui méritent de revenir dans votre attention.</p></div></div>
+        <div className="yd-section-heading"><div><span className="yd-eyebrow"><Sparkles size={14} /> En dehors de l’étude</span><h2 id="overview-title">À garder en vue</h2><p className="yd-section-description">Les échéances et les relations restent disponibles sans concurrencer la prochaine étape d’étude.</p></div></div>
         <div className="yd-columns">
-        <section className="yd-panel" aria-labelledby="today-title">
-          <div className="yd-panel-heading"><span><CalendarDays size={16} /> Aujourd’hui</span><strong>{formatMinutes(todayMinutes)}</strong></div>
-          <div className="yd-panel-body">
-            <p className="yd-big-number">{sessions.filter(session => isToday(session.started_at) && session.status !== 'abandoned').length}</p>
-            <p>session{sessions.filter(session => isToday(session.started_at) && session.status !== 'abandoned').length === 1 ? '' : 's'} enregistrée{sessions.filter(session => isToday(session.started_at) && session.status !== 'abandoned').length === 1 ? '' : 's'}</p>
-            <button className="yd-text-button" onClick={() => navigate('/plan')}>Ouvrir le planner <ArrowRight size={15} /></button>
-          </div>
-        </section>
-
         <section className="yd-panel" aria-labelledby="deadlines-title">
           <div className="yd-panel-heading"><span id="deadlines-title"><Target size={16} /> Prochainement</span></div>
           <ul className="yd-list">
@@ -443,18 +458,9 @@ export default function TodayDashboard() {
           </ul>
         </section>
 
-        <section className="yd-panel yd-panel-wide" aria-labelledby="resume-title">
-          <div className="yd-panel-heading"><span id="resume-title"><BookOpen size={16} /> À remettre dans votre champ de vision</span></div>
-          <ul className="yd-list">
-            {neglected.map(subject => <li key={subject.id}><button onClick={() => setQuickStart(subject)}><span><strong>{subject.name}</strong><small>Reprendre en un clic</small></span><time>{new Date(subject.last_studied_at!).toLocaleDateString('fr-FR')}</time><Play size={15} /></button></li>)}
-            {neglected.length === 0 && <li className="yd-list-empty">Vos matières réapparaîtront ici avec le temps.</li>}
-          </ul>
-        </section>
         </div>
       </section>
       </details>
-
-      {quickStart && <ObsidianQuickStart subject={quickStart} onClose={() => setQuickStart(null)} />}
     </div>
   )
 }

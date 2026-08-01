@@ -75,7 +75,7 @@ function base64ToBytes(dataUrl: string): Uint8Array {
 
 async function dumpStudyBuddyDb() {
   const db = await getDb();
-  const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, quotes, metacognition_logs, error_log,
+  const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events] = await Promise.all([
     db.select<any[]>('SELECT * FROM subjects'),
     db.select('SELECT * FROM tags'),
@@ -84,6 +84,7 @@ async function dumpStudyBuddyDb() {
     db.select('SELECT * FROM sessions ORDER BY started_at'),
     db.select('SELECT * FROM session_blocks ORDER BY session_id, idx'),
     db.select('SELECT * FROM session_effects ORDER BY session_id, effect_type, target_id'),
+    db.select('SELECT * FROM session_evidence ORDER BY created_at'),
     db.select('SELECT * FROM quotes ORDER BY idx'),
     db.select('SELECT * FROM metacognition_logs ORDER BY created_at'),
     db.select('SELECT * FROM error_log ORDER BY created_at'),
@@ -113,7 +114,7 @@ async function dumpStudyBuddyDb() {
     } catch {}
   }
 
-  return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, quotes, metacognition_logs, error_log,
+  return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, subject_covers };
 }
 
@@ -390,6 +391,18 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
       await db.execute(
         `INSERT OR IGNORE INTO session_effects(session_id,effect_type,target_id,applied_at,applied) VALUES ($1,$2,$3,$4,$5)`,
         [effect.session_id, effect.effect_type, effect.target_id, effect.applied_at ?? null, effect.applied ?? 1]
+      );
+    } catch {}
+  }
+  for (const evidence of data.session_evidence ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR REPLACE INTO session_evidence
+         (session_id,subject_id,chapter_id,chapter_name,created_at,did_text,action_text,result_text,meaning_text,resume_point)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [evidence.session_id, evidence.subject_id ?? null, evidence.chapter_id ?? null, evidence.chapter_name ?? null,
+         evidence.created_at, evidence.did_text ?? null, evidence.action_text ?? null, evidence.result_text ?? null,
+         evidence.meaning_text ?? null, evidence.resume_point ?? null]
       );
     } catch {}
   }

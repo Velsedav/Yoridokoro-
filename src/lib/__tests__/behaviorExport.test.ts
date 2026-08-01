@@ -81,4 +81,27 @@ describe('behaviour analysis export', () => {
     expect(bundle.csv).toContain('121')
     expect(bundle.markdown).toContain('2 min 1 s')
   })
+
+  it('includes voluntary micro-evidence and its resume point in Markdown only', () => {
+    const bundle = buildBehaviorExportBundle({
+      events: [BASE_EVENT],
+      subjectNames: { 'subject-secret-id': 'Python' },
+      chapterNames: { 'chapter-secret-id': 'Functions' },
+      preferences: { prepChecklistHelpful: true, countdownTimerStimulating: true },
+      generatedAt: '2026-07-21T12:00:00.000Z',
+      appVersion: '0.2.3',
+      evidence: [{
+        session_id: 'session-secret-id', subject_id: 'subject-secret-id', chapter_id: 'chapter-secret-id',
+        chapter_name: 'Functions', created_at: '2026-07-20T11:00:00.000Z',
+        did_text: 'J’ai écrit une fonction.', action_text: 'npm test', result_text: '12 tests passent.',
+        meaning_text: 'Je comprends mieux les paramètres.', resume_point: 'Ajouter le cas limite.',
+      }],
+    }, { period: 30, pseudonymizeLabels: true })
+
+    expect(bundle.markdown).toContain('## Micro-preuves et points de reprise')
+    expect(bundle.markdown).toContain('> J’ai écrit une fonction.')
+    expect(bundle.markdown).toContain('> Ajouter le cas limite.')
+    expect(bundle.markdown).toContain('Sujet 01 · Chapitre 01')
+    expect(bundle.csv).not.toContain('J’ai écrit une fonction.')
+  })
 })

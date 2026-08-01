@@ -142,6 +142,16 @@ describe('buildPlannerRecommendations', () => {
     expect(result[0]).toMatchObject({ chapterId: 'bio-2', reason: 'next-chapter', suggestedTechniqueId: 'disc1' })
   })
 
+  it('carries the saved resume point into the next recommendation', () => {
+    const result = buildPlannerRecommendations(
+      [subject('python')],
+      [chapter('python-1', 'python', { resumePoint: 'Relire uniquement les deux phrases suivantes.' })],
+      now,
+    )
+
+    expect(result[0].resumePoint).toBe('Relire uniquement les deux phrases suivantes.')
+  })
+
   it('puts one critically overdue review before forward progress', () => {
     const result = buildPlannerRecommendations(
       [subject('maths')],

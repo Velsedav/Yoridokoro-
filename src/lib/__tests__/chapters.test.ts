@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { applyMasteryRating, applyMasteryRatingForSession, archiveChapter, getChapterSpacingIntervals, getChaptersForSubject, getRatings, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus, incrementStudyCountForSession, parseSpacing, replaceChaptersForSubject, saveRating, synchronizeStudyDataDurability, unarchiveChapter } from '../chapters'
+import { applyMasteryRating, applyMasteryRatingForSession, archiveChapter, getChapterSpacingIntervals, getChaptersForSubject, getRatings, getRetentionPercent, getRecommendations, getSpacedRepetitionStatus, incrementStudyCountForSession, parseSpacing, replaceChaptersForSubject, saveRating, setChapterResumePoint, synchronizeStudyDataDurability, unarchiveChapter } from '../chapters'
 import type { Chapter } from '../chapters'
 
 // ── parseSpacing ──────────────────────────────────────────────────────────────
@@ -160,6 +160,20 @@ describe('chapter archives', () => {
     unarchiveChapter(chapter.id)
 
     expect(getChaptersForSubject('sub-1')[0].archived).toBeUndefined()
+  })
+})
+
+describe('chapter resume point', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('trims, updates, and clears the exact next action', () => {
+    replaceChaptersForSubject('sub-1', [makeChapter({ id: 'resume' })])
+
+    setChapterResumePoint('resume', '  Refaire les deux prochaines phrases.  ')
+    expect(getChaptersForSubject('sub-1')[0].resumePoint).toBe('Refaire les deux prochaines phrases.')
+
+    setChapterResumePoint('resume', '   ')
+    expect(getChaptersForSubject('sub-1')[0].resumePoint).toBeUndefined()
   })
 })
 

@@ -26,6 +26,29 @@
 .yd-active-status { align-self: stretch; padding-right: 20px; border-right: 1px solid var(--yd-line); display: flex; align-items: center; gap: 8px; color: var(--yd-accent); font: 700 10px var(--font-mono, monospace); text-transform: uppercase; }
 .yd-pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--yd-accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--yd-accent) 14%, transparent); }
 .yd-timer { font: 500 25px var(--font-mono, monospace); letter-spacing: .03em; }
+.yd-continuity-row { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(250px, .55fr); gap: 12px; }
+.yd-continuity, .yd-return-sign { min-width: 0; border: 1px solid var(--yd-line); border-radius: 9px; background: var(--yd-surface); }
+.yd-continuity { padding: 20px 22px; }
+.yd-continuity > header { display: flex; align-items: baseline; gap: 12px; }
+.yd-continuity h2 { margin: 0; font: 600 22px var(--font-heading, Georgia, serif); }
+.yd-continuity-context { margin: 15px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--yd-line); display: flex; align-items: baseline; gap: 9px; color: var(--yd-muted); font-size: 11px; }
+.yd-continuity-context strong { color: var(--yd-text); font-size: 13px; }
+.yd-continuity-context time { margin-left: auto; }
+.yd-continuity dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.yd-continuity dl > div { min-width: 0; padding: 10px 12px; border-left: 2px solid var(--yd-line); background: color-mix(in srgb, var(--yd-subtle) 58%, transparent); }
+.yd-continuity dl > .is-resume { grid-column: 1 / -1; border-left-color: var(--yd-accent); background: color-mix(in srgb, var(--yd-accent) 7%, var(--yd-surface)); }
+.yd-continuity dt { margin-bottom: 4px; color: var(--yd-muted); font: 700 9px var(--font-mono, monospace); letter-spacing: .08em; text-transform: uppercase; }
+.yd-continuity dd { margin: 0; overflow-wrap: anywhere; line-height: 1.45; font-size: 12px; }
+.yd-continuity .is-resume dd { font-weight: 700; }
+.yd-continuity-empty { margin: 15px 0 0; color: var(--yd-muted); font-size: 12px; line-height: 1.55; }
+.yd-return-sign { padding: 17px 19px; box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--yd-line) 48%, transparent); text-align: center; display: grid; place-items: center; align-content: center; }
+.yd-return-sign > span { display: inline-flex; align-items: center; gap: 6px; color: var(--yd-accent); font: 800 9px var(--font-mono, monospace); letter-spacing: .1em; text-transform: uppercase; }
+.yd-return-sign h2 { max-width: 210px; margin: 10px 0 2px; font: 800 10px/1.35 var(--font-mono, monospace); letter-spacing: .12em; text-transform: uppercase; }
+.yd-return-sign > strong { font: 700 clamp(52px, 7vw, 82px)/.95 var(--font-mono, monospace); }
+.yd-return-sign p { max-width: 240px; margin: 8px 0 0; color: var(--yd-muted); font-size: 10px; line-height: 1.45; }
+.yd-today-summary { margin: 12px 2px 0; display: flex; align-items: center; gap: 9px; color: var(--yd-muted); font-size: 11px; }
+.yd-today-summary strong { color: var(--yd-text); }
+.yd-today-summary i { width: 3px; height: 3px; border-radius: 50%; background: var(--yd-accent); }
 .yd-section { margin-top: 18px; padding: 22px; border: 1px solid var(--yd-line); border-radius: 9px; background: var(--yd-surface); }
 .yd-organize { margin-top: 18px; }
 .yd-organize > summary { min-height: 58px; padding: 10px 16px; border: 1px solid var(--yd-line); border-radius: 8px; background: var(--yd-surface); display: flex; align-items: center; gap: 11px; color: var(--yd-text); cursor: pointer; }
@@ -120,6 +143,6 @@
 .yd-placeholder { max-width: 620px; margin: auto; padding: 40px; }
 .yd-placeholder h1 { color: var(--text-dark); font-size: 48px; }
 .yd-placeholder p { line-height: 1.7; }
-@media (max-width: 1000px) { .yd-quick-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .yd-active { grid-template-columns: auto 1fr auto; } .yd-active .yd-primary-button { grid-column: 2 / -1; justify-self: start; } .yd-focus-lab { grid-template-columns: 1fr; } .yd-focus-principles { justify-content: flex-start; } }
-@media (max-width: 700px) { .yd-page { padding: 20px; } .yd-header, .yd-start-card, .yd-section-heading { align-items: flex-start; flex-direction: column; } .yd-section { padding: 16px; } .yd-quick-grid, .yd-columns, .yd-eisenhower-grid { grid-template-columns: 1fr; } .yd-panel-wide { grid-column: auto; } .yd-active { grid-template-columns: 1fr; } .yd-active-status { min-height: 30px; border-right: 0; border-bottom: 1px solid var(--yd-line); } .yd-active .yd-primary-button { grid-column: auto; } .yd-focus-lab { padding: 18px; } .yd-focus-command { grid-template-columns: 1fr; } .yd-focus-command > .yd-primary-button { grid-column: 1; grid-row: auto; min-height: 44px; } .yd-focus-running { grid-template-columns: 1fr; } .yd-focus-running > time { grid-column: 1; grid-row: auto; } }
+@media (max-width: 1000px) { .yd-quick-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .yd-active { grid-template-columns: auto 1fr auto; } .yd-active .yd-primary-button { grid-column: 2 / -1; justify-self: start; } .yd-continuity-row { grid-template-columns: minmax(0, 1fr) 240px; } .yd-focus-lab { grid-template-columns: 1fr; } .yd-focus-principles { justify-content: flex-start; } }
+@media (max-width: 700px) { .yd-page { padding: 20px; } .yd-header, .yd-start-card, .yd-section-heading { align-items: flex-start; flex-direction: column; } .yd-section { padding: 16px; } .yd-continuity-row, .yd-quick-grid, .yd-columns, .yd-eisenhower-grid { grid-template-columns: 1fr; } .yd-continuity > header, .yd-continuity-context { align-items: flex-start; flex-direction: column; } .yd-continuity-context time { margin-left: 0; } .yd-continuity dl { grid-template-columns: 1fr; } .yd-continuity dl > .is-resume { grid-column: auto; } .yd-today-summary { flex-wrap: wrap; } .yd-panel-wide { grid-column: auto; } .yd-active { grid-template-columns: 1fr; } .yd-active-status { min-height: 30px; border-right: 0; border-bottom: 1px solid var(--yd-line); } .yd-active .yd-primary-button { grid-column: auto; } .yd-focus-lab { padding: 18px; } .yd-focus-command { grid-template-columns: 1fr; } .yd-focus-command > .yd-primary-button { grid-column: 1; grid-row: auto; min-height: 44px; } .yd-focus-running { grid-template-columns: 1fr; } .yd-focus-running > time { grid-column: 1; grid-row: auto; } }
 @media (prefers-reduced-motion: reduce) { .yd-page * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

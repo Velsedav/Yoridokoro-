@@ -1,5 +1,5 @@
 import { getAllChapters } from './chapters'
-import { getSubjects } from './db'
+import { getSessionEvidence, getSubjects, type SessionEvidence } from './db'
 import {
   getBehaviorEvents,
   loadObservationPreferences,
@@ -21,6 +21,7 @@ export interface BehaviorExportSource {
   preferences: ObservationPreferences
   generatedAt: string
   appVersion: string
+  evidence?: SessionEvidence[]
 }
 
 export interface BehaviorExportBundle {
@@ -114,6 +115,10 @@ function ratingCounts(events: Array<BehaviorEventRow & { payload: Record<string,
   return counts
 }
 
+function quoteMarkdown(value: string | null | undefined) {
+  return String(value ?? '').replaceAll('\r', '').split('\n').map(line => `> ${line}`).join('\n')
+}
+
 export function buildBehaviorExportBundle(source: BehaviorExportSource, options: BehaviorExportOptions): BehaviorExportBundle {
   const limit = eventDateLimit(options.period, source.generatedAt)
   const events = source.events
@@ -170,8 +175,20 @@ export function buildBehaviorExportBundle(source: BehaviorExportSource, options:
   const workBlockStarts = events.filter(event => event.event_type === 'block_started' && event.payload.block_type === 'WORK').length
   const skips = events.filter(event => event.event_type === 'block_completed' && event.payload.completion_reason === 'skipped').length
   const ratings = ratingCounts(events)
+  const evidence = (source.evidence ?? []).filter(item => new Date(item.created_at).getTime() >= limit)
   const firstEvent = events[0]?.occurred_at ?? null
   const lastEvent = events.at(-1)?.occurred_at ?? null
+  const evidenceMarkdown = evidence.length
+    ? evidence.map(item => {
+      const labels = [subjectLabel(item.subject_id), chapterLabel(item.chapter_id)].filter(Boolean).join(' · ')
+      const fields = [
+        ['Ce que j’ai fait', item.did_text], ['Commande ou action', item.action_text],
+        ['Résultat', item.result_text], ['Ce que ça signifie', item.meaning_text],
+        ['Point de reprise', item.resume_point],
+      ].filter((entry): entry is [string, string] => Boolean(entry[1]))
+      return `### ${item.created_at}${labels ? ` · ${labels}` : ''}\n\n${fields.map(([label, value]) => `**${label}**\n\n${quoteMarkdown(value)}`).join('\n\n')}`
+    }).join('\n\n')
+    : '_Aucune micro-preuve enregistrée sur cette période._'
 
   const markdown = `# Yoridokoro — Export d’observation personnelle
 
@@ -184,7 +201,8 @@ Libellés : ${options.pseudonymizeLabels ? 'pseudonymisés' : 'noms d’étude i
 
 - Cet export décrit l’usage du logiciel. Il ne mesure ni ne diagnostique un TDAH, un CDS, une dépression ou un burnout.
 - Une donnée absente signifie « inconnue », jamais « échec ».
-- Les notes, citations, relations, données Art, URL, frappes clavier et textes libres ne sont pas inclus.
+- Les notes générales, citations, relations, données Art, URL et frappes clavier ne sont pas incluses.
+- Les micro-preuves ci-dessous sont du texte libre volontairement exporté. Leur contenu n’est pas pseudonymisé automatiquement.
 - Les évaluations Oublié / Difficile / Bien / Facile décrivent le rappel à cet instant, pas la valeur ou l’intelligence de la personne.
 
 ## Préférences déclarées
@@ -208,6 +226,10 @@ Libellés : ${options.pseudonymizeLabels ? 'pseudonymisés' : 'noms d’étude i
 - Temps de travail sauvegardé : ${Math.floor(actualWorkSeconds / 60)} min ${actualWorkSeconds % 60} s
 - Blocs passés : ${skips}
 - Évaluations : Oublié ${ratings.forgot} · Difficile ${ratings.hard} · Bien ${ratings.good} · Facile ${ratings.easy} · Ignorées ${ratings.skipped}
+
+## Micro-preuves et points de reprise
+
+${evidenceMarkdown}
 
 ## Dictionnaire du fichier CSV
 
@@ -239,7 +261,7 @@ export async function exportBehaviorAnalyticsBundle(options: BehaviorExportOptio
   const folder = await dialog.openDirectory() as string | null
   if (!folder) return null
 
-  const [events, subjects] = await Promise.all([getBehaviorEvents(), getSubjects()])
+  const [events, subjects, evidence] = await Promise.all([getBehaviorEvents(), getSubjects(), getSessionEvidence()])
   const chapters = getAllChapters()
   const generatedAt = new Date().toISOString()
   const bundle = buildBehaviorExportBundle({
@@ -249,6 +271,7 @@ export async function exportBehaviorAnalyticsBundle(options: BehaviorExportOptio
     preferences: loadObservationPreferences(),
     generatedAt,
     appVersion: __APP_VERSION__,
+    evidence,
   }, options)
 
   const stamp = generatedAt.slice(0, 16).replace('T', '-').replace(':', '')

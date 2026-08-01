@@ -289,6 +289,52 @@ export async function markSessionEvaluated(id: string) {
   await db.execute(`UPDATE sessions SET evaluated_at = $1 WHERE id = $2`, [new Date().toISOString(), id])
 }
 
+export interface SessionEvidence {
+  session_id: string
+  subject_id: string | null
+  chapter_id: string | null
+  chapter_name: string | null
+  created_at: string
+  did_text: string | null
+  action_text: string | null
+  result_text: string | null
+  meaning_text: string | null
+  resume_point: string | null
+  subject_name?: string | null
+  session_started_at?: string | null
+}
+
+export async function saveSessionEvidence(evidence: SessionEvidence): Promise<void> {
+  const db = await getDb()
+  await db.execute(
+    `INSERT INTO session_evidence
+      (session_id,subject_id,chapter_id,chapter_name,created_at,did_text,action_text,result_text,meaning_text,resume_point)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ON CONFLICT(session_id) DO UPDATE SET
+       subject_id=excluded.subject_id,chapter_id=excluded.chapter_id,chapter_name=excluded.chapter_name,
+       created_at=excluded.created_at,did_text=excluded.did_text,action_text=excluded.action_text,
+       result_text=excluded.result_text,meaning_text=excluded.meaning_text,resume_point=excluded.resume_point`,
+    [evidence.session_id, evidence.subject_id, evidence.chapter_id, evidence.chapter_name, evidence.created_at,
+      evidence.did_text, evidence.action_text, evidence.result_text, evidence.meaning_text, evidence.resume_point],
+  )
+}
+
+export async function getSessionEvidence(from?: Date, to?: Date): Promise<SessionEvidence[]> {
+  const db = await getDb()
+  const clauses: string[] = []
+  const params: unknown[] = []
+  if (from) { params.push(from.toISOString()); clauses.push(`e.created_at >= $${params.length}`) }
+  if (to) { params.push(to.toISOString()); clauses.push(`e.created_at < $${params.length}`) }
+  return db.select<SessionEvidence[]>(`
+    SELECT e.*, subj.name AS subject_name, s.started_at AS session_started_at
+    FROM session_evidence e
+    LEFT JOIN subjects subj ON subj.id = e.subject_id
+    LEFT JOIN sessions s ON s.id = e.session_id
+    ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''}
+    ORDER BY e.created_at DESC
+  `, params)
+}
+
 export interface Tag {
   id: string
   name: string

@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpenCheck, Play } from 'lucide-react'
+import { ArrowRight, BookOpenCheck, Play, Zap } from 'lucide-react'
 import { useTranslation } from '../lib/i18n'
 import { TECHNIQUES } from '../lib/techniques'
 import { guidedObjectiveKey } from '../lib/guidedSession'
@@ -8,12 +8,13 @@ import './NextStudyStep.css'
 interface NextStudyStepProps {
   recommendation: PlannerRecommendation
   onStart: () => void
+  onJustFive?: () => void
   onOther?: () => void
   autoFocus?: boolean
   compact?: boolean
 }
 
-export default function NextStudyStep({ recommendation, onStart, onOther, autoFocus = false, compact = false }: NextStudyStepProps) {
+export default function NextStudyStep({ recommendation, onStart, onJustFive, onOther, autoFocus = false, compact = false }: NextStudyStepProps) {
   const { t } = useTranslation()
   const technique = TECHNIQUES.find(item => item.id === recommendation.suggestedTechniqueId)
   const reason = recommendation.allocationInfluenced
@@ -36,6 +37,7 @@ export default function NextStudyStep({ recommendation, onStart, onOther, autoFo
           <span aria-hidden="true"> · </span>{t('planner.focus_duration')}
         </p>
         <p className="next-study-step-reason"><strong>{t('planner.why_label')}</strong> {reason}</p>
+        {recommendation.resumePoint && <p className="next-study-step-resume"><strong>{t('planner.resume_point')}</strong> {recommendation.resumePoint}</p>}
         {!compact && <p className="next-study-step-goal"><strong>{t('planner.goal_label')}</strong> {t(guidedObjectiveKey(recommendation))}</p>}
         {!compact && <p className="next-study-step-technique"><strong>{t('planner.technique_label')}</strong> {technique?.name ?? t('planner.technique_fallback')}</p>}
       </div>
@@ -45,6 +47,11 @@ export default function NextStudyStep({ recommendation, onStart, onOther, autoFo
           <span>{t('planner.start_preparation')}<small>{t('planner.session_structure')}</small></span>
           <kbd aria-hidden="true">↵</kbd>
         </button>
+        {onJustFive && <button type="button" className="next-study-step-five" onClick={onJustFive} aria-keyshortcuts="5">
+          <Zap size={16} fill="currentColor" />
+          <span>{t('planner.just_five')}<small>{t('planner.just_five_hint')}</small></span>
+          <kbd aria-hidden="true">5</kbd>
+        </button>}
         {onOther && <button type="button" className="next-study-step-other" onClick={onOther}>{t('planner.other_suggestion')} <ArrowRight size={14} /></button>}
       </div>
     </article>

@@ -10,7 +10,7 @@ import { useUndoRedo } from '../lib/undo'
 import { ANALYTICS_CATEGORY_COLORS } from '../lib/analytics-utils'
 import { buildPlannerRecommendations, type PlannerRecommendation } from '../lib/plannerRecommendations'
 import { usePlannerAllocation } from '../lib/plannerAllocation'
-import { buildGuidedDraft, guidedObjectiveKey } from '../lib/guidedSession'
+import { buildFiveMinuteDraft, buildGuidedDraft, guidedObjectiveKey } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
 import {
@@ -213,6 +213,7 @@ export default function ObsidianPlanner() {
     repeatCount: number,
     analytics: SessionAnalyticsContext,
     inputMethod: 'keyboard' | 'pointer',
+    entryMode?: 'five-minute',
   ) {
     const planned = draft.reduce((acc, b) => acc + b.minutes, 0)
     const sessionId = crypto.randomUUID()
@@ -227,9 +228,10 @@ export default function ObsidianPlanner() {
       template,
       repeats: repeatCount,
       plannedMinutes: planned,
-      fiveMinAlert,
+      fiveMinAlert: entryMode ? false : fiveMinAlert,
       elapsedSecondsByBlock: {},
       analytics,
+      ...(entryMode ? { entryMode, fiveMinuteDecisionMade: false } : {}),
     }
     localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
     localStorage.removeItem(SESSION_RETURN_PATH_KEY)
@@ -248,7 +250,8 @@ export default function ObsidianPlanner() {
         planned_seconds: planned * 60,
         input_method: inputMethod,
         timer_display_mode: 'countdown-visible',
-        prep_checklist_mode: 'optional',
+        prep_checklist_mode: entryMode ? 'skipped-by-design' : 'optional',
+        started_from: entryMode ? 'just-five' : analytics.planningMode,
       },
       dedupeKey: `session-created:${sessionId}`,
     })
@@ -305,6 +308,25 @@ export default function ObsidianPlanner() {
     )
   }
 
+  async function startFiveMinuteSession(inputMethod: 'keyboard' | 'pointer' = 'pointer') {
+    const fresh = buildPlannerRecommendations(subjects, getAllChapters(), new Date(), { workSecondsBySubject })
+    const recommendation = fresh.find(item => item.id === selectedRecommendation?.id) ?? fresh[0]
+    if (!recommendation) return
+    await recordBehaviorEvent({
+      eventType: 'recommendation_accepted', opportunityId: opportunityIdRef.current,
+      recommendationId: recommendation.id, subjectId: recommendation.subjectId, chapterId: recommendation.chapterId,
+      policyId: ANALYTICS_POLICY_ID, policyVersion: ANALYTICS_POLICY_VERSION,
+      payload: { recommendation_kind: recommendation.kind, recommendation_reason: recommendation.reason, input_method: inputMethod, started_from: 'just-five' },
+      dedupeKey: `recommendation-accepted:${opportunityIdRef.current}`,
+    })
+    await launchSession(
+      buildFiveMinuteDraft(recommendation, recommendationObjective(recommendation)), '5-minute-start', 1,
+      { opportunityId: opportunityIdRef.current, recommendationId: recommendation.id, chapterId: recommendation.chapterId,
+        policyId: ANALYTICS_POLICY_ID, policyVersion: ANALYTICS_POLICY_VERSION, planningMode: 'guided' },
+      inputMethod, 'five-minute',
+    )
+  }
+
   function requestOtherSuggestion() {
     if (!selectedRecommendation || visibleRecommendations.length < 2) return
     void recordBehaviorEvent({
@@ -336,6 +358,11 @@ export default function ObsidianPlanner() {
       if (event.ctrlKey && event.key === 'Enter' && advancedOpen && canStart) {
         event.preventDefault()
         startSession('keyboard')
+        return
+      }
+      if (event.key === '5' && !event.ctrlKey && !event.altKey && !event.metaKey && !advancedOpen && !hasActiveSession) {
+        event.preventDefault()
+        void startFiveMinuteSession('keyboard')
         return
       }
       if (event.key !== 'Enter' || event.ctrlKey || event.altKey || event.metaKey || advancedOpen) return
@@ -434,6 +461,11 @@ export default function ObsidianPlanner() {
                 <p>{recommendationObjective(selectedRecommendation)}</p>
               </div>
 
+              {selectedRecommendation.resumePoint && <div className="op-guided-goal op-resume-point">
+                <span>{t('planner.resume_point')}</span>
+                <p>{selectedRecommendation.resumePoint}</p>
+              </div>}
+
               <dl className="op-recommendation-details">
                 <div>
                   <dt>{t('planner.why_label')}</dt>
@@ -458,6 +490,9 @@ export default function ObsidianPlanner() {
                   <kbd aria-hidden="true">↵</kbd>
                 </button>
                 <div className="op-guided-secondary-actions">
+                  <button className="op-other-suggestion" onClick={() => void startFiveMinuteSession('pointer')} aria-keyshortcuts="5">
+                    {t('planner.just_five')} <kbd>5</kbd>
+                  </button>
                   {visibleRecommendations.length > 1 && (
                     <button className="op-other-suggestion" onClick={requestOtherSuggestion}>
                       {t('planner.other_suggestion')} <ArrowRight size={14} />

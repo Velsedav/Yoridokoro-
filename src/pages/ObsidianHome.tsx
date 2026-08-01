@@ -11,7 +11,7 @@ import SubjectEditorModal from '../components/SubjectEditorModal'
 import NextStudyStep from '../components/NextStudyStep'
 import { buildPlannerRecommendations, type PlannerRecommendation } from '../lib/plannerRecommendations'
 import { usePlannerAllocation } from '../lib/plannerAllocation'
-import { buildGuidedDraft, createActiveSession, guidedObjectiveKey } from '../lib/guidedSession'
+import { buildGuidedDraft, createActiveSession, createFiveMinuteSession, guidedObjectiveKey } from '../lib/guidedSession'
 import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sessionProgress'
 import { useTranslation } from '../lib/i18n'
 import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
@@ -188,6 +188,22 @@ export default function ObsidianHome() {
     })
   }, [loading, recommendation, recommendations.length, suggestionIndex])
 
+  useEffect(() => {
+    if (loading || !recommendation || localStorage.getItem('activeSession')) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!['Enter', '5'].includes(event.key) || event.repeat || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return
+      const target = event.target instanceof HTMLElement ? event.target : null
+      if (target?.closest('input, textarea, select, button, a, summary, [contenteditable="true"], [role="dialog"]')) return
+      event.preventDefault()
+      if (event.key === '5') void launchRecommendation(recommendation, true, 'keyboard')
+      else void startRecommendation('keyboard')
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // The shortcut follows the recommendation currently visible on the page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, recommendation?.id])
+
   function handleViewChange(v: ViewMode) {
     setView(v)
     localStorage.setItem(LS_VIEW_KEY, v)
@@ -213,8 +229,9 @@ export default function ObsidianHome() {
     setAllChapters(getAllChapters())
   }
 
-  async function launchRecommendation(target: PlannerRecommendation) {
-    const draft = buildGuidedDraft(target, t(guidedObjectiveKey(target)))
+  async function launchRecommendation(target: PlannerRecommendation, justFive = false, inputMethod: 'keyboard' | 'pointer' = 'pointer') {
+    const objective = t(guidedObjectiveKey(target))
+    const draft = buildGuidedDraft(target, objective)
     const analytics = {
       opportunityId: opportunityIdRef.current,
       recommendationId: target.id,
@@ -234,11 +251,14 @@ export default function ObsidianHome() {
       payload: {
         recommendation_kind: target.kind,
         recommendation_reason: target.reason,
-        input_method: 'pointer',
+        input_method: inputMethod,
+        started_from: justFive ? 'just-five' : 'guided',
       },
       dedupeKey: `recommendation-accepted:${analytics.opportunityId}`,
     })
-    const nextSession = createActiveSession(draft, true, analytics)
+    const nextSession = justFive
+      ? createFiveMinuteSession(target, objective, analytics)
+      : createActiveSession(draft, true, analytics)
     localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
     localStorage.removeItem(SESSION_RETURN_PATH_KEY)
     localStorage.setItem('activeSession', JSON.stringify(nextSession))
@@ -254,17 +274,18 @@ export default function ObsidianHome() {
       payload: {
         planning_mode: 'guided',
         planned_seconds: nextSession.plannedMinutes * 60,
-        input_method: 'pointer',
+        input_method: inputMethod,
         timer_display_mode: 'countdown-visible',
-        prep_checklist_mode: 'optional',
+        prep_checklist_mode: justFive ? 'skipped-by-design' : 'optional',
+        started_from: justFive ? 'just-five' : 'guided',
       },
       dedupeKey: `session-created:${nextSession.sessionId}`,
     })
     navigate('/session')
   }
 
-  async function startRecommendation() {
-    if (recommendation) await launchRecommendation(recommendation)
+  async function startRecommendation(inputMethod: 'keyboard' | 'pointer' = 'pointer') {
+    if (recommendation) await launchRecommendation(recommendation, false, inputMethod)
   }
 
   async function startCreatedSubject(subjectId: string, subjectName: string, chapter: Chapter) {
@@ -332,7 +353,8 @@ export default function ObsidianHome() {
           <div className="ohi-next-step-wrap">
             <NextStudyStep
               recommendation={recommendation}
-              onStart={() => void startRecommendation()}
+              onStart={() => void startRecommendation('pointer')}
+              onJustFive={() => void launchRecommendation(recommendation, true)}
               onOther={recommendations.length > 1 ? requestOtherRecommendation : undefined}
               compact
             />

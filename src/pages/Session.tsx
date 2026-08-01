@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { formatSecondsMMSS } from '../lib/time';
-import { getSubjects, saveSession, saveErrorLogEntry, markSessionEvaluated } from '../lib/db';
+import { getSubjects, saveSession, saveErrorLogEntry, markSessionEvaluated, saveSessionEvidence } from '../lib/db';
 import { TECHNIQUES } from '../lib/techniques';
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 const openPath = (path: string) => (window as any).electronAPI.shell.openPath(path);
@@ -10,7 +10,7 @@ import { playSFX, SFX } from '../lib/sounds';
 import { useSettings } from '../lib/settings';
 import { useTranslation } from '../lib/i18n';
 import { METACOGNITION_QUESTIONS } from '../lib/metacognitionQuestions';
-import { getChaptersForSubject, incrementStudyCountForSession, applyMasteryRatingForSession, saveRating, clearPreRecalls, getPreRecall, type MasteryRating, type ChapterSource } from '../lib/chapters';
+import { getAllChapters, getChaptersForSubject, incrementStudyCountForSession, applyMasteryRatingForSession, saveRating, clearPreRecalls, getPreRecall, setChapterResumePoint, type MasteryRating, type ChapterSource } from '../lib/chapters';
 import { isWorkoutMode } from '../lib/devMode';
 import { MUSCLE_GROUPS, CATEGORY_LABELS, loadWorkoutLog, markMuscleWorked, isMuscleEligible, loadWorkoutSets, saveWorkoutSet } from '../lib/workout';
 import type { WorkoutLog, WorkoutSets } from '../lib/workout';
@@ -224,7 +224,7 @@ export default function Session() {
     const [zoneOmbreInput, setZoneOmbreInput] = useState('');
     const [workoutLog, setWorkoutLog] = useState<WorkoutLog>(loadWorkoutLog);
     const [workoutSets, setWorkoutSets] = useState<WorkoutSets>(loadWorkoutSets);
-    const [endConfirmStep, setEndConfirmStep] = useState<'none' | 'confirm-stop' | 'confirm-save' | 'saving' | 'save-error' | 'rate-chapters' | 'total-rest'>('none');
+    const [endConfirmStep, setEndConfirmStep] = useState<'none' | 'confirm-stop' | 'confirm-save' | 'saving' | 'save-error' | 'rate-chapters' | 'evidence' | 'total-rest'>('none');
     const [restCountdown, setRestCountdown] = useState(600); // 10 minutes in seconds
     const [postStudyStage, setPostStudyStage] = useState<'rest' | 'review'>('rest');
     const [rateChapterList, setRateChapterList] = useState<Array<{ id: string; name: string }>>([]);
@@ -242,6 +242,10 @@ export default function Session() {
     const [intervalTick, setIntervalTick] = useState(30);
     const [subjectNames, setSubjectNames] = useState<Record<string, string>>({});
     const [ratingSaving, setRatingSaving] = useState(false);
+    const [evidenceDraft, setEvidenceDraft] = useState({ did: '', action: '', result: '', meaning: '' });
+    const [resumePointInput, setResumePointInput] = useState('');
+    const [evidenceSaving, setEvidenceSaving] = useState(false);
+    const [evidenceError, setEvidenceError] = useState('');
     const [postSaveError, setPostSaveError] = useState('');
     const [pausedBeforeDialog, setPausedBeforeDialog] = useState(false);
     const persistInFlightRef = useRef<Promise<Array<{ id: string; name: string }>> | null>(null);
@@ -261,7 +265,7 @@ export default function Session() {
             setPaused(parsed.paused || false);
             if (parsed.progressPersisted) persistedRef.current = true;
             const post = parsed.postSession;
-            if (post && (post.step === 'rate-chapters' || post.step === 'total-rest')) {
+            if (post && (post.step === 'rate-chapters' || post.step === 'evidence' || post.step === 'total-rest')) {
                 setRateChapterList(Array.isArray(post.chapters) ? post.chapters : []);
                 setRateChapterIdx(Number.isInteger(post.index) ? post.index : 0);
                 setPendingCompletedAll(post.completedAll !== false);
@@ -269,6 +273,13 @@ export default function Session() {
                 setDisplayedWorkMins(Number(post.displayedWorkMins) || 0);
                 setRestCountdown(Number.isFinite(post.restCountdown) ? post.restCountdown : 600);
                 setPostStudyStage(post.stage === 'review' ? 'review' : 'rest');
+                if (post.evidence && typeof post.evidence === 'object') {
+                    setEvidenceDraft({
+                        did: String(post.evidence.did ?? ''), action: String(post.evidence.action ?? ''),
+                        result: String(post.evidence.result ?? ''), meaning: String(post.evidence.meaning ?? ''),
+                    });
+                }
+                setResumePointInput(typeof post.resumePoint === 'string' ? post.resumePoint : '');
                 setEndConfirmStep(post.step);
             }
         }
@@ -304,6 +315,17 @@ export default function Session() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [restCountdown, postStudyStage, endConfirmStep]);
 
+    useEffect(() => {
+        if (!session || !persistedRef.current || endConfirmStep !== 'evidence') return;
+        persistPostSessionCheckpoint({
+            step: 'evidence', chapters: rateChapterList, index: rateChapterIdx,
+            completedAll: pendingCompletedAll, completedWorkMinutes, displayedWorkMins,
+            evidence: evidenceDraft, resumePoint: resumePointInput,
+        });
+        // Keep every optional line recoverable without requiring a submit.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [endConfirmStep, evidenceDraft, resumePointInput]);
+
     // Persist paper reading notes to localStorage
     useEffect(() => {
         localStorage.setItem(PAPER_NOTES_KEY, JSON.stringify({ checked: paperChecked, notes: paperNotes, title: paperTitle }));
@@ -318,6 +340,11 @@ export default function Session() {
             if (event.key === 'Escape' && (endConfirmStep === 'confirm-stop' || endConfirmStep === 'confirm-save')) {
                 event.preventDefault();
                 closeEndDialog();
+                return;
+            }
+            if (event.key === 'Escape' && endConfirmStep === 'evidence' && !evidenceSaving) {
+                event.preventDefault();
+                openTotalRest();
                 return;
             }
             if (event.key !== 'Tab') return;
@@ -335,7 +362,7 @@ export default function Session() {
         };
         dialog.addEventListener('keydown', onKeyDown);
         return () => dialog.removeEventListener('keydown', onKeyDown);
-    }, [endConfirmStep, pausedBeforeDialog]);
+    }, [endConfirmStep, pausedBeforeDialog, evidenceSaving]);
 
     function closeEndDialog() {
         setEndConfirmStep('none');
@@ -531,6 +558,59 @@ export default function Session() {
         });
     }
 
+    function openEvidence(completedAll = pendingCompletedAll, chapters = rateChapterList) {
+        const primaryChapter = chapters[chapters.length - 1];
+        const storedResumePoint = primaryChapter
+            ? getAllChapters().find(chapter => chapter.id === primaryChapter.id)?.resumePoint ?? ''
+            : '';
+        setPendingCompletedAll(completedAll);
+        setRateChapterList(chapters);
+        setResumePointInput(storedResumePoint);
+        setEvidenceError('');
+        setEndConfirmStep('evidence');
+        persistPostSessionCheckpoint({
+            step: 'evidence', chapters, index: rateChapterIdx, completedAll,
+            completedWorkMinutes, displayedWorkMins, evidence: evidenceDraft,
+            resumePoint: storedResumePoint,
+        });
+    }
+
+    async function saveEvidenceAndContinue() {
+        if (!session || evidenceSaving) return;
+        setEvidenceSaving(true);
+        setEvidenceError('');
+        const primaryChapter = rateChapterList[rateChapterList.length - 1];
+        const lastWorkBlock = [...session.draft].reverse().find((block: any) => block.type === 'WORK' && block.subject_id);
+        const normalized = {
+            did: evidenceDraft.did.trim(), action: evidenceDraft.action.trim(),
+            result: evidenceDraft.result.trim(), meaning: evidenceDraft.meaning.trim(),
+        };
+        const resumePoint = resumePointInput.trim();
+        try {
+            if (primaryChapter) setChapterResumePoint(primaryChapter.id, resumePoint || null);
+            if (Object.values(normalized).some(Boolean) || resumePoint) {
+                await saveSessionEvidence({
+                    session_id: session.sessionId,
+                    subject_id: lastWorkBlock?.subject_id ?? null,
+                    chapter_id: primaryChapter?.id ?? lastWorkBlock?.chapter_id ?? null,
+                    chapter_name: primaryChapter?.name ?? lastWorkBlock?.chapter_name ?? null,
+                    created_at: new Date().toISOString(),
+                    did_text: normalized.did || null,
+                    action_text: normalized.action || null,
+                    result_text: normalized.result || null,
+                    meaning_text: normalized.meaning || null,
+                    resume_point: resumePoint || null,
+                });
+            }
+            openTotalRest();
+        } catch (error) {
+            console.error('Unable to save the study evidence', error);
+            setEvidenceError(t('session.evidence_error'));
+        } finally {
+            setEvidenceSaving(false);
+        }
+    }
+
     function enterRatingStep(completedAll: boolean, chapters: Array<{ id: string; name: string }>) {
         if (chapters.length > 0) {
             setRateChapterList(chapters);
@@ -542,7 +622,7 @@ export default function Session() {
                 completedWorkMinutes, displayedWorkMins,
             });
         } else {
-            openTotalRest(completedAll, chapters);
+            openEvidence(completedAll, chapters);
         }
     }
 
@@ -577,7 +657,7 @@ export default function Session() {
         try {
             if (isLast) {
                 await markSessionEvaluated(session.sessionId);
-                openTotalRest();
+                openEvidence();
             } else {
                 const nextIndex = rateChapterIdx + 1;
                 setRateChapterIdx(nextIndex);
@@ -621,6 +701,13 @@ export default function Session() {
             if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
             const block = session.draft[session.nowBlockIdx];
             if (!block) return;
+            const fiveMinuteChoice = session.entryMode === 'five-minute'
+                && !session.fiveMinuteDecisionMade && block.type === 'WORK' && remaining === 0;
+            if (fiveMinuteChoice && (event.key === '2' || event.key === '3')) {
+                event.preventDefault();
+                extendCurrentBlock(event.key === '2' ? 10 : 20, 'keyboard', event.key === '3');
+                return;
+            }
             if (event.code === 'Space' && block.type !== 'PREP' && remaining > 0) {
                 event.preventDefault();
                 togglePaused('keyboard');
@@ -640,6 +727,13 @@ export default function Session() {
         requestAnimationFrame(() => primarySessionActionRef.current?.focus());
     }, [endConfirmStep, session?.nowBlockIdx]);
 
+    useEffect(() => {
+        if (!session || endConfirmStep !== 'none' || remaining !== 0) return;
+        const block = session.draft[session.nowBlockIdx];
+        if (session.entryMode !== 'five-minute' || session.fiveMinuteDecisionMade || block?.type !== 'WORK') return;
+        requestAnimationFrame(() => primarySessionActionRef.current?.focus());
+    }, [endConfirmStep, remaining, session]);
+
     function togglePaused(inputMethod: 'keyboard' | 'pointer') {
         if (!session) return;
         const block = session.draft[session.nowBlockIdx];
@@ -657,10 +751,11 @@ export default function Session() {
         setPaused(nextPaused);
     }
 
-    function extendCurrentBlock(minutes = 5) {
+    function extendCurrentBlock(minutes = 5, inputMethod: 'keyboard' | 'pointer' = 'pointer', appendStandardBreak = false) {
         if (!session || minutes <= 0) return;
         const addedSeconds = minutes * 60;
         const wasExpired = remaining === 0;
+        const breakBlockId = appendStandardBreak ? crypto.randomUUID() : null;
         setSession((current: any) => {
             if (!current) return current;
             const draft = current.draft.map((block: any, index: number) =>
@@ -668,10 +763,19 @@ export default function Session() {
                     ? { ...block, minutes: block.minutes + minutes }
                     : block
             );
+            let addedBreakMinutes = 0;
+            if (appendStandardBreak && draft[current.nowBlockIdx + 1]?.type !== 'BREAK') {
+                draft.splice(current.nowBlockIdx + 1, 0, {
+                    id: breakBlockId, type: 'BREAK', minutes: 5,
+                    subject_id: null, technique_id: null, chapter_id: null, chapter_name: null, objective: '',
+                });
+                addedBreakMinutes = 5;
+            }
             return {
                 ...current,
                 draft,
-                plannedMinutes: (current.plannedMinutes ?? 0) + minutes,
+                plannedMinutes: (current.plannedMinutes ?? 0) + minutes + addedBreakMinutes,
+                ...(current.entryMode === 'five-minute' ? { fiveMinuteDecisionMade: true } : {}),
             };
         });
         setRemaining(value => value + addedSeconds);
@@ -685,7 +789,7 @@ export default function Session() {
                 block_index: session.nowBlockIdx,
                 extension_minutes: minutes,
                 remaining_seconds: remaining,
-                input_method: 'pointer',
+                input_method: inputMethod,
             },
         });
     }
@@ -991,7 +1095,15 @@ export default function Session() {
         ? currentBlock
         : session.draft.slice(session.nowBlockIdx + 1).find((block: any) => block.type === 'WORK');
     const contextSubject = contextBlock?.subject_id ? subjectNames[contextBlock.subject_id] : '';
+    const contextChapter = contextBlock?.chapter_id
+        ? getAllChapters().find(chapter => chapter.id === contextBlock.chapter_id)
+        : contextBlock?.subject_id && contextBlock?.chapter_name
+            ? getChaptersForSubject(contextBlock.subject_id).find(chapter => chapter.name === contextBlock.chapter_name)
+            : null;
+    const currentResumePoint = contextChapter?.resumePoint ?? '';
     const isBlockExpired = remaining === 0;
+    const isFiveMinuteChoice = session.entryMode === 'five-minute'
+        && !session.fiveMinuteDecisionMade && currentBlock.type === 'WORK' && isBlockExpired;
     const checkedPrepCount = checkedItems.filter(Boolean).length;
     const checkedBreakCount = breakCheckedItems.filter(Boolean).length;
     const phaseNameFor = (block: any) => block ? t(`session.phase_${String(block.type).toLowerCase()}`) : t('session.session_complete');
@@ -1022,6 +1134,13 @@ export default function Session() {
                         )}
                     </header>
 
+                {currentBlock.type === 'PREP' && currentResumePoint && (
+                    <aside className="session-resume-point" aria-label={t('planner.resume_point')}>
+                        <strong>{t('planner.resume_point')}</strong>
+                        <p>{currentResumePoint}</p>
+                    </aside>
+                )}
+
                 {currentBlock.type === 'WORK' && (
                     <div className="session-work-container">
                         <div className="session-context-grid">
@@ -1048,6 +1167,12 @@ export default function Session() {
                             <div className="session-info-card">
                                 <div className="session-info-label">🎯 {t('session.objective')}</div>
                                 <div className="session-info-value">{currentBlock.objective}</div>
+                            </div>
+                        )}
+                        {currentResumePoint && (
+                            <div className="session-info-card session-resume-point-card">
+                                <div className="session-info-label">↪ {t('planner.resume_point')}</div>
+                                <div className="session-info-value">{currentResumePoint}</div>
                             </div>
                         )}
                         </div>
@@ -1512,13 +1637,24 @@ export default function Session() {
 
                     {isBlockExpired && (
                         <div className="session-time-expired" role="status">
-                            <strong>{t('session.time_up')}</strong>
-                            <span>{t('session.up_next')} : {phaseNameFor(nextBlock)}</span>
+                            <strong>{isFiveMinuteChoice ? t('session.five_done') : t('session.time_up')}</strong>
+                            <span>{isFiveMinuteChoice ? t('session.five_done_hint') : <>{t('session.up_next')} : {phaseNameFor(nextBlock)}</>}</span>
                         </div>
                     )}
 
                     <div className="session-controls">
-                        {(currentBlock.type === 'PREP' || isBlockExpired) && (
+                        {isFiveMinuteChoice && <div className="five-minute-choices" role="group" aria-label={t('session.five_done')}>
+                            <button ref={primarySessionActionRef} className="btn btn-secondary" aria-keyshortcuts="Enter" onClick={() => void handleBlockComplete('timer-complete', 'pointer')}>
+                                {t('session.five_stop_save')}
+                            </button>
+                            <button className="btn btn-primary" aria-keyshortcuts="2" onClick={() => extendCurrentBlock(10)}>
+                                {t('session.five_add_ten')} <kbd>2</kbd>
+                            </button>
+                            <button className="btn btn-primary" aria-keyshortcuts="3" onClick={() => extendCurrentBlock(20, 'pointer', true)}>
+                                {t('session.five_continue_normal')} <kbd>3</kbd>
+                            </button>
+                        </div>}
+                        {!isFiveMinuteChoice && (currentBlock.type === 'PREP' || isBlockExpired) && (
                             <button ref={primarySessionActionRef} className="btn btn-primary session-next-btn" aria-keyshortcuts="Enter" onClick={() => {
                                 playSFX('glass_ui_check', theme);
                                 void handleBlockComplete(currentBlock.type === 'PREP' ? 'ready' : 'timer-complete', 'pointer');
@@ -1536,7 +1672,7 @@ export default function Session() {
                                 {paused ? t('session.resume') : t('session.pause')}
                             </button>
                         )}
-                        {currentBlock.type === 'WORK' && (
+                        {currentBlock.type === 'WORK' && !isFiveMinuteChoice && (
                             <button
                                 className="btn btn-secondary add-time-btn"
                                 onClick={() => { playSFX('glass_ui_check', theme); extendCurrentBlock(5); }}
@@ -1548,7 +1684,7 @@ export default function Session() {
                             playSFX('glass_ui_cancel', theme);
                             void handleBlockComplete('skipped', 'pointer');
                         }}>{t('session.skip_block')}</button>}
-                        <button
+                        {!isFiveMinuteChoice && <button
                             ref={endSessionButtonRef}
                             className="btn end-session-btn"
                             onClick={() => {
@@ -1559,7 +1695,7 @@ export default function Session() {
                             }}
                         >
                             {t('session.end_session')}
-                        </button>
+                        </button>}
                     </div>
                 </div>
                 </aside>
@@ -1574,11 +1710,11 @@ export default function Session() {
                 }}>
                     <div
                         ref={endDialogRef}
-                        className={`modal-content confirm-modal-content${endConfirmStep === 'rate-chapters' ? ' confirm-modal-content--rating' : ''}${endConfirmStep === 'total-rest' ? ` confirm-modal-content--post confirm-modal-content--${postStudyStage}` : ''}`}
+                        className={`modal-content confirm-modal-content${endConfirmStep === 'rate-chapters' ? ' confirm-modal-content--rating' : ''}${endConfirmStep === 'evidence' ? ' confirm-modal-content--evidence' : ''}${endConfirmStep === 'total-rest' ? ` confirm-modal-content--post confirm-modal-content--${postStudyStage}` : ''}`}
                         role="dialog"
                         aria-modal="true"
                         tabIndex={-1}
-                        aria-label={endConfirmStep === 'rate-chapters' ? t('session.rate_chapters') : endConfirmStep === 'total-rest' ? t('session.total_rest') : t('session.end_session')}
+                        aria-label={endConfirmStep === 'rate-chapters' ? t('session.rate_chapters') : endConfirmStep === 'evidence' ? t('session.evidence_title') : endConfirmStep === 'total-rest' ? t('session.total_rest') : t('session.end_session')}
                         onClick={e => e.stopPropagation()}
                     >
                         {endConfirmStep === 'confirm-stop' && (
@@ -1677,6 +1813,32 @@ export default function Session() {
                                 </div>
                             );
                         })()}
+
+                        {endConfirmStep === 'evidence' && (
+                            <form className="session-evidence" onSubmit={event => { event.preventDefault(); void saveEvidenceAndContinue(); }}>
+                                <header>
+                                    <span>{t('session.evidence_kicker')}</span>
+                                    <h2>{t('session.evidence_title')}</h2>
+                                    <p>{t('session.evidence_intro')}</p>
+                                </header>
+                                {rateChapterList.length > 0 && <p className="session-evidence-chapter">{rateChapterList[rateChapterList.length - 1]?.name}</p>}
+                                <div className="session-evidence-fields">
+                                    <label>{t('session.evidence_did')}<input autoFocus value={evidenceDraft.did} onChange={event => setEvidenceDraft(current => ({ ...current, did: event.target.value }))} /></label>
+                                    <label>{t('session.evidence_action')}<input value={evidenceDraft.action} onChange={event => setEvidenceDraft(current => ({ ...current, action: event.target.value }))} /></label>
+                                    <label>{t('session.evidence_result')}<input value={evidenceDraft.result} onChange={event => setEvidenceDraft(current => ({ ...current, result: event.target.value }))} /></label>
+                                    <label>{t('session.evidence_meaning')}<input value={evidenceDraft.meaning} onChange={event => setEvidenceDraft(current => ({ ...current, meaning: event.target.value }))} /></label>
+                                </div>
+                                {rateChapterList.length > 0 && <label className="session-evidence-resume">
+                                    <span>{t('session.resume_prompt')}</span>
+                                    <input value={resumePointInput} onChange={event => setResumePointInput(event.target.value)} placeholder={t('session.resume_placeholder')} />
+                                </label>}
+                                {evidenceError && <p className="session-evidence-error" role="alert">{evidenceError}</p>}
+                                <footer>
+                                    <button type="button" className="btn btn-secondary" onClick={() => openTotalRest()} disabled={evidenceSaving}>{t('session.evidence_skip')} <kbd>Esc</kbd></button>
+                                    <button className="btn btn-primary" disabled={evidenceSaving}>{evidenceSaving ? t('app.saving') : t('session.evidence_save')}</button>
+                                </footer>
+                            </form>
+                        )}
 
                         {endConfirmStep === 'total-rest' && (
                             <div className="total-rest-container">

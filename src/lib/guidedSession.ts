@@ -34,6 +34,20 @@ export function buildGuidedDraft(
   ]
 }
 
+export function buildFiveMinuteDraft(
+  recommendation: PlannerRecommendation,
+  objective: string,
+): PlannerBlock[] {
+  return [{
+    id: crypto.randomUUID(), type: 'WORK', minutes: 5,
+    subject_id: recommendation.subjectId,
+    technique_id: recommendation.suggestedTechniqueId,
+    chapter_id: recommendation.chapterId,
+    chapter_name: recommendation.chapterName,
+    objective,
+  }]
+}
+
 export function createActiveSession(
   draft: PlannerBlock[],
   fiveMinAlert = true,
@@ -52,5 +66,19 @@ export function createActiveSession(
     fiveMinAlert,
     elapsedSecondsByBlock: {},
     analytics,
+  }
+}
+
+export function createFiveMinuteSession(
+  recommendation: PlannerRecommendation,
+  objective: string,
+  analytics: SessionAnalyticsContext,
+) {
+  const session = createActiveSession(buildFiveMinuteDraft(recommendation, objective), false, analytics)
+  return {
+    ...session,
+    template: '5-minute-start',
+    entryMode: 'five-minute',
+    fiveMinuteDecisionMade: false,
   }
 }

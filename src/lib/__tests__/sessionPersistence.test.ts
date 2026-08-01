@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { saveSession } from '../db'
+import { saveSession, saveSessionEvidence } from '../db'
 
 describe('idempotent session persistence', () => {
   const transaction = vi.fn(async () => [])
@@ -38,5 +38,20 @@ describe('idempotent session persistence', () => {
     expect(second[1].params[0]).toBe(first[1].params[0])
     expect(first.some((statement: { sql: string }) => statement.sql.includes("effect_type,target_id"))).toBe(true)
     expect(first.some((statement: { sql: string }) => statement.sql.includes('applied = 0'))).toBe(true)
+  })
+
+  it('upserts a single recoverable micro-evidence record per session', async () => {
+    const execute = vi.fn(async () => ({ changes: 1 }))
+    ;(window as any).electronAPI = { db: { transaction, execute } }
+
+    await saveSessionEvidence({
+      session_id: 'session-1', subject_id: 'subject-1', chapter_id: 'chapter-1', chapter_name: 'Chapter 1',
+      created_at: '2026-08-01T08:26:00.000Z', did_text: 'Read two sentences', action_text: null,
+      result_text: null, meaning_text: null, resume_point: 'Read the next two sentences',
+    })
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(execute.mock.calls[0][1]).toContain('ON CONFLICT(session_id) DO UPDATE')
+    expect(execute.mock.calls[0][2]).toContain('Read the next two sentences')
   })
 })

@@ -1,8 +1,9 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { Archive, ChevronLeft, ChevronRight, Clock3, Link2, Pause, Pencil, Pin, PinOff, Play, Plus, Square, Trash2, TrendingUp, X } from 'lucide-react'
+import { Archive, ChevronLeft, ChevronRight, Clock3, Link2, NotebookPen, Pause, Pencil, Pin, PinOff, Play, Plus, Square, Trash2, TrendingUp, X } from 'lucide-react'
 import { addActivityResource, archiveActivity, createActivity, deleteActivityResource, deleteTimeEntry, elapsedActivitySeconds, getActivities, getActivityEvents, getActivityResources, getTimeEntries, pauseActivityTimer, readActiveActivityTimer, resumeActivityTimer, saveTimeEntry, setActivityPinned, startActivityTimer, startOfWeek, stopActivityTimer, toggleActivityResource, updateTimeEntry, type ActiveActivityTimer, type Activity, type ActivityEvent, type ActivityKind, type ActivityResource, type TimeEntry } from '../lib/activityTime'
 import './ActivityCalendar.css'
 import { syncLegacyTime } from '../lib/timeSync'
+import { getSessionEvidence, type SessionEvidence } from '../lib/db'
 
 const kinds: Array<{ id: ActivityKind; label: string; color: string }> = [
   { id: 'study', label: 'Sujets', color: '#567d9c' }, { id: 'goal', label: 'Objectif', color: '#a76545' }, { id: 'project', label: 'Projet', color: '#a76545' },
@@ -46,6 +47,7 @@ export default function ActivityCalendar() {
   const [resourceActivity, setResourceActivity] = useState<Activity | null>(null)
   const [resources, setResources] = useState<ActivityResource[]>([])
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
+  const [studyEvidence, setStudyEvidence] = useState<SessionEvidence[]>([])
 
   const weekStart = useMemo(() => {
     const now = new Date(); now.setHours(0,0,0,0)
@@ -59,8 +61,8 @@ export default function ActivityCalendar() {
 
   const refresh = useCallback(async () => {
     await syncLegacyTime()
-    const [nextActivities, nextEntries, nextProgressEvents] = await Promise.all([getActivities(), getTimeEntries(weekStart, weekEnd), getActivityEvents(weekStart, weekEnd)])
-    setActivities(nextActivities); setEntries(nextEntries); setProgressEvents(nextProgressEvents); setActive(readActiveActivityTimer())
+    const [nextActivities, nextEntries, nextProgressEvents, nextEvidence] = await Promise.all([getActivities(), getTimeEntries(weekStart, weekEnd), getActivityEvents(weekStart, weekEnd), getSessionEvidence(weekStart, weekEnd)])
+    setActivities(nextActivities); setEntries(nextEntries); setProgressEvents(nextProgressEvents); setStudyEvidence(nextEvidence); setActive(readActiveActivityTimer())
   }, [weekStart, weekEnd])
 
   useEffect(() => { void refresh() }, [refresh])
@@ -121,6 +123,19 @@ export default function ActivityCalendar() {
     <section className="ac-progress" aria-labelledby="ac-progress-title">
       <div className="ac-section-head"><div><span className="ac-eyebrow"><TrendingUp size={13} /> Progression sans chronomètre</span><h2 id="ac-progress-title">Avancées des objectifs</h2></div><small>{progressEvents.length} événement{progressEvents.length > 1 ? 's' : ''}</small></div>
       {progressEvents.length ? <ol className="ac-progress-list">{progressEvents.map(event => { const activity = activities.find(item => item.id === event.activity_id); return <li key={event.id} style={{ '--activity-color': activity?.color || '#a76545' } as React.CSSProperties}><span className="ac-progress-mark" aria-hidden="true" /><time>{new Date(event.occurred_at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' })}<small>{new Date(event.occurred_at).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })}</small></time><div><strong>{activity?.name || 'Objectif archivé'}</strong><p>{formatProgressEvent(event)}</p></div></li> })}</ol> : <p className="ac-progress-empty">Les changements de quantité et les étapes terminées apparaîtront ici. Les anciennes valeurs ne sont pas antidatées.</p>}
+    </section>
+    <section className="ac-evidence" aria-labelledby="ac-evidence-title">
+      <div className="ac-section-head"><div><span className="ac-eyebrow"><NotebookPen size={13} /> Traces d’étude</span><h2 id="ac-evidence-title">Ce que vous avez réellement appris</h2></div><small>{studyEvidence.length} trace{studyEvidence.length > 1 ? 's' : ''}</small></div>
+      {studyEvidence.length ? <ol className="ac-evidence-list">{studyEvidence.map(evidence => <li key={evidence.session_id}>
+        <header><time>{new Date(evidence.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</time><div><strong>{evidence.subject_name || 'Session d’étude'}</strong>{evidence.chapter_name && <span>{evidence.chapter_name}</span>}</div></header>
+        <dl>
+          {evidence.did_text && <div><dt>Fait</dt><dd>{evidence.did_text}</dd></div>}
+          {evidence.action_text && <div><dt>Action</dt><dd>{evidence.action_text}</dd></div>}
+          {evidence.result_text && <div><dt>Résultat</dt><dd>{evidence.result_text}</dd></div>}
+          {evidence.meaning_text && <div><dt>Signification</dt><dd>{evidence.meaning_text}</dd></div>}
+          {evidence.resume_point && <div className="ac-evidence-resume"><dt>Reprendre par</dt><dd>{evidence.resume_point}</dd></div>}
+        </dl>
+      </li>)}</ol> : <p className="ac-progress-empty">Les micro-preuves facultatives de vos sessions apparaîtront ici.</p>}
     </section>
     {resourceActivity&&<div className="ac-modal-backdrop" onMouseDown={event=>event.target===event.currentTarget&&setResourceActivity(null)}><section className="ac-modal" role="dialog" aria-modal="true" aria-labelledby="resources-title"><header><div><span className="ac-eyebrow">Ouverture automatique</span><h2 id="resources-title">Ressources · {resourceActivity.name}</h2></div><button className="ac-icon-button" onClick={()=>setResourceActivity(null)} aria-label="Fermer"><X/></button></header><p>Les ressources activées s’ouvrent quand vous démarrez cette activité.</p><form className="ac-resource-form" onSubmit={addResource}><label>Nom<input name="label" placeholder="Documentation"/></label><label>Adresse web<input name="url" type="text" inputMode="url" required placeholder="https://…"/></label><button className="ac-primary">Ajouter</button></form><ul className="ac-resource-list">{resources.map(resource=><li key={resource.id}><label><input type="checkbox" checked={Boolean(resource.enabled)} onChange={()=>toggleResource(resource)}/><span><strong>{resource.label}</strong><small>{resource.url}</small></span></label><button onClick={()=>removeResource(resource)} aria-label={`Supprimer ${resource.label}`}><Trash2 size={15}/></button></li>)}{!resources.length&&<li className="ac-resource-empty">Aucune ressource pour le moment.</li>}</ul></section></div>}
     {editingEntry&&<div className="ac-modal-backdrop" onMouseDown={event=>event.target===event.currentTarget&&setEditingEntry(null)}><form className="ac-modal" role="dialog" aria-modal="true" aria-labelledby="edit-entry-title" onSubmit={saveEditedEntry}><header><h2 id="edit-entry-title">Modifier l’entrée</h2><button className="ac-icon-button" type="button" onClick={()=>setEditingEntry(null)} aria-label="Fermer"><X/></button></header><div className="ac-edit-fields"><label>Début<input name="startedAt" type="datetime-local" required defaultValue={new Date(new Date(editingEntry.started_at).getTime()-new Date(editingEntry.started_at).getTimezoneOffset()*60000).toISOString().slice(0,16)}/></label><label>Fin<input name="endedAt" type="datetime-local" required defaultValue={new Date(new Date(editingEntry.ended_at).getTime()-new Date(editingEntry.ended_at).getTimezoneOffset()*60000).toISOString().slice(0,16)}/></label><label>Note<input name="note" defaultValue={editingEntry.note||''}/></label></div><footer><button type="button" className="ac-stop" onClick={()=>removeEntry(editingEntry)}><Trash2 size={15}/> Supprimer</button><button className="ac-primary">Enregistrer</button></footer></form></div>}

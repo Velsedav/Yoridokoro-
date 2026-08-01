@@ -75,6 +75,15 @@ function applyMainSchema(db: Database.Database) {
       PRIMARY KEY(session_id, effect_type, target_id),
       FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS session_evidence(
+      session_id TEXT PRIMARY KEY,
+      subject_id TEXT NULL, chapter_id TEXT NULL, chapter_name TEXT NULL,
+      created_at TEXT NOT NULL,
+      did_text TEXT NULL, action_text TEXT NULL, result_text TEXT NULL,
+      meaning_text TEXT NULL, resume_point TEXT NULL,
+      FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_session_evidence_created_at ON session_evidence(created_at DESC);
     CREATE TABLE IF NOT EXISTS quotes(
       id TEXT PRIMARY KEY, text TEXT NOT NULL, idx INT NOT NULL DEFAULT 0
     );
@@ -221,7 +230,7 @@ function applyMainSchema(db: Database.Database) {
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_session_blocks_session_idx ON session_blocks(session_id, idx)')
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_source_ref ON time_entries(source_ref) WHERE source_ref IS NOT NULL')
     db.exec('UPDATE subjects SET importance_weight = 5 WHERE importance_weight IS NULL OR importance_weight < 1 OR importance_weight > 10')
-    db.pragma('user_version = 4')
+    db.pragma('user_version = 5')
   })
   migrate()
 }

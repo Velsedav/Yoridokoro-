@@ -35,6 +35,7 @@ export interface Chapter {
     currentMeasure?: number;  // music: frontier measure (how far the student has reached)
     sources?: ChapterSource[]; // links/references attached to this chapter
     archived?: boolean;
+    resumePoint?: string;
     appliedSessionIds?: string[];
     appliedRatingSessionIds?: string[];
 }
@@ -77,6 +78,7 @@ function normalizeChapter(value: unknown): Chapter | null {
         ...(Number.isFinite(chapter.currentMeasure) ? { currentMeasure: Number(chapter.currentMeasure) } : {}),
         ...(Array.isArray(chapter.sources) ? { sources: chapter.sources } : {}),
         ...(chapter.archived ? { archived: true } : {}),
+        ...(typeof chapter.resumePoint === 'string' && chapter.resumePoint.trim() ? { resumePoint: chapter.resumePoint.trim() } : {}),
         ...(Array.isArray(chapter.appliedSessionIds) ? { appliedSessionIds: chapter.appliedSessionIds.filter(id => typeof id === 'string') } : {}),
         ...(Array.isArray(chapter.appliedRatingSessionIds) ? { appliedRatingSessionIds: chapter.appliedRatingSessionIds.filter(id => typeof id === 'string') } : {}),
     };
@@ -224,6 +226,16 @@ export function replaceChaptersForSubject(subjectId: string, chapters: Chapter[]
     const others = loadAll().filter(chapter => chapter.subjectId !== subjectId);
     const staged = chapters.map(chapter => normalizeChapter({ ...chapter, subjectId })).filter((chapter): chapter is Chapter => chapter !== null);
     saveAll([...others, ...staged]);
+}
+
+export function setChapterResumePoint(id: string, text: string | null): void {
+    const all = loadAll();
+    const chapter = all.find(item => item.id === id);
+    if (!chapter) return;
+    const normalized = text?.trim();
+    if (normalized) chapter.resumePoint = normalized;
+    else delete chapter.resumePoint;
+    saveAll(all);
 }
 
 export function updateChapterMeasure(id: string, currentMeasure: number) {
