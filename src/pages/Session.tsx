@@ -142,7 +142,6 @@ const POST_STUDY_SECTIONS: PrepSectionDef[] = [
         icon: '📋',
         items: [
             { emoji: '📅', labelKey: 'session.post_tomorrow_list', tooltipKey: 'session.post_tip_tomorrow' },
-            { emoji: '📊', labelKey: 'session.post_compass', tooltipKey: 'session.post_tip_compass' },
             { emoji: '🚀', labelKey: 'session.post_shutdown', tooltipKey: 'session.post_tip_shutdown' },
         ],
     },
@@ -1644,14 +1643,14 @@ export default function Session() {
 
                     <div className="session-controls">
                         {isFiveMinuteChoice && <div className="five-minute-choices" role="group" aria-label={t('session.five_done')}>
-                            <button ref={primarySessionActionRef} className="btn btn-secondary" aria-keyshortcuts="Enter" onClick={() => void handleBlockComplete('timer-complete', 'pointer')}>
-                                {t('session.five_stop_save')}
+                            <button ref={primarySessionActionRef} className="btn btn-primary five-minute-choice-stop" aria-keyshortcuts="Enter" onClick={() => void handleBlockComplete('timer-complete', 'pointer')}>
+                                <span>{t('session.five_stop_save')}</span><kbd aria-hidden="true">↵</kbd>
                             </button>
-                            <button className="btn btn-primary" aria-keyshortcuts="2" onClick={() => extendCurrentBlock(10)}>
-                                {t('session.five_add_ten')} <kbd>2</kbd>
+                            <button className="btn btn-secondary" aria-keyshortcuts="2" onClick={() => extendCurrentBlock(10)}>
+                                <span>{t('session.five_add_ten')}</span><kbd aria-hidden="true">2</kbd>
                             </button>
                             <button className="btn btn-primary" aria-keyshortcuts="3" onClick={() => extendCurrentBlock(20, 'pointer', true)}>
-                                {t('session.five_continue_normal')} <kbd>3</kbd>
+                                <span className="five-minute-choice-copy"><strong>{t('session.five_continue_normal')}</strong><small>{t('session.five_continue_hint')}</small></span><kbd aria-hidden="true">3</kbd>
                             </button>
                         </div>}
                         {!isFiveMinuteChoice && (currentBlock.type === 'PREP' || isBlockExpired) && (
