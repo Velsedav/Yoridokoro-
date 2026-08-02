@@ -76,10 +76,15 @@ function techniqueFor(kind: PlannerRecommendationKind, focusType: FocusType): st
 }
 
 function sortedChapters(chapters: Chapter[]) {
-  return [...chapters].sort((a, b) => {
-    const createdDelta = validTime(a.createdAt, 0) - validTime(b.createdAt, 0)
-    return createdDelta || a.id.localeCompare(b.id)
-  })
+  return chapters
+    .map((chapter, inputPosition) => ({ chapter, inputPosition }))
+    .sort((a, b) => {
+      const createdDelta = validTime(a.chapter.createdAt, 0) - validTime(b.chapter.createdAt, 0)
+      // Chapters created in one batch often share the exact same timestamp.
+      // Their stored order reflects the user's outline; UUID order does not.
+      return createdDelta || a.inputPosition - b.inputPosition
+    })
+    .map(({ chapter }) => chapter)
 }
 
 /**

@@ -406,12 +406,13 @@ export default function TodayDashboard() {
                   {tasks.map(task => (
                     <li key={task.id} className={task.done ? 'is-done' : ''}>
                       <button type="button" className="yd-task-check" onClick={() => toggleMatrixTask(task)} aria-label={task.done ? `Rouvrir ${task.title}` : `Terminer ${task.title}`} aria-pressed={Boolean(task.done)}>
-                        {task.done && <Check size={14} aria-hidden="true" />}
+                        {Boolean(task.done) && <Check size={14} aria-hidden="true" />}
                       </button>
                       <span>{task.title}</span>
                       <label className="yd-sr-only" htmlFor={`move-${task.id}`}>Déplacer {task.title}</label>
-                      <select id={`move-${task.id}`} value={task.quadrant} onChange={event => moveMatrixItem(task, event.target.value as EisenhowerQuadrant)} aria-label={`Déplacer ${task.title}`}>
-                        {EISENHOWER_QUADRANTS.map(value => <option key={value} value={value}>{QUADRANT_COPY[value].title}</option>)}
+                      <select id={`move-${task.id}`} value="" onChange={event => moveMatrixItem(task, event.target.value as EisenhowerQuadrant)} aria-label={`Déplacer ${task.title}`}>
+                        <option value="" disabled>Déplacer…</option>
+                        {EISENHOWER_QUADRANTS.filter(value => value !== task.quadrant).map(value => <option key={value} value={value}>{QUADRANT_COPY[value].title}</option>)}
                       </select>
                       <button type="button" className="yd-task-delete" onClick={() => removeMatrixTask(task)} aria-label={`Supprimer ${task.title}`}><Trash2 size={14} aria-hidden="true" /></button>
                     </li>

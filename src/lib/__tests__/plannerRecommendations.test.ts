@@ -176,6 +176,26 @@ describe('buildPlannerRecommendations', () => {
     expect(result[0]).toMatchObject({ chapterId: 'python-1', chapterPosition: 1, chapterCount: 2 })
   })
 
+  it('preserves outline order when batch-created chapters share a timestamp', () => {
+    const createdAt = '2026-01-01T00:00:00.000Z'
+    const result = buildPlannerRecommendations(
+      [subject('linux')],
+      [
+        chapter('z-chapter-1', 'linux', { name: 'Creating a Linux VM on Windows', createdAt }),
+        chapter('m-chapter-2', 'linux', { name: 'How to Do This Course', createdAt }),
+        chapter('a-chapter-3', 'linux', { name: 'Running your First Command', createdAt }),
+      ],
+      now,
+    )
+
+    expect(result[0]).toMatchObject({
+      chapterId: 'z-chapter-1',
+      chapterName: 'Creating a Linux VM on Windows',
+      chapterPosition: 1,
+      reason: 'first-chapter',
+    })
+  })
+
   it('ignores archived chapters and chapters outside the active subjects', () => {
     const result = buildPlannerRecommendations(
       [subject('active')],
