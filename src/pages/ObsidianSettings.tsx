@@ -34,6 +34,8 @@ import {
     exportBehaviorAnalyticsBundle,
     type BehaviorExportPeriod,
 } from '../lib/behaviorExport';
+import { getTimeEntrySummary } from '../lib/activityTime';
+import { syncLegacyTime } from '../lib/timeSync';
 import './ObsidianSettings.css';
 
 type Category = 'look-and-feel' | 'sessions' | 'learning' | 'art' | 'audio' | 'data' | 'system';
@@ -200,12 +202,20 @@ function ObservationDataPanel() {
     const [period, setPeriod] = useState<BehaviorExportPeriod>(30);
     const [pseudonymizeLabels, setPseudonymizeLabels] = useState(true);
     const [summary, setSummary] = useState<Awaited<ReturnType<typeof getBehaviorAnalyticsSummary>> | null>(null);
+    const [timeSummary, setTimeSummary] = useState<Awaited<ReturnType<typeof getTimeEntrySummary>> | null>(null);
     const [working, setWorking] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     async function refreshSummary() {
-        try { setSummary(await getBehaviorAnalyticsSummary()); }
-        catch { setSummary(null); }
+        try {
+            await syncLegacyTime();
+            const [nextSummary, nextTimeSummary] = await Promise.all([getBehaviorAnalyticsSummary(), getTimeEntrySummary()]);
+            setSummary(nextSummary);
+            setTimeSummary(nextTimeSummary);
+        } catch {
+            setSummary(null);
+            setTimeSummary(null);
+        }
     }
 
     useEffect(() => { void refreshSummary(); }, []);
@@ -223,7 +233,7 @@ function ObservationDataPanel() {
             if (result) {
                 setStatus({
                     type: 'success',
-                    message: `${result.eventCount} événements exportés dans ${result.folder}. Joignez le Markdown et les trois CSV à ChatGPT.`,
+                    message: `${result.eventCount} événements et ${result.timeEntryCount} chronométrages exportés dans ${result.folder}. Joignez le Markdown et les quatre CSV à ChatGPT.`,
                 });
             }
         } catch (error) {
@@ -245,8 +255,9 @@ function ObservationDataPanel() {
         setStatus({ type: 'success', message: 'Journal d’observation effacé. Une nouvelle période peut commencer.' });
     }
 
-    const firstDate = summary?.first_event_at
-        ? new Date(summary.first_event_at).toLocaleDateString('fr-FR')
+    const firstRecordedAt = summary?.first_event_at ?? timeSummary?.first_entry_at;
+    const firstDate = firstRecordedAt
+        ? new Date(firstRecordedAt).toLocaleDateString('fr-FR')
         : 'Pas encore de données';
 
     return (
@@ -268,9 +279,10 @@ function ObservationDataPanel() {
                 <div className="observation-stats">
                     <div><strong>{summary?.event_count ?? 0}</strong><span>événements</span></div>
                     <div><strong>{summary?.opportunity_count ?? 0}</strong><span>occasions de démarrer</span></div>
-                    <div><strong>{summary?.session_count ?? 0}</strong><span>sessions</span></div>
+                    <div><strong>{summary?.session_count ?? 0}</strong><span>sessions Étude observées</span></div>
+                    <div><strong>{timeSummary?.entry_count ?? 0}</strong><span>chronométrages dans l’Historique</span></div>
                 </div>
-                <p className="observation-data-note">Sont enregistrés : suggestions, démarrages, transitions, pauses, reprises, prolongations, passages, sauvegardes et évaluations du rappel. Jamais les frappes, URL, notes, citations, Relations ou données Art.</p>
+                <p className="observation-data-note">L’export couvre les suggestions et sessions Étude, ainsi que toute activité chronométrée visible dans l’Historique : Objectifs, projets, loisirs, sport, Art, autres activités et saisies manuelles. Jamais les frappes, URL, citations ou Relations.</p>
             </section>
 
             <section className="obs-settings-section">
@@ -290,7 +302,7 @@ function ObservationDataPanel() {
 
             <section className="obs-settings-section">
                 <h2 className="obs-settings-section-label">Exporter pour analyse</h2>
-                <p className="obs-settings-hint">Yoridokoro crée un rapport Markdown et trois CSV : événements, opportunités et sessions. Vérifiez-les avant de les joindre à ChatGPT ou à un autre outil.</p>
+                <p className="obs-settings-hint">Yoridokoro crée un rapport Markdown et quatre CSV : événements, opportunités, sessions Étude et registre complet du temps. Vérifiez-les avant de les joindre à ChatGPT ou à un autre outil.</p>
                 <div className="observation-export-options">
                     <label className="obs-settings-field">
                         <span>Période</span>
@@ -302,18 +314,18 @@ function ObservationDataPanel() {
                     </label>
                     <label className="observation-checkbox-card">
                         <input type="checkbox" checked={pseudonymizeLabels} onChange={event => setPseudonymizeLabels(event.target.checked)} />
-                        <span><strong>Pseudonymiser les sujets</strong><small>« Python » devient « Sujet 01 » et les identifiants internes ne quittent jamais l’appareil.</small></span>
+                        <span><strong>Pseudonymiser les sujets et activités</strong><small>Les noms et identifiants sont remplacés ; les détails libres des chronométrages sont retirés.</small></span>
                     </label>
                 </div>
                 <div className="obs-settings-row observation-export-actions">
-                    <button type="button" className="btn btn-primary" onClick={() => void handleExport()} disabled={working || !summary?.event_count}>
-                        <FileDown size={15} /> {working ? 'Création…' : 'Créer Markdown + 3 CSV'}
+                    <button type="button" className="btn btn-primary" onClick={() => void handleExport()} disabled={working || (!summary?.event_count && !timeSummary?.entry_count)}>
+                        <FileDown size={15} /> {working ? 'Création…' : 'Créer Markdown + 4 CSV'}
                     </button>
                     <button type="button" className="btn btn-secondary" onClick={() => void handleCopyPrompt()}>
                         <ClipboardCopy size={15} /> Copier seulement le prompt
                     </button>
                 </div>
-                {!summary?.event_count && <p className="obs-settings-hint">Le premier événement sera créé lorsque Yoridokoro affichera votre prochaine suggestion d’étude.</p>}
+                {!summary?.event_count && !timeSummary?.entry_count && <p className="obs-settings-hint">Le premier événement sera créé par une suggestion d’étude ou par une activité chronométrée.</p>}
                 {status && <p className="obs-settings-hint" role="status" aria-live="polite" style={{ color: status.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>{status.message}</p>}
             </section>
 
@@ -323,7 +335,7 @@ function ObservationDataPanel() {
                     <li>Aucun score TDAH, CDS, burnout ou « productivité ».</li>
                     <li>Aucune interprétation de l’absence d’usage.</li>
                     <li>Aucun classement, streak ou comparaison avec d’autres personnes.</li>
-                    <li>Les textes libres restent exclus de cette première version.</li>
+                    <li>Les détails libres des chronométrages ne sont inclus que si vous désactivez leur pseudonymisation.</li>
                 </ul>
                 <button type="button" className="btn btn-danger-outline observation-clear" onClick={() => void handleClearJournal()} disabled={!summary?.event_count}>
                     <Trash2 size={14} /> Effacer uniquement le journal d’observation

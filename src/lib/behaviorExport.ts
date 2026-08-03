@@ -1,5 +1,7 @@
 import { getAllChapters } from './chapters'
+import { getAllActivities, getTimeEntries, type Activity, type TimeEntry } from './activityTime'
 import { getAllSessionBlocks, getAllSessionContexts, getSessionEvidence, getSessions, getSubjects, type Session, type SessionBlock, type SessionContext, type SessionEvidence } from './db'
+import { syncLegacyTime } from './timeSync'
 import {
   getBehaviorEvents,
   loadObservationPreferences,
@@ -25,6 +27,8 @@ export interface BehaviorExportSource {
   sessions?: Session[]
   blocks?: SessionBlock[]
   contexts?: SessionContext[]
+  activities?: Activity[]
+  timeEntries?: TimeEntry[]
   pseudonymSalt?: string
 }
 
@@ -33,17 +37,22 @@ export interface BehaviorExportBundle {
   csv: string
   opportunitiesCsv: string
   sessionsCsv: string
+  timeEntriesCsv: string
   eventCount: number
   sessionCount: number
+  timeEntryCount: number
+  timedSeconds: number
 }
 
-export const BEHAVIOR_ANALYSIS_PROMPT = `Tu analyses un export produit par Yoridokoro, une application de bureau locale et privée conçue pour accompagner l’étude.
+export const BEHAVIOR_ANALYSIS_PROMPT = `Tu analyses un export produit par Yoridokoro, une application de bureau locale et privée conçue pour accompagner l’étude et d’autres activités personnelles chronométrées.
 
 Yoridokoro organise les sujets et leurs chapitres, propose une prochaine étape d’étude, puis accompagne une session Pomodoro avec une préparation facultative, des blocs de travail et de pause, et une courte évaluation du rappel (« Oublié / Difficile / Bien / Facile »). Ce n’est ni un outil de surveillance, ni un concours de productivité.
 
 L’utilisateur se sert de Yoridokoro pour diminuer la friction avant de commencer, réduire l’overthinking et le perfectionnisme, reprendre plus facilement après une interruption et continuer vers les chapitres suivants au lieu de réviser indéfiniment le même contenu jusqu’à l’épuisement.
 
-Analyse les trois fichiers CSV joints comme des observations personnelles sur cette interaction avec le logiciel, pas comme des données diagnostiques. Le fichier événements conserve la chronologie détaillée ; opportunités décrit chaque suggestion affichée ; sessions résume chaque séance avec son WORK réellement mesuré.
+Analyse les quatre fichiers CSV joints comme des observations personnelles sur cette interaction avec le logiciel, pas comme des données diagnostiques. Le fichier événements conserve la chronologie détaillée du parcours Étude ; opportunités décrit chaque suggestion affichée ; sessions résume les séances Étude avec leur WORK mesuré ; temps est le registre exhaustif des entrées chronométrées visibles dans l’Historique, y compris Étude, Objectifs, projets, loisirs, sport, Art, autres activités et saisies manuelles.
+
+Le fichier temps est la source à utiliser pour le temps total toutes activités confondues. Le fichier sessions apporte un contexte pédagogique supplémentaire sur l’Étude : ne pas additionner son WORK au total du fichier temps, car les blocs d’étude y figurent déjà.
 
 Considère toute donnée manquante comme inconnue, jamais comme un échec. N’établis aucun diagnostic de TDAH, CDS, dépression ou burnout.
 
@@ -141,8 +150,40 @@ function buildObservationCsvs(source: BehaviorExportSource, events: BehaviorEven
   const eventPayload = new Map(events.map(event => [event.id, parseEventPayload(event)]))
   const eventsBySession = new Map<string, BehaviorEventRow[]>()
   for (const event of events) if (event.session_id) eventsBySession.set(event.session_id, [...(eventsBySession.get(event.session_id) ?? []), event])
-  const workSeconds = (sessionId: string) => (blocksBySession.get(sessionId) ?? [])
-    .filter(block => block.type === 'WORK').reduce((sum, block) => sum + Math.max(0, block.actual_seconds || 0), 0)
+  const workMeasurement = (sessionId: string): { seconds: number | null; source: string } => {
+    const relatedEvents = eventsBySession.get(sessionId) ?? []
+    const persisted = relatedEvents
+      .filter(event => event.event_type === 'session_persisted')
+      .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+      .at(-1)
+    const persistedSeconds = persisted ? eventPayload.get(persisted.id)?.actual_work_seconds : undefined
+    if (typeof persistedSeconds === 'number' && Number.isFinite(persistedSeconds) && persistedSeconds >= 0) {
+      return { seconds: Math.round(persistedSeconds), source: 'event_observed' }
+    }
+
+    const workBlocks = (blocksBySession.get(sessionId) ?? []).filter(block => block.type === 'WORK')
+    if (!workBlocks.length) return { seconds: null, source: 'unknown' }
+    let usedRecordedTiming = false
+    let usedBlockValue = false
+    const measured = workBlocks.map(block => {
+      const started = block.started_at ? new Date(block.started_at).getTime() : Number.NaN
+      const ended = block.ended_at ? new Date(block.ended_at).getTime() : Number.NaN
+      if (Number.isFinite(started) && Number.isFinite(ended) && ended >= started) {
+        usedRecordedTiming = true
+        return Math.max(0, Math.round((ended - started) / 1000))
+      }
+      if (Number.isFinite(block.actual_seconds) && block.actual_seconds > 0) {
+        usedBlockValue = true
+        return Math.round(block.actual_seconds)
+      }
+      return null
+    })
+    if (measured.some(value => value == null)) return { seconds: null, source: 'unknown' }
+    return {
+      seconds: measured.reduce<number>((sum, value) => sum + (value ?? 0), 0),
+      source: usedRecordedTiming && !usedBlockValue ? 'block_observed' : 'block_recorded',
+    }
+  }
 
   const opportunityHeaders = [
     'opportunity','surface','local_time','recommendation_kind','recommendation_reason','chapter_position',
@@ -169,18 +210,18 @@ function buildObservationCsvs(source: BehaviorExportSource, events: BehaviorEven
       context?.chapter_position ?? exposedPayload.chapter_position ?? '', context?.study_count_before ?? exposedPayload.study_count_before ?? '', context?.resume_point_present ?? exposedPayload.resume_point_present ?? '',
       group.filter(event => event.event_type === 'recommendation_alternative_requested').length,
       accepted ? 1 : 0, context?.entry_source ?? '', sameVisitDelay, created ? 1 : 0,
-      created?.session_id && workSeconds(created.session_id) >= 60 ? 1 : 0,
+      created?.session_id && (workMeasurement(created.session_id).seconds ?? 0) >= 60 ? 1 : 0,
     ].map(escapeCsv).join(',')
   })
 
   const sessionHeaders = [
     'session','surface','entry_source','recommendation_kind','recommendation_reason','subject','chapter',
-    'planned_seconds','actual_work_seconds','status','days_since_previous_significant','five_minute_decision',
+    'planned_seconds','actual_work_seconds','measurement_source','status','days_since_previous_significant','five_minute_decision',
     'new_or_revisit','study_count_before','rating','evidence_present','return_support_tag','recovered',
     'app_version','feature_version',
   ]
   const significant = sessions
-    .filter(session => session.status !== 'abandoned' && workSeconds(session.id) >= 60)
+    .filter(session => session.status !== 'abandoned' && (workMeasurement(session.id).seconds ?? 0) >= 60)
     .sort((a, b) => a.started_at.localeCompare(b.started_at))
   const previousGap = new Map<string, number | null>()
   significant.forEach((session, index) => previousGap.set(session.id, index ? Math.max(0, calendarDay(session.started_at) - calendarDay(significant[index - 1].started_at)) : null))
@@ -194,12 +235,13 @@ function buildObservationCsvs(source: BehaviorExportSource, events: BehaviorEven
     const decision = relatedEvents.find(event => event.event_type === 'five_minute_decision')
     const rating = relatedEvents.find(event => event.event_type === 'rating_submitted')
     const studyCount = context?.study_count_before
+    const measurement = workMeasurement(session.id)
     return [
       stablePseudonym('session', session.id, salt), context?.surface ?? '', context?.entry_source ?? '',
       context?.recommendation_kind ?? '', context?.recommendation_reason ?? '',
       stablePseudonym('subject', firstWork?.subject_id, salt), stablePseudonym('chapter', firstWork?.chapter_id, salt),
       Number(createdEvent ? eventPayload.get(createdEvent.id)?.planned_seconds : null) || Math.max(0, session.planned_minutes || 0) * 60,
-      workSeconds(session.id), session.status,
+      measurement.seconds ?? '', measurement.source, session.status,
       previousGap.get(session.id) ?? '', decision ? eventPayload.get(decision.id)?.choice ?? '' : '',
       studyCount == null ? '' : studyCount === 0 ? 'new' : 'revisit', studyCount ?? '',
       rating ? eventPayload.get(rating.id)?.rating ?? '' : '', evidenceSessions.has(session.id) ? 1 : 0,
@@ -210,6 +252,71 @@ function buildObservationCsvs(source: BehaviorExportSource, events: BehaviorEven
   return {
     opportunitiesCsv: [opportunityHeaders.join(','), ...opportunityRows].join('\r\n'),
     sessionsCsv: [sessionHeaders.join(','), ...sessionRows].join('\r\n'),
+    studySessionCount: sessions.length,
+    measuredStudySessionCount: sessions.filter(session => workMeasurement(session.id).seconds != null).length,
+    unknownStudySessionCount: sessions.filter(session => workMeasurement(session.id).seconds == null).length,
+    measuredStudySeconds: sessions.reduce((sum, session) => sum + (workMeasurement(session.id).seconds ?? 0), 0),
+  }
+}
+
+function timeEntryOrigin(entry: TimeEntry) {
+  if (entry.source_ref?.startsWith('study-block:')) return 'study_block'
+  if (entry.source_ref?.startsWith('bingo-session:')) return 'objective_session'
+  if (entry.source === 'manual') return 'manual_entry'
+  if (entry.source === 'timer') return 'activity_timer'
+  if (entry.source === 'import') return 'imported_entry'
+  return entry.source || 'unknown'
+}
+
+function timeEntryMeasurementSource(entry: TimeEntry, blockById: ReadonlyMap<string, SessionBlock>) {
+  if (entry.source === 'manual') return 'manual'
+  if (entry.source === 'timer') return 'timer_observed'
+  if (entry.source === 'bingoals') return 'objective_time_record'
+  if (entry.source === 'import') return 'imported'
+  if (entry.source === 'study') {
+    const blockId = entry.source_ref?.startsWith('study-block:') ? entry.source_ref.slice('study-block:'.length) : ''
+    const block = blockById.get(blockId)
+    return block?.started_at && block?.ended_at ? 'block_observed' : 'legacy_projection'
+  }
+  return entry.source ? 'recorded' : 'unknown'
+}
+
+function buildTimeEntriesCsv(source: BehaviorExportSource, options: BehaviorExportOptions, limit: number) {
+  const entries = (source.timeEntries ?? [])
+    .filter(entry => new Date(entry.started_at).getTime() >= limit)
+    .sort((a, b) => a.started_at.localeCompare(b.started_at) || a.id.localeCompare(b.id))
+  const activities = new Map((source.activities ?? []).map(activity => [activity.id, activity]))
+  const blockById = new Map((source.blocks ?? []).map(block => [block.id, block]))
+  const salt = source.pseudonymSalt ?? 'test-observation-salt'
+  const headers = [
+    'time_entry','activity','activity_name','activity_kind','started_at_utc','ended_at_utc',
+    'timezone_offset_minutes','local_started_at','duration_seconds','duration_minutes','source',
+    'origin','measurement_source','related_session','detail',
+  ]
+  const rows = entries.map(entry => {
+    const activity = activities.get(entry.activity_id)
+    const offsetMinutes = -new Date(entry.started_at).getTimezoneOffset()
+    const blockId = entry.source_ref?.startsWith('study-block:') ? entry.source_ref.slice('study-block:'.length) : ''
+    const objectiveSessionId = entry.source_ref?.startsWith('bingo-session:') ? entry.source_ref.slice('bingo-session:'.length) : ''
+    const relatedSessionId = blockById.get(blockId)?.session_id ?? objectiveSessionId
+    const activityAlias = stablePseudonym('activity', entry.activity_id, salt)
+    return [
+      stablePseudonym('time', entry.id, salt), activityAlias,
+      options.pseudonymizeLabels ? activityAlias : activity?.name ?? activityAlias,
+      activity?.kind ?? 'unknown', entry.started_at, entry.ended_at, offsetMinutes,
+      localTimestamp(entry.started_at, offsetMinutes), Math.max(0, Math.round(entry.duration_seconds)),
+      (Math.max(0, entry.duration_seconds) / 60).toFixed(2), entry.source, timeEntryOrigin(entry),
+      timeEntryMeasurementSource(entry, blockById), stablePseudonym('session', relatedSessionId, salt),
+      options.pseudonymizeLabels ? '' : entry.note ?? '',
+    ].map(escapeCsv).join(',')
+  })
+  return {
+    timeEntriesCsv: [headers.join(','), ...rows].join('\r\n'),
+    timeEntryCount: entries.length,
+    timedSeconds: entries.reduce((sum, entry) => sum + Math.max(0, Math.round(entry.duration_seconds)), 0),
+    timedActivityCount: new Set(entries.map(entry => entry.activity_id)).size,
+    firstTimeEntry: entries[0]?.started_at ?? null,
+    lastTimeEntry: entries.at(-1)?.started_at ?? null,
   }
 }
 
@@ -285,13 +392,13 @@ export function buildBehaviorExportBundle(source: BehaviorExportSource, options:
   ].map(escapeCsv).join(','))
   const csv = [headers.join(','), ...csvRows].join('\r\n')
   const observationCsvs = buildObservationCsvs(source, events, limit)
+  const timedCsv = buildTimeEntriesCsv(source, options, limit)
 
   const sessionCount = new Set(events.map(event => event.session_id).filter(Boolean)).size
   const opportunityCount = new Set(events.map(event => event.opportunity_id).filter(Boolean)).size
   const acceptedCount = events.filter(event => event.event_type === 'recommendation_accepted').length
   const alternativeCount = events.filter(event => event.event_type === 'recommendation_alternative_requested').length
-  const persisted = events.filter(event => event.event_type === 'session_persisted')
-  const actualWorkSeconds = persisted.reduce((total, event) => total + Number(event.payload.actual_work_seconds ?? 0), 0)
+  const actualWorkSeconds = observationCsvs.measuredStudySeconds
   const workBlockStarts = events.filter(event => event.event_type === 'block_started' && event.payload.block_type === 'WORK').length
   const skips = events.filter(event => event.event_type === 'block_completed' && event.payload.completion_reason === 'skipped').length
   const ratings = ratingCounts(events)
@@ -315,13 +422,14 @@ export function buildBehaviorExportBundle(source: BehaviorExportSource, options:
 Généré le : ${source.generatedAt}
 Version Yoridokoro : ${source.appVersion}
 Période : ${periodLabel(options.period)}
-Libellés : ${options.pseudonymizeLabels ? 'pseudonymisés' : 'noms d’étude inclus'}
+Libellés : ${options.pseudonymizeLabels ? 'pseudonymisés' : 'noms des sujets et activités inclus'}
 
 ## Limites et confidentialité
 
 - Cet export décrit l’usage du logiciel. Il ne mesure ni ne diagnostique un TDAH, un CDS, une dépression ou un burnout.
 - Une donnée absente signifie « inconnue », jamais « échec ».
-- Les notes générales, citations, relations, données Art, URL et frappes clavier ne sont pas incluses.
+- Les notes générales, citations, relations, contenu de la collection Art, URL et frappes clavier ne sont pas inclus. Les chronométrages Art restent présents dans le fichier temps.
+- Les détails libres des chronométrages sont retirés lorsque la pseudonymisation est activée.
 - Les micro-preuves ci-dessous sont du texte libre volontairement exporté. Leur contenu n’est pas pseudonymisé automatiquement.
 - Les évaluations Oublié / Difficile / Bien / Facile décrivent le rappel à cet instant, pas la valeur ou l’intelligence de la personne.
 
@@ -334,16 +442,22 @@ Libellés : ${options.pseudonymizeLabels ? 'pseudonymisés' : 'noms d’étude i
 
 - Événements : ${events.length}
 - Opportunités de démarrage : ${opportunityCount}
-- Sessions observées : ${sessionCount}
+- Sessions Étude instrumentées par Observation v2 : ${sessionCount}
+- Sessions Étude exportées : ${observationCsvs.studySessionCount} (${observationCsvs.measuredStudySessionCount} mesurées · ${observationCsvs.unknownStudySessionCount} à durée inconnue)
+- Entrées chronométrées dans l’Historique : ${timedCsv.timeEntryCount}
+- Activités chronométrées distinctes : ${timedCsv.timedActivityCount}
 - Premiers blocs de travail atteints : ${workBlockStarts}
 - Première observation : ${firstEvent ?? '—'}
 - Dernière observation : ${lastEvent ?? '—'}
+- Première entrée chronométrée : ${timedCsv.firstTimeEntry ?? '—'}
+- Dernière entrée chronométrée : ${timedCsv.lastTimeEntry ?? '—'}
 
 ## Résumé descriptif
 
 - Recommandations acceptées : ${acceptedCount}
 - Demandes d’une autre suggestion : ${alternativeCount}
-- Temps de travail sauvegardé : ${Math.floor(actualWorkSeconds / 60)} min ${actualWorkSeconds % 60} s
+- Temps WORK d’étude mesuré : ${Math.floor(actualWorkSeconds / 60)} min ${actualWorkSeconds % 60} s
+- Temps total chronométré, toutes activités : ${Math.floor(timedCsv.timedSeconds / 60)} min ${timedCsv.timedSeconds % 60} s
 - Blocs passés : ${skips}
 - Évaluations : Oublié ${ratings.forgot} · Difficile ${ratings.hard} · Bien ${ratings.good} · Facile ${ratings.easy} · Ignorées ${ratings.skipped}
 
@@ -360,7 +474,10 @@ ${evidenceMarkdown}
 - payload_json contient uniquement des mesures autorisées : durées, type de bloc, motif de transition, agrégat de checklist et évaluation du rappel.
 - monotonic_ms sert à calculer des délais à l’intérieur d’une même visite sans dépendre des changements de l’horloge système.
 - opportunites : une ligne par suggestion, de son affichage jusqu’à l’acceptation éventuelle et l’atteinte de 60 secondes de WORK.
-- sessions : une ligne par séance, avec contexte de démarrage, WORK réel, reprise, évaluation et présence éventuelle d’une micro-preuve.
+- sessions : une ligne par séance Étude, avec contexte de démarrage, WORK réel, provenance de la mesure, reprise, évaluation et présence éventuelle d’une micro-preuve.
+- temps : une ligne par entrée chronométrée de l’Historique. Ce fichier couvre Étude, Objectifs, projets, loisirs, sport, Art, autres activités et saisies manuelles.
+- Le total toutes activités doit être calculé depuis temps uniquement. Les blocs d’étude y sont déjà présents : ne pas leur ajouter de nouveau le WORK de sessions.
+- measurement_source distingue une mesure observée, une saisie manuelle, une projection historique ou une provenance inconnue.
 - Les valeurs de 0 seconde dans actual_work_seconds ne sont jamais remplacées par les durées planifiées.
 
 ## Prompt conseillé
@@ -368,7 +485,7 @@ ${evidenceMarkdown}
 ${BEHAVIOR_ANALYSIS_PROMPT}
 `
 
-  return { markdown, csv, ...observationCsvs, eventCount: events.length, sessionCount }
+  return { markdown, csv, ...observationCsvs, ...timedCsv, eventCount: events.length, sessionCount }
 }
 
 function folderFilePath(folder: string, filename: string) {
@@ -384,8 +501,12 @@ export async function exportBehaviorAnalyticsBundle(options: BehaviorExportOptio
   const folder = await dialog.openDirectory() as string | null
   if (!folder) return null
 
-  const [events, subjects, evidence, sessions, blocks, contexts] = await Promise.all([
+  // Export the same complete time projection that feeds History.
+  await syncLegacyTime()
+
+  const [events, subjects, evidence, sessions, blocks, contexts, activities, timeEntries] = await Promise.all([
     getBehaviorEvents(), getSubjects(), getSessionEvidence(), getSessions(), getAllSessionBlocks(), getAllSessionContexts(),
+    getAllActivities(), getTimeEntries(),
   ])
   const chapters = getAllChapters()
   const generatedAt = new Date().toISOString()
@@ -400,6 +521,8 @@ export async function exportBehaviorAnalyticsBundle(options: BehaviorExportOptio
     sessions,
     blocks,
     contexts,
+    activities,
+    timeEntries,
     pseudonymSalt: getObservationPseudonymSalt(),
   }, options)
 
@@ -408,11 +531,13 @@ export async function exportBehaviorAnalyticsBundle(options: BehaviorExportOptio
   const csvPath = folderFilePath(folder, `yoridokoro-evenements-${stamp}.csv`)
   const opportunitiesPath = folderFilePath(folder, `yoridokoro-opportunites-${stamp}.csv`)
   const sessionsPath = folderFilePath(folder, `yoridokoro-sessions-${stamp}.csv`)
+  const timeEntriesPath = folderFilePath(folder, `yoridokoro-temps-${stamp}.csv`)
   await Promise.all([
     fs.writeTextFileAtomic(markdownPath, bundle.markdown),
     fs.writeTextFileAtomic(csvPath, bundle.csv),
     fs.writeTextFileAtomic(opportunitiesPath, bundle.opportunitiesCsv),
     fs.writeTextFileAtomic(sessionsPath, bundle.sessionsCsv),
+    fs.writeTextFileAtomic(timeEntriesPath, bundle.timeEntriesCsv),
   ])
-  return { folder, markdownPath, csvPath, opportunitiesPath, sessionsPath, ...bundle }
+  return { folder, markdownPath, csvPath, opportunitiesPath, sessionsPath, timeEntriesPath, ...bundle }
 }

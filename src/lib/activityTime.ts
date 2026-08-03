@@ -30,6 +30,13 @@ export interface TimeEntry {
   created_at: string
 }
 
+export interface TimeEntrySummary {
+  entry_count: number
+  total_seconds: number
+  first_entry_at: string | null
+  last_entry_at: string | null
+}
+
 export interface ActivityEvent {
   id: string
   activity_id: string
@@ -60,6 +67,11 @@ const activitySelect = `SELECT a.*,
 export async function getActivities(): Promise<Activity[]> {
   const db = await getDb()
   return db.select<Activity[]>(`${activitySelect} WHERE a.archived=0 ORDER BY a.pinned DESC, MAX(COALESCE(last_entry_at,''),COALESCE(last_event_at,''),a.created_at) DESC, a.name COLLATE NOCASE`)
+}
+
+export async function getAllActivities(): Promise<Activity[]> {
+  const db = await getDb()
+  return db.select<Activity[]>(`${activitySelect} ORDER BY a.created_at, a.name COLLATE NOCASE`)
 }
 
 export async function createActivity(input: { name: string; kind: ActivityKind; color?: string }): Promise<string> {
@@ -101,6 +113,18 @@ export async function getTimeEntries(from?: Date, to?: Date): Promise<TimeEntry[
   const db = await getDb()
   if (from && to) return db.select<TimeEntry[]>(`SELECT * FROM time_entries WHERE started_at >= $1 AND started_at < $2 ORDER BY started_at DESC`, [from.toISOString(), to.toISOString()])
   return db.select<TimeEntry[]>(`SELECT * FROM time_entries ORDER BY started_at DESC`)
+}
+
+export async function getTimeEntrySummary(): Promise<TimeEntrySummary> {
+  const db = await getDb()
+  const [row] = await db.select<TimeEntrySummary[]>(`
+    SELECT COUNT(*) AS entry_count,
+      COALESCE(SUM(duration_seconds), 0) AS total_seconds,
+      MIN(started_at) AS first_entry_at,
+      MAX(started_at) AS last_entry_at
+    FROM time_entries
+  `)
+  return row ?? { entry_count: 0, total_seconds: 0, first_entry_at: null, last_entry_at: null }
 }
 
 export async function getActivityEvents(from?: Date, to?: Date): Promise<ActivityEvent[]> {

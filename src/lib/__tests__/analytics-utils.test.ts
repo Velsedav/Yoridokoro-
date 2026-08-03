@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   computeStreaks,
   computeWeeklyStats,
@@ -260,12 +260,16 @@ describe('computeWeekTrend', () => {
   })
 
   it('calculates correct percentage change', () => {
-    // Previous week: 60 mins. Current week: 90 mins → +50%
-    const prevWeekDate = new Date()
-    prevWeekDate.setDate(prevWeekDate.getDate() - 10)
-    const sessions = [makeSession('old', prevWeekDate.toISOString(), 60)]
-    const result = computeWeekTrend(sessions, { minutes: 90, count: 2, activeDays: 2 }, 'monday')
-    expect(result.weekMinutesDelta).toBe(50)
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-08-04T12:00:00.000Z'))
+      // Previous comparable window: Monday 00:00 through Tuesday 12:00.
+      const sessions = [makeSession('old', '2026-07-28T10:00:00.000Z', 60)]
+      const result = computeWeekTrend(sessions, { minutes: 90, count: 2, activeDays: 2 }, 'monday')
+      expect(result.weekMinutesDelta).toBe(50)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

@@ -1,0 +1,213 @@
+YORIDOKORO — BACKLOG PRODUIT ET TECHNIQUE
+Dernière mise à jour : 3 août 2026
+
+Ce fichier sert de mémoire de travail concise.
+Une idée n'est pas une fonctionnalité promise. Les constats venant d'une analyse externe
+doivent être confirmés dans le code ou avec un export reproductible avant correction.
+
+LÉGENDE
+P0  Fiabilité des données ou risque de conclusions fausses
+P1  Amélioration produit importante
+P2  Analyse ou confort à envisager plus tard
+[ ] À faire   [~] À examiner / valider   [x] Déjà présent
+
+
+======================================================================
+P0 — FIABILITÉ DES EXPORTS
+======================================================================
+
+[x] P0.1 — Réconcilier le WORK réel dans tous les exports
+
+Résolu le 3 août 2026 : sessions.csv privilégie maintenant la mesure
+session_persisted, indique measurement_source et laisse une durée réellement
+inconnue vide plutôt que de fabriquer 0 seconde.
+
+Contexte rapporté :
+- Une session d'environ 5 minutes aurait actual_work_seconds = 0 dans sessions.csv.
+- Les événements session_persisted et block_completed indiqueraient 300 secondes.
+- Le Markdown et les événements totaliseraient 3 900 secondes / 65 minutes,
+  tandis que sessions.csv n'en totaliserait que 3 600 / 60 minutes.
+
+Implémentation :
+- Reproduire l'écart depuis les données locales ou un export de test.
+- Comparer la fonction qui construit sessions.csv avec les événements persistés.
+- Utiliser le WORK réel observé lorsqu'un session_persisted fiable existe.
+- Ne jamais transformer silencieusement une valeur inconnue en zéro seconde.
+- Ajouter measurement_source : event_observed | legacy_record | unknown.
+
+Critères de validation :
+- CSV, Markdown et calcul depuis les événements donnent le même total.
+- Le cas rapporté donne 3 sessions observées et 3 900 secondes.
+- Un test de régression couvre une session résumée à 0 mais persistée à 300 secondes.
+- Les anciennes sessions restent exportables sans être présentées comme des échecs.
+
+
+[x] P0.2 — Inclure les sessions Objectifs visibles dans l'Historique
+
+Résolu le 3 août 2026 : l'export produit désormais temps.csv depuis le même registre
+que l'Historique. Il couvre Étude, Objectifs, projets, loisirs, sport, Art, autres
+activités et saisies manuelles, sans inventer de champs pédagogiques pour ces activités.
+
+Contexte rapporté :
+- Des activités Objectifs (par exemple Read 6 books et Get a 6 pack) sont visibles
+  dans l'Historique mais absentes des trois CSV d'observation.
+- Ce n'est vraisemblablement pas un problème de période : les activités concernées
+  se situeraient dans la même fenêtre de 30 jours que les sessions Étude exportées.
+
+Implémentation :
+- Identifier la source de données utilisée par l'Historique.
+- Identifier la source et les filtres utilisés par l'export d'observation.
+- Vérifier explicitement les bornes de dates et le fuseau Europe/Paris.
+- Confirmer si les minuteurs Objectifs vivent dans une table distincte.
+
+Format préféré : un export de sessions unifié comprenant au minimum :
+- session_type : study | objective
+- activity_id et activity_name
+- started_at et ended_at
+- duration_seconds
+- status
+- source : timer | manual | history
+
+Le format peut rester séparé en deux CSV si l'unification rend le schéma fragile,
+mais le Markdown doit alors annoncer clairement la couverture de chaque fichier.
+
+Critères de validation :
+- Toute entrée chronométrée visible dans l'Historique et comprise dans la période
+  apparaît dans l'export approprié.
+- Une session Objectif et une session Étude sont couvertes par un test.
+- Les totaux par type et le total général sont cohérents avec l'Historique.
+- Aucun champ propre à l'étude n'est artificiellement inventé pour un Objectif.
+
+
+[x] P0.3 — Rendre la couverture et les données historiques explicites
+
+Résolu le 3 août 2026 : le rapport sépare sessions Étude instrumentées, sessions
+exportées mesurées/inconnues et chronométrages de l'Historique. Les CSV indiquent
+leur provenance et le prompt explique quel fichier utiliser sans double comptage.
+
+Contexte rapporté :
+- sessions.csv contiendrait 8 lignes, dont seulement 3 instrumentées par Observation v2.
+- Cinq anciennes lignes sans app_version, feature_version ni événements associés
+  risquent d'être prises à tort pour cinq sessions échouées.
+
+Implémentation :
+- Distinguer observed_v2, legacy et unknown dans l'export.
+- Exporter app_version, feature_version et measurement_source lorsque disponibles.
+- Ajouter au résumé : nombre total de lignes, nombre de sessions observées,
+  nombre de lignes historiques et nombre de durées inconnues.
+- Documenter la source de vérité utilisée pour le WORK réel.
+
+Critères de validation :
+- Une ligne legacy sans mesure n'entre pas dans le taux de réussite.
+- Le résumé ne présente jamais « absence de mesure » comme « zéro seconde ».
+- Les dénominateurs des métriques sont lisibles et reproductibles.
+
+
+======================================================================
+P1 — BOUCLE PRODUIT À EXAMINER
+======================================================================
+
+[~] P1.1 — Éviter la répétition excessive d'une même recommandation
+
+Signal externe à revalider après les corrections P0 :
+- 103 opportunités review/overdue sur 131 auraient été observées.
+- Le même chapitre Python aurait été la première recommandation 77 fois.
+
+Attention :
+- Une opportunité signifie parfois seulement que l'écran a été affiché.
+- La version 0.2.6 a déjà corrigé l'ordre des chapitres jamais étudiés.
+- Ne pas modifier l'algorithme avant de distinguer exposition, refus et navigation.
+
+Piste produit :
+- Après deux demandes d'alternative dans une même visite, arrêter le défilement infini.
+- Proposer trois choix stables :
+  1. reprendre la recommandation et son point de reprise ;
+  2. avancer vers un contenu nouveau ;
+  3. faire cinq minutes sur un autre sujet.
+
+Validation souhaitée :
+- Moins d'alternatives successives.
+- Délai de démarrage plus court.
+- Davantage de session_created et de sessions atteignant 60 secondes.
+- Pas d'augmentation des abandons après le démarrage.
+
+
+[~] P1.2 — Comparer « Juste 5 minutes » et session guidée
+
+Il ne s'agit pas de choisir un gagnant : les deux portes peuvent répondre à des états
+différents. Conserver provisoirement les deux actions visibles.
+
+Sur les prochaines sessions, comparer par entry_source :
+- nombre de contextes lancés ;
+- délai actif avant session_created ;
+- proportion atteignant au moins 60 secondes de WORK ;
+- micro-preuve enregistrée ;
+- arrêt propre, continuation ou abandon.
+
+Ne pas optimiser uniquement le nombre total de minutes.
+Ne pas conclure avec seulement deux ou trois sessions.
+
+
+[~] P1.3 — Mesurer l'utilité réelle des points de reprise
+
+Questions :
+- Le point était-il présent lors de la recommandation suivante ?
+- A-t-il été affiché puis utilisé ?
+- Le délai avant le prochain démarrage a-t-il diminué ?
+- A-t-il aidé après plusieurs jours d'interruption ?
+
+Attendre plusieurs reprises réelles avant de modifier l'interface.
+
+
+======================================================================
+P2 — ANALYSES FUTURES, APRÈS P0
+======================================================================
+
+[ ] P2.1 — Décrire les horaires d'étude, sans chercher une « heure parfaite ».
+[ ] P2.2 — Comparer blocs longs et retours multiples dans une même journée.
+[ ] P2.3 — Étudier le premier démarrage après plusieurs jours sans activité.
+[ ] P2.4 — Comparer les conditions de démarrage Étude / Objectif.
+[ ] P2.5 — Vérifier les durées anormalement longues (activité réelle ou minuteur oublié).
+[ ] P2.6 — Étudier quelle durée de session est la plus facilement répétée.
+[ ] P2.7 — Evaluer s'il faut implémenter le plan Major de Learnivore, et est-ce que ça pourrait aider.
+[ ] P2.8 — Réduire encore la friction, par exemple en ouvrant automatiquement les liens/fichiers/programmes des blocs d'étude.
+[ ] P2.9 — Si est un film/album est ajouté dans Art, alors il faudrait que soit ajouté aussi la durée du film ou de l'album dans la data. Mais il ne faut pas que la data de toute la collection soit ajouté, seulement les oeuvres qui auront été ajoutées après la mise à jour.
+[ ] P2.10 — Un moyen de récupérer la data de playnite, afin de pouvoir améliorer encore l'historique.
+
+Conditions avant analyse :
+- Export complet Étude + Objectifs.
+- Sources de mesure explicites.
+- Assez d'observations pour ne pas surinterpréter quelques cas.
+- Conclusions descriptives et fonctionnelles, jamais diagnostic psychologique automatisé.
+
+
+======================================================================
+DÉJÀ PRÉSENT — NE PAS RECRÉER
+======================================================================
+
+[x] Démarrage « Juste 5 minutes ».
+[x] Session guidée avec PREP, WORK et BREAK.
+[x] Checklist de préparation facultative et compte à rebours visible.
+[x] Évaluation Oublié / Difficile / Bien / Facile après WORK significatif.
+[x] Micro-preuve de fin de session.
+[x] Point de reprise associé au chapitre.
+[x] Observation v2 et export Markdown + CSV pour le parcours Étude.
+[x] Sessions Objectifs visibles dans l'Historique de l'application.
+[x] Ordre des chapitres jamais étudiés corrigé dans la version 0.2.6.
+
+
+======================================================================
+HORS PÉRIMÈTRE POUR LE MOMENT
+======================================================================
+
+- Machine learning ou prédiction d'un « moment idéal ».
+- Nouveau dashboard de performance.
+- Score psychologique, score TDAH/CDS ou mesure de « gravité ».
+- Coefficient de difficulté ajouté au moteur de recommandation.
+- Conclusions générales tirées uniquement des trois sessions Observation v2 actuelles.
+
+
+PROCHAINE ACTION RECOMMANDÉE
+
+Commencer par P0.1 et P0.2 ensemble : comparer les sources de l'Historique et de
+l'export, puis produire un export dont la couverture et les totaux sont vérifiables.
