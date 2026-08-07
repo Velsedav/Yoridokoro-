@@ -10,9 +10,10 @@ interface SuggestionFieldProps {
   onChange: (value: string) => void;
   required?: boolean;
   placeholder?: string;
+  completionField?: boolean;
 }
 
-export function SuggestionField({ label, value, options, onChange, required, placeholder }: SuggestionFieldProps) {
+export function SuggestionField({ label, value, options, onChange, required, placeholder, completionField }: SuggestionFieldProps) {
   const { t } = useI18n();
   const id = useId();
   const listId = `${id}-suggestions`;
@@ -34,7 +35,7 @@ export function SuggestionField({ label, value, options, onChange, required, pla
   return <div className="field suggestion-field">
     <label htmlFor={id}>{label}{required && <i>{t('required')}</i>}</label>
     <div className="suggestion-control">
-      <input id={id} required={required} value={value} placeholder={placeholder} autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={show} aria-controls={show ? listId : undefined} aria-activedescendant={show ? `${listId}-${active}` : undefined} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onChange={(event) => { onChange(event.target.value); setOpen(true); setActive(0); }} onKeyDown={keyDown} />
+      <input id={id} data-completion-field={completionField ? '' : undefined} required={required} value={value} placeholder={placeholder} autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={show} aria-controls={show ? listId : undefined} aria-activedescendant={show ? `${listId}-${active}` : undefined} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onChange={(event) => { onChange(event.target.value); setOpen(true); setActive(0); }} onKeyDown={keyDown} />
       {show && <ul id={listId} className="suggestion-menu" role="listbox">
         {suggestions.map((option, index) => <li id={`${listId}-${index}`} key={option} role="option" aria-selected={index === active} className={index === active ? 'active' : ''} onMouseDown={(event) => { event.preventDefault(); choose(option); }}><span>{option}</span>{option === value && <Check />}</li>)}
       </ul>}
@@ -49,9 +50,10 @@ interface TagSuggestionFieldProps {
   options: string[];
   onChange: (value: string) => void;
   placeholder?: string;
+  completionField?: boolean;
 }
 
-export function TagSuggestionField({ label, value, options, onChange, placeholder }: TagSuggestionFieldProps) {
+export function TagSuggestionField({ label, value, options, onChange, placeholder, completionField }: TagSuggestionFieldProps) {
   const { t } = useI18n();
   const id = useId();
   const listId = `${id}-suggestions`;
@@ -84,7 +86,7 @@ export function TagSuggestionField({ label, value, options, onChange, placeholde
     <label htmlFor={id}>{label}</label>
     <div className="tag-control" onClick={(event) => (event.currentTarget.querySelector('input') as HTMLInputElement)?.focus()}>
       {tags.map((tag) => <span className="field-tag" key={tag}>{tag}<button type="button" onClick={() => remove(tag)} aria-label={`${t('Remove')} ${tag}`}><X /></button></span>)}
-      <div className="tag-input-wrap"><input id={id} value={query} placeholder={tags.length ? '' : placeholder} autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={show} aria-controls={show ? listId : undefined} aria-activedescendant={show ? `${listId}-${active}` : undefined} onFocus={() => setOpen(true)} onBlur={() => { if (query.trim()) add(query); else setOpen(false); }} onChange={(event) => { setQuery(event.target.value); setOpen(true); setActive(0); }} onKeyDown={keyDown} />
+      <div className="tag-input-wrap"><input id={id} data-completion-field={completionField ? '' : undefined} value={query} placeholder={tags.length ? '' : placeholder} autoComplete="off" role="combobox" aria-autocomplete="list" aria-expanded={show} aria-controls={show ? listId : undefined} aria-activedescendant={show ? `${listId}-${active}` : undefined} onFocus={() => setOpen(true)} onBlur={() => { if (query.trim()) add(query); else setOpen(false); }} onChange={(event) => { setQuery(event.target.value); setOpen(true); setActive(0); }} onKeyDown={keyDown} />
         {show && <ul id={listId} className="suggestion-menu" role="listbox">{suggestions.map((option, index) => <li id={`${listId}-${index}`} key={option} role="option" aria-selected={index === active} className={index === active ? 'active' : ''} onMouseDown={(event) => { event.preventDefault(); add(option); }}>{option}</li>)}</ul>}
       </div>
     </div>

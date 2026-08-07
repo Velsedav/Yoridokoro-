@@ -1,21 +1,21 @@
 import type { CategoryId, RankedItem } from '../types';
 
-export type CompletionField = 'year' | 'genre' | 'country' | 'series' | 'movement';
+export type CompletionField = 'creator' | 'year' | 'genre' | 'country' | 'series' | 'movement';
 
 const completionFieldsByCategory: Record<CategoryId, readonly CompletionField[]> = {
-  books: ['year', 'genre', 'country', 'series'],
-  essays: ['year', 'genre', 'country', 'series'],
-  comics: ['year', 'genre', 'country', 'series'],
-  movies: ['year', 'genre', 'country'],
-  tv: ['year', 'genre', 'country'],
-  paintings: ['year', 'genre', 'country', 'movement'],
-  architecture: ['year', 'genre', 'country'],
-  games: ['year', 'genre', 'country'],
-  songs: ['year', 'genre', 'country'],
-  albums: ['year', 'genre', 'country'],
-  photographs: ['year', 'genre', 'country', 'series'],
-  sculptures: ['year', 'genre', 'country', 'movement'],
-  poems: ['year', 'genre', 'country', 'series']
+  books: ['creator', 'year', 'genre', 'country', 'series'],
+  essays: ['creator', 'year', 'genre', 'country', 'series'],
+  comics: ['creator', 'year', 'genre', 'country', 'series'],
+  movies: ['creator', 'year', 'genre', 'country'],
+  tv: ['creator', 'year', 'genre', 'country'],
+  paintings: ['creator', 'year', 'genre', 'country', 'movement'],
+  architecture: ['creator', 'year', 'genre', 'country'],
+  games: ['creator', 'year', 'genre', 'country'],
+  songs: ['creator', 'year', 'genre', 'country'],
+  albums: ['creator', 'year', 'genre', 'country'],
+  photographs: ['creator', 'year', 'genre', 'country', 'series'],
+  sculptures: ['creator', 'year', 'genre', 'country', 'movement'],
+  poems: ['creator', 'year', 'genre', 'country', 'series']
 };
 
 export function completionFieldsFor(category: CategoryId) {
@@ -24,6 +24,7 @@ export function completionFieldsFor(category: CategoryId) {
 
 export function isFieldMissing(item: RankedItem, field: CompletionField) {
   switch (field) {
+    case 'creator': return !item.creator.trim();
     case 'year': return item.year === undefined;
     case 'genre': return !item.genres.some((genre) => genre.trim());
     case 'country': return !item.countries?.some((country) => country.trim());

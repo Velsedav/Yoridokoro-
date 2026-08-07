@@ -211,7 +211,7 @@ export function escapeHtmlForExport(value: unknown): string {
 const escapeHtml = escapeHtmlForExport;
 
 export function buildReadableArtHtml(art: { items?: any[]; matches?: any[] }): string {
-  const artItems = art.items ?? [];
+  const artItems = (art.items ?? []).filter(item => item.shelf !== 'watchlist');
   const artCategoryNames: Record<string, string> = {
     books: 'Livres', essays: 'Essais', comics: 'Bandes dessinées', movies: 'Films', tv: 'Séries TV', paintings: 'Peintures',
     architecture: 'Architecture', games: 'Jeux vidéo', songs: 'Chansons', albums: 'Albums',
@@ -455,7 +455,7 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
     try { await db.execute(`INSERT OR IGNORE INTO activity_resources (id,activity_id,label,url,enabled,created_at) VALUES ($1,$2,$3,$4,$5,$6)`, [resource.id,resource.activity_id,resource.label,resource.url,resource.enabled??1,resource.created_at]); } catch {}
   }
   for (const entry of data.time_entries ?? []) {
-    try { await db.execute(`INSERT OR IGNORE INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [entry.id,entry.activity_id,entry.started_at,entry.ended_at,entry.duration_seconds,entry.note??null,entry.source??'import',entry.source_ref??null,entry.created_at]); } catch {}
+    try { await db.execute(`INSERT OR IGNORE INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,source_detail_ref,source_detail_label,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [entry.id,entry.activity_id,entry.started_at,entry.ended_at,entry.duration_seconds,entry.note??null,entry.source??'import',entry.source_ref??null,entry.source_detail_ref??null,entry.source_detail_label??null,entry.created_at]); } catch {}
   }
   for (const deletion of data.time_entry_deletions ?? []) {
     try {
@@ -616,12 +616,13 @@ export async function autoExportToConfiguredPaths(
 
   if (slots.length > 0) {
     const targets = slots.map(([folder, slot]) => ({ filePath: folderToFilePath(folder), slot }));
-    targets.forEach(({ filePath, slot }) => onProgress?.(filePath, 'saving', slot));
+    onProgress?.(targets[0].filePath, 'saving', targets[0].slot);
     try {
       const backup = await createBackup();
       const json = JSON.stringify(backup, null, 2);
       let saved = false;
-      for (const { filePath, slot } of targets) {
+      for (const [index, { filePath, slot }] of targets.entries()) {
+        if (index > 0) onProgress?.(filePath, 'saving', slot);
         try {
           await fsAPI().writeTextFileAtomic(filePath, json);
           saved = true;

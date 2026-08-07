@@ -1,6 +1,6 @@
 {
   "name": "yoridokoro",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Yoridokoro — espace personnel pour étudier, agir, créer et entretenir ses relations.",
   "private": true,
   "author": {
@@ -50,7 +50,10 @@
       "category": "Education"
     },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "icon-dark-academia.ico"
     },
     "mac": {

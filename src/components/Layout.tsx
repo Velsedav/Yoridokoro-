@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, BookOpen, BrainCircuit, Calendar, CalendarDays, Palette, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle, Heart, MoreHorizontal } from 'lucide-react';
+import { Home, BookOpen, BrainCircuit, Calendar, CalendarDays, Palette, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle, Heart, MoreHorizontal, AlertTriangle, X } from 'lucide-react';
 import { getQuotes, addQuote } from '../lib/db';
 import type { Quote } from '../lib/db';
 import QuoteEditorModal from './QuoteEditorModal';
@@ -12,33 +12,24 @@ import { isDevNavUnlocked, toggleDevNav } from '../lib/devMode';
 import { getLatestMetacognitionCompletion, getMetacognitionStatus, METACOGNITION_UPDATED_EVENT, type MetacognitionStatus } from '../lib/metacognitionStatus';
 import MetacognitionGate from './MetacognitionGate';
 import { useDialogFocus } from '../hooks/useDialogFocus';
+import { importPlayniteSessionsAtStartup } from '../lib/playniteImport';
+import { initialCloseOperations, updateCloseOperation, type CloseOperation } from '../lib/closeOperations';
 import './Layout.css';
 
 const MASCOT_DEFAULT_QUOTE = "The exam is won at home, not on exam day 🏠";
 const DEV_NAV_CLICKS = 4;
 
-interface PathEntry { path: string; status: 'saving' | 'ok' | 'error'; slot: 1 | 2 | 'art-html'; }
-
-
 function CloseOverlay() {
     const { t } = useTranslation();
     const [phase, setPhase] = useState<'idle' | 'saving' | 'done'>('idle');
-    const [paths, setPaths] = useState<PathEntry[]>([]);
+    const [paths, setPaths] = useState<CloseOperation[]>([]);
 
     useEffect(() => {
-        const onStart = () => { setPhase('saving'); setPaths([]); };
+        const onStart = () => { setPhase('saving'); setPaths(initialCloseOperations()); };
         const onDone = () => setPhase('done');
         const onPath = (e: Event) => {
-            const { path, status, slot } = (e as CustomEvent<PathEntry>).detail;
-            setPaths(prev => {
-                const idx = prev.findIndex(p => p.slot === slot);
-                if (idx >= 0) {
-                    const next = [...prev];
-                    next[idx] = { path, status, slot };
-                    return next;
-                }
-                return [...prev, { path, status, slot }];
-            });
+            const update = (e as CustomEvent<CloseOperation>).detail;
+            setPaths(prev => updateCloseOperation(prev, update));
         };
         window.addEventListener('app-close-start', onStart);
         window.addEventListener('app-close-done', onDone);
@@ -72,11 +63,15 @@ function CloseOverlay() {
                         {paths.map(({ path, status, slot }) => (
                             <li key={slot} className={`close-overlay-path-row close-overlay-path-${status}`}>
                                 <span className="close-overlay-path-label">
-                                    {slot === 1 ? t('app.backup_primary') : slot === 2 ? t('app.backup_secondary') : 'Page HTML Art'}
+                                    {slot === 1 ? t('app.backup_primary') : slot === 2 ? t('app.backup_secondary') : t('app.export_art_html')}
                                 </span>
-                                {status === 'saving' && <Loader2 size={13} className="close-overlay-path-spinner" />}
-                                {status === 'ok' && <CheckCircle2 size={13} />}
-                                {status === 'error' && <span title={path}><XCircle size={13} /></span>}
+                                <span className="close-overlay-path-status" title={status === 'error' ? path : undefined}>
+                                    {status === 'pending' && <span className="close-overlay-path-pending-dot" aria-hidden="true" />}
+                                    {status === 'saving' && <Loader2 size={13} className="close-overlay-path-spinner" />}
+                                    {status === 'ok' && <CheckCircle2 size={13} />}
+                                    {status === 'error' && <XCircle size={13} />}
+                                    {status === 'pending' ? t('app.operation_pending') : status === 'saving' ? t('app.operation_running') : status === 'ok' ? t('app.operation_done') : t('app.operation_error')}
+                                </span>
                             </li>
                         ))}
                     </ul>
@@ -113,6 +108,15 @@ export default function Layout() {
     const mascotClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [learningReviewDue, setLearningReviewDue] = useState(false);
     const [metacognitionStatus, setMetacognitionStatus] = useState<MetacognitionStatus>('upcoming');
+    const [playniteWarning, setPlayniteWarning] = useState<'not-found' | 'read-error' | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        void importPlayniteSessionsAtStartup().then(result => {
+            if (active && result.warning) setPlayniteWarning(result.warning);
+        });
+        return () => { active = false; };
+    }, []);
 
     const closeNavWarning = useCallback(() => {
         setNavWarningStep('none');
@@ -466,6 +470,16 @@ export default function Layout() {
 
                 <CloseOverlay />
                 <MetacognitionGate />
+
+                {playniteWarning && (
+                    <aside className="playnite-import-warning" role="status" aria-live="polite">
+                        <AlertTriangle size={16} aria-hidden="true" />
+                        <span>{playniteWarning === 'not-found'
+                            ? 'Import Playnite indisponible : données GameActivity introuvables.'
+                            : 'Certaines données Playnite n’ont pas pu être lues.'}</span>
+                        <button type="button" onClick={() => setPlayniteWarning(null)} aria-label="Fermer l’avertissement Playnite"><X size={15} /></button>
+                    </aside>
+                )}
 
                 {navWarningStep !== 'none' && (
                     <div className="modal-overlay" onClick={closeNavWarning}>

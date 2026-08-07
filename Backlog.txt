@@ -172,7 +172,12 @@ P2 — ANALYSES FUTURES, APRÈS P0
 [ ] P2.7 — Evaluer s'il faut implémenter le plan Major de Learnivore, et est-ce que ça pourrait aider.
 [ ] P2.8 — Réduire encore la friction, par exemple en ouvrant automatiquement les liens/fichiers/programmes des blocs d'étude.
 [ ] P2.9 — Si est un film/album est ajouté dans Art, alors il faudrait que soit ajouté aussi la durée du film ou de l'album dans la data. Mais il ne faut pas que la data de toute la collection soit ajouté, seulement les oeuvres qui auront été ajoutées après la mise à jour.
-[ ] P2.10 — Un moyen de récupérer la data de playnite, afin de pouvoir améliorer encore l'historique.
+[x] P2.10 — Import automatique et idempotent des sessions Playnite (GameActivity) dans l’Historique.
+[x] P2.11 — Afficher dès la fermeture les deux sauvegardes et l’export HTML, avec leurs états réels successifs.
+[x] P2.12 — Afficher dans l’Historique le sous-objectif travaillé en priorité et son objectif parent en secondaire.
+[x] P2.13 — Watchlist Art séparée de la Collection, avec transfert immédiat vers le placement accéléré Elo.
+[ ] P2.14 — Dans les objectifs Bingoals, je veux que soit calculé et visible le temps moyen hebdomaraire consacré à l'objectif depuis le début de l'année. Ça ira là où on a actuellement TIME INVESTED. Il faut qu'il y ait un switch qui passe de TOTAL/HEBDOMADAIRE/MENSUEL/QUARTERLY.
+[ ] P2.15 — Un calendrier de saisonalité/événements culturels. Du genre le Carnaval de Nice, le nouvel an chinois, l'Eïd, Noël, les journées du patrimoine etc. Et je pourrais mettre une image format bannière qu'on verrait en haut sur l'écran d'accueil. Parce que moi je fais attention qu'il y a les journées du patrimoine seulement après que ce soit passé et qu'il y a ait un article dans le journal.
 
 Conditions avant analyse :
 - Export complet Étude + Objectifs.

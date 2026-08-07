@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import Database from 'better-sqlite3'
 import { normalizeSqlStatement } from './sqlParams'
 import { normalizeExternalUrl, normalizeRemoteImageUrl } from './security'
+import { readPlayniteSessions } from './playnite'
 
 // ── Linux GPU fixes ───────────────────────────────────────────────────────────
 // White screen on Debian/GNOME caused by DMABUF buffer sharing failing in
@@ -154,7 +155,8 @@ function applyMainSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_activity_resources_activity ON activity_resources(activity_id, created_at);
     CREATE TABLE IF NOT EXISTS time_entries(
       id TEXT PRIMARY KEY, activity_id TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT NOT NULL,
-      duration_seconds INTEGER NOT NULL, note TEXT NULL, source TEXT NOT NULL DEFAULT 'timer', source_ref TEXT NULL, created_at TEXT NOT NULL,
+      duration_seconds INTEGER NOT NULL, note TEXT NULL, source TEXT NOT NULL DEFAULT 'timer', source_ref TEXT NULL,
+      source_detail_ref TEXT NULL, source_detail_label TEXT NULL, created_at TEXT NOT NULL,
       FOREIGN KEY(activity_id) REFERENCES activities(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS time_entry_deletions(
@@ -236,6 +238,8 @@ function applyMainSchema(db: Database.Database) {
     ensureColumn('metacognition_logs', 'free_time_hours', 'REAL NULL')
     ensureColumn('metacognition_logs', 'priority_subject_ids', 'TEXT NULL')
     ensureColumn('time_entries', 'source_ref', 'TEXT NULL')
+    ensureColumn('time_entries', 'source_detail_ref', 'TEXT NULL')
+    ensureColumn('time_entries', 'source_detail_label', 'TEXT NULL')
     ensureColumn('sessions', 'actual_seconds', 'INTEGER NOT NULL DEFAULT 0')
     ensureColumn('sessions', 'status', "TEXT NOT NULL DEFAULT 'completed'")
     ensureColumn('sessions', 'evaluated_at', 'TEXT NULL')
@@ -389,6 +393,8 @@ ipcMain.handle('db:select', (_e, dbName: 'main' | 'bingo', sql: string, params: 
 // ── IPC: file system ──────────────────────────────────────────────────────────
 
 ipcMain.handle('fs:getUserDataPath', () => userData)
+
+ipcMain.handle('playnite:readSessions', () => readPlayniteSessions(app.getPath('appData')))
 
 ipcMain.handle('fs:readTextFile', (_e, filePath: string) => {
   return fs.readFileSync(filePath, 'utf-8')

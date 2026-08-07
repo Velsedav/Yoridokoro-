@@ -118,17 +118,27 @@ export async function syncBingoTime() {
     if (!activityId) continue
     const startedAt = new Date(row.started_at).toISOString(), endedAt = new Date(row.ended_at!).toISOString()
     const sourceRef = `bingo-session:${row.id}`
+    const detailRef = `bingo-subobjective:${row.subobjective_id}`
     const deleted = await main.select<{ source_ref: string }[]>(`SELECT source_ref FROM time_entry_deletions WHERE source_ref=$1 LIMIT 1`, [sourceRef])
     if (deleted[0]) continue
     const existing = await main.select<{ id: string }[]>(`SELECT id FROM time_entries WHERE source_ref=$1 LIMIT 1`, [sourceRef])
     if (existing[0]) {
       await main.execute(
-        `UPDATE time_entries SET activity_id=$1,started_at=$2,ended_at=$3,duration_seconds=$4,note=$5,source='bingoals' WHERE id=$6`,
-        [activityId, startedAt, endedAt, Math.max(0, Math.round(row.duration_ms / 1000)), detail?.sub_title || null, existing[0].id]
+        `UPDATE time_entries SET activity_id=$1,started_at=$2,ended_at=$3,duration_seconds=$4,note=$5,source='bingoals',source_detail_ref=$6,source_detail_label=$7 WHERE id=$8`,
+        [activityId, startedAt, endedAt, Math.max(0, Math.round(row.duration_ms / 1000)), detail?.sub_title || null, detailRef, detail?.sub_title || null, existing[0].id]
       )
     } else {
-      await main.execute(`INSERT INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,created_at) VALUES ($1,$2,$3,$4,$5,$6,'bingoals',$7,$8)`, [crypto.randomUUID(), activityId, startedAt, endedAt, Math.max(0, Math.round(row.duration_ms / 1000)), detail?.sub_title || null, sourceRef, endedAt])
+      await main.execute(`INSERT INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,source_detail_ref,source_detail_label,created_at) VALUES ($1,$2,$3,$4,$5,$6,'bingoals',$7,$8,$9,$10)`, [crypto.randomUUID(), activityId, startedAt, endedAt, Math.max(0, Math.round(row.duration_ms / 1000)), detail?.sub_title || null, sourceRef, detailRef, detail?.sub_title || null, endedAt])
     }
+  }
+  // A manual time correction tombstones the synchronized source, but its
+  // descriptive link remains. Renames may therefore refresh the label without
+  // ever touching the corrected timestamps or duration.
+  for (const subobjective of subobjectives) {
+    await main.execute(
+      `UPDATE time_entries SET source_detail_label=$1 WHERE source_detail_ref=$2`,
+      [subobjective.sub_title, `bingo-subobjective:${subobjective.id}`],
+    )
   }
   // Older releases created one activity per subobjective. Once their entries
   // have been reassigned above, keep those legacy shells out of the active list.

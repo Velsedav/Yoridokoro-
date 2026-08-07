@@ -265,6 +265,7 @@ function timeEntryOrigin(entry: TimeEntry) {
   if (entry.source === 'manual') return 'manual_entry'
   if (entry.source === 'timer') return 'activity_timer'
   if (entry.source === 'import') return 'imported_entry'
+  if (entry.source === 'playnite') return 'playnite_gameactivity'
   return entry.source || 'unknown'
 }
 
@@ -273,6 +274,7 @@ function timeEntryMeasurementSource(entry: TimeEntry, blockById: ReadonlyMap<str
   if (entry.source === 'timer') return 'timer_observed'
   if (entry.source === 'bingoals') return 'objective_time_record'
   if (entry.source === 'import') return 'imported'
+  if (entry.source === 'playnite') return 'imported'
   if (entry.source === 'study') {
     const blockId = entry.source_ref?.startsWith('study-block:') ? entry.source_ref.slice('study-block:'.length) : ''
     const block = blockById.get(blockId)
@@ -307,7 +309,7 @@ function buildTimeEntriesCsv(source: BehaviorExportSource, options: BehaviorExpo
       localTimestamp(entry.started_at, offsetMinutes), Math.max(0, Math.round(entry.duration_seconds)),
       (Math.max(0, entry.duration_seconds) / 60).toFixed(2), entry.source, timeEntryOrigin(entry),
       timeEntryMeasurementSource(entry, blockById), stablePseudonym('session', relatedSessionId, salt),
-      options.pseudonymizeLabels ? '' : entry.note ?? '',
+      options.pseudonymizeLabels ? '' : entry.source_detail_label ?? entry.note ?? '',
     ].map(escapeCsv).join(',')
   })
   return {

@@ -934,6 +934,11 @@ export const pt: Translations = {
         'app.force_quit': 'Force quit',
         'app.backup_primary': 'Primary',
         'app.backup_secondary': 'Secondary',
+        'app.export_art_html': 'Art HTML export',
+        'app.operation_pending': 'Waiting',
+        'app.operation_running': 'In progress',
+        'app.operation_done': 'Complete',
+        'app.operation_error': 'Error',
     },
     // French
     fr: {
@@ -1855,6 +1860,11 @@ export const pt: Translations = {
         'app.force_quit': 'Forcer la fermeture',
         'app.backup_primary': 'Principale',
         'app.backup_secondary': 'Secondaire',
+        'app.export_art_html': 'Export HTML Art',
+        'app.operation_pending': 'En attente',
+        'app.operation_running': 'En cours',
+        'app.operation_done': 'Terminé',
+        'app.operation_error': 'Erreur',
     },
     // Spanish
     es: {
@@ -2423,6 +2433,11 @@ export const pt: Translations = {
         'app.force_quit': 'Forzar cierre',
         'app.backup_primary': 'Principal',
         'app.backup_secondary': 'Secundaria',
+        'app.export_art_html': 'Exportación HTML de Arte',
+        'app.operation_pending': 'En espera',
+        'app.operation_running': 'En curso',
+        'app.operation_done': 'Completado',
+        'app.operation_error': 'Error',
     },
     // Indonesian
     id: {
@@ -2963,6 +2978,11 @@ export const pt: Translations = {
         'app.force_quit': 'Paksa keluar',
         'app.backup_primary': 'Utama',
         'app.backup_secondary': 'Sekunder',
+        'app.export_art_html': 'Ekspor HTML Seni',
+        'app.operation_pending': 'Menunggu',
+        'app.operation_running': 'Sedang berjalan',
+        'app.operation_done': 'Selesai',
+        'app.operation_error': 'Kesalahan',
     },
     // Simplified Chinese
     'zh-CN': {
@@ -3498,6 +3518,11 @@ export const pt: Translations = {
         'app.force_quit': '强制退出',
         'app.backup_primary': '主要',
         'app.backup_secondary': '次要',
+        'app.export_art_html': 'Art HTML書き出し',
+        'app.operation_pending': '待機中',
+        'app.operation_running': '処理中',
+        'app.operation_done': '完了',
+        'app.operation_error': 'エラー',
     },
     // Traditional Chinese
     'zh-TW': {
@@ -4033,6 +4058,11 @@ export const pt: Translations = {
         'app.force_quit': '強制退出',
         'app.backup_primary': '主要',
         'app.backup_secondary': '次要',
+        'app.export_art_html': 'Art HTML 匯出',
+        'app.operation_pending': '等待中',
+        'app.operation_running': '進行中',
+        'app.operation_done': '已完成',
+        'app.operation_error': '錯誤',
     }
 };
 

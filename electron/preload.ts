@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('shell:openExternal', url),
   },
 
+  playnite: {
+    readSessions: () => ipcRenderer.invoke('playnite:readSessions'),
+  },
+
   images: {
     fetchDataUrl: (url: string): Promise<string> =>
       ipcRenderer.invoke('image:fetchDataUrl', url),

@@ -27,6 +27,8 @@ export interface TimeEntry {
   note: string | null
   source: string
   source_ref?: string | null
+  source_detail_ref?: string | null
+  source_detail_label?: string | null
   created_at: string
 }
 

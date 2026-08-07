@@ -43,6 +43,8 @@ export interface RankedItem {
   quote?: string;
   quoteComment?: string;
   notes?: string;
+  /** Missing on legacy records, which are always treated as collection items. */
+  shelf?: 'collection' | 'watchlist';
   rating: number;
   wins: number;
   losses: number;

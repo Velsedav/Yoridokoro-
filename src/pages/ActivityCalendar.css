@@ -47,3 +47,8 @@
 
 @media(max-width:800px){.ac-evidence-list{grid-template-columns:1fr}}
 @media(max-width:700px){.ac-progress-list li{grid-template-columns:4px 62px minmax(0,1fr);gap:8px;padding-inline:8px}.ac-evidence-list dl>div{grid-template-columns:1fr;gap:3px}}
+
+/* Bingoals time keeps the worked step prominent and its parent objective visible. */
+.ac-day li.has-parent { min-height: 61px; }
+.ac-day li .ac-entry-parent { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ac-muted); font-size: 8px; line-height: 1.15; }
+.ac-day li.has-parent small { margin-top: 1px; }

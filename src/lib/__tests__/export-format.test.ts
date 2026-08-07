@@ -69,6 +69,8 @@ describe('Yoridokoro backup format', () => {
     expect(exportSource).toContain('data.session_context ?? []')
     expect(exportSource).toContain('INSERT OR REPLACE INTO session_context')
     expect(exportSource).toContain('b.actual_seconds ?? 0')
+    expect(exportSource).toContain('entry.source_detail_ref??null')
+    expect(exportSource).toContain('entry.source_detail_label??null')
   })
 
   it('creates durable session evidence with the database migration', () => {
@@ -118,5 +120,14 @@ describe('Yoridokoro backup format', () => {
     input(document.querySelector('#decade') as HTMLSelectElement, '1990')
     expect(visibleRows()).toHaveLength(10)
     expect(document.querySelector('[data-category-section="albums"]')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('keeps watchlist items out of the ranked offline Art collection', () => {
+    const html = buildReadableArtHtml({ items: [
+      { id: 'ranked', category: 'books', title: 'In collection', creator: 'Author', rating: 1200, wins: 0, losses: 0, genres: [] },
+      { id: 'later', category: 'books', title: 'Read later', creator: 'Author', rating: 1200, wins: 0, losses: 0, genres: [], shelf: 'watchlist' },
+    ], matches: [] })
+    expect(html).toContain('In collection')
+    expect(html).not.toContain('Read later')
   })
 })

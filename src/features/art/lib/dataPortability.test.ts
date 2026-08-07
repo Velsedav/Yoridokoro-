@@ -16,6 +16,12 @@ describe('data portability', () => {
     expect(csv).toContain('"0.7500"');
   });
 
+  it('keeps watchlist items out of ranked statistics', () => {
+    const csv = createStatsCsv([item, { ...item, id: 'later', title: 'Watch later', shelf: 'watchlist' }]);
+    expect(csv).toContain('Paris, Texas');
+    expect(csv).not.toContain('Watch later');
+  });
+
   it('accepts a valid Keystone backup', () => {
     const backup = parseBackup(JSON.stringify({
       format: 'keystone-backup', version: 1, exportedAt: '2026-01-01', items: [item], matches: [],

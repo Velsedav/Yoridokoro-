@@ -28,4 +28,8 @@ describe('collection tools', () => {
   it('treats whitespace-only metadata as incomplete', () => {
     expect(missingCompletionFields(item({ genres: [' '], countries: [' '], series: '  ' }))).toEqual(['genre', 'country', 'series']);
   });
+
+  it('offers to complete a missing creator with the shared metadata workflow', () => {
+    expect(missingCompletionFields(item({ creator: '  ' }))[0]).toBe('creator');
+  });
 });

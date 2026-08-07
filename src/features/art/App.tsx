@@ -22,6 +22,7 @@ import { SuggestionField, TagSuggestionField } from './components/SuggestionFiel
 import { formatItemsForClipboard, missingCompletionFields } from './lib/collectionTools';
 import { openArtworkSearch } from './lib/webSearch';
 import { buildQuotePages } from './lib/quotePagination';
+import { itemsOnShelf, moveToCollection, type ArtShelf } from './lib/watchlist';
 
 type Toast = { id: number; message: string };
 type PeriodRankContext = { label: string; rankById: Map<string, number> };
@@ -88,24 +89,25 @@ function Artwork({ item, size = 'medium' }: { item: RankedItem; size?: 'small' |
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState({ shelf, onAdd }: { shelf: ArtShelf; onAdd: () => void }) {
   const { t } = useI18n();
   return (
     <div className="empty-state">
       <span className="empty-icon"><Library /></span>
-      <h2>{t('Your ladder starts here')}</h2>
-      <p>{t('Add at least two things, then let your choices sort out the order.')}</p>
-      <button className="button button--primary" onClick={onAdd}><Plus size={17} />{t('Add your first item')}</button>
+      <h2>{shelf === 'collection' ? t('Your ladder starts here') : t('Your watchlist starts here')}</h2>
+      <p>{shelf === 'collection' ? t('Add at least two things, then let your choices sort out the order.') : t('Keep works here until you are ready to add them to your collection.')}</p>
+      <button className="button button--primary" onClick={onAdd}><Plus size={17} />{shelf === 'collection' ? t('Add your first item') : t('Add to watchlist')}</button>
     </div>
   );
 }
 
-function Ladder({ items, fullRanking, periodRank, onSelect, onFight }: {
+function Ladder({ items, fullRanking, periodRank, shelf, onSelect, onAction }: {
   items: RankedItem[];
   fullRanking: RankedItem[];
   periodRank?: PeriodRankContext;
+  shelf: ArtShelf;
   onSelect: (item: RankedItem) => void;
-  onFight: (item: RankedItem) => void;
+  onAction: (item: RankedItem) => void;
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLOListElement>(null);
@@ -140,8 +142,8 @@ function Ladder({ items, fullRanking, periodRank, onSelect, onFight }: {
   }, [getScrollElement, items.length]);
 
   return (
-    <div className="ladder-shell">
-      <div className="table-head" aria-hidden="true"><span>{t('Rank')}</span><span>{t('Work')}</span><span className="details-head">{t('Details')}</span><span className="country-head">{t('Country')}</span><span className="record-head">{t('Record')}</span><span>{t('Rating')}</span></div>
+    <div className={`ladder-shell ${shelf === 'watchlist' ? 'ladder-shell--watchlist' : ''}`}>
+      <div className="table-head" aria-hidden="true">{shelf === 'collection' ? <><span>{t('Rank')}</span><span>{t('Work')}</span><span className="details-head">{t('Details')}</span><span className="country-head">{t('Country')}</span><span className="record-head">{t('Record')}</span><span>{t('Rating')}</span></> : <><span>{t('Work')}</span><span>{t('Details')}</span><span>{t('Country')}</span><span>{t('Added')}</span></>}</div>
       <ol ref={listRef} className="ladder-list" aria-label={`${t('Collection')}, ${items.length}`} style={{ height: `${virtualizer.getTotalSize()}px` }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const index = virtualRow.index;
@@ -155,17 +157,16 @@ function Ladder({ items, fullRanking, periodRank, onSelect, onFight }: {
           return (
             <li key={item.id} className={`ladder-row ${index === items.length - 1 ? 'ladder-row--last' : ''}`} aria-posinset={index + 1} aria-setsize={items.length} style={{ height: `${virtualRow.size}px`, transform: `translateY(${virtualRow.start - scrollMargin}px)` }}>
               <button className="ladder-open" onClick={() => onSelect(item)}>
-                <span className="rank-stack">
+                {shelf === 'collection' && <span className="rank-stack">
                   <span className={`rank-number ${actualIndex < 3 ? 'rank-number--top' : ''}`}>{String(actualIndex + 1).padStart(2, '0')}</span>
                   {localRankLabel && localRankPeriod && <span className="rank-context" aria-label={t('Rank within {period}', { period: localRankPeriod })}>{localRankLabel}</span>}
-                </span>
+                </span>}
                 <span className="work-cell"><Artwork item={item} size="small" /><span className="work-copy"><strong>{item.title}</strong><small>{item.creator}</small></span></span>
                 <span className="details-cell"><span>{item.year ?? t('Year unknown')}</span><small>{[item.series, item.movement, item.genres[0]].filter(Boolean)[0] ?? t('Unclassified')}</small></span>
                 <span className="country-cell">{item.countries?.[0] ?? '—'}</span>
-                <span className="record-cell"><strong>{item.wins}<small>W</small></strong><span>—</span><strong>{item.losses}<small>L</small></strong></span>
-                <span className="rating-cell"><strong>{Math.round(item.rating)}</strong>{isProvisional(item) && <small><Zap size={11} /> {t('placing')}</small>}</span>
+                {shelf === 'collection' ? <><span className="record-cell"><strong>{item.wins}<small>W</small></strong><span>—</span><strong>{item.losses}<small>L</small></strong></span><span className="rating-cell"><strong>{Math.round(item.rating)}</strong>{isProvisional(item) && <small><Zap size={11} /> {t('placing')}</small>}</span></> : <span className="watchlist-added">{new Date(item.createdAt).toLocaleDateString()}</span>}
               </button>
-              <span className="row-action"><span className="rating-gap">{movement ? `${movement} pts` : t('Leader')}</span><button className="icon-button icon-button--quiet fight-row" onClick={() => onFight(item)} aria-label={`${t('Make this item compete')}: ${item.title}`} title={t('Make this item compete')}><Swords size={17} /></button></span>
+              <span className="row-action">{shelf === 'collection' && <span className="rating-gap">{movement ? `${movement} pts` : t('Leader')}</span>}<button className="icon-button icon-button--quiet fight-row" onClick={() => onAction(item)} aria-label={`${shelf === 'collection' ? t('Make this item compete') : t('Add to collection')}: ${item.title}`} title={shelf === 'collection' ? t('Make this item compete') : t('Add to collection')}>{shelf === 'collection' ? <Swords size={17} /> : <Plus size={17} />}</button></span>
             </li>
           );
         })}
@@ -174,16 +175,18 @@ function Ladder({ items, fullRanking, periodRank, onSelect, onFight }: {
   );
 }
 
-function CoverGrid({ items, fullRanking, periodRank, onSelect, onFight }: {
+function CoverGrid({ items, fullRanking, periodRank, shelf, onSelect, onAction }: {
   items: RankedItem[];
   fullRanking: RankedItem[];
   periodRank?: PeriodRankContext;
+  shelf: ArtShelf;
   onSelect: (item: RankedItem) => void;
-  onFight: (item: RankedItem) => void;
+  onAction: (item: RankedItem) => void;
 }) {
   const { t } = useI18n();
   const rankById = useMemo(() => new Map(fullRanking.map((item, index) => [item.id, index + 1])), [fullRanking]);
   const rankGroups = useMemo(() => {
+    if (shelf === 'watchlist') return items.length ? [[0, items] as [number, RankedItem[]]] : [];
     const groups = new Map<number, RankedItem[]>();
     for (const item of items) {
       const rank = rankById.get(item.id) ?? 1;
@@ -191,31 +194,31 @@ function CoverGrid({ items, fullRanking, periodRank, onSelect, onFight }: {
       groups.set(start, [...(groups.get(start) ?? []), item]);
     }
     return [...groups.entries()].sort(([a], [b]) => a - b);
-  }, [items, rankById]);
+  }, [items, rankById, shelf]);
   return (
     <div className="cover-rank-groups" role="region" aria-label={`${t('Cover grid view')}, ${items.length}`}>
       {rankGroups.map(([start, groupItems]) => {
         const end = start + 9;
         const headingId = `cover-ranks-${start}-${end}`;
-        return <section key={start} className="cover-rank-group" aria-labelledby={headingId}>
-          <div className="cover-rank-heading">
+        return <section key={start} className={`cover-rank-group ${shelf === 'watchlist' ? 'cover-rank-group--watchlist' : ''}`} aria-labelledby={shelf === 'collection' ? headingId : undefined}>
+          {shelf === 'collection' && <div className="cover-rank-heading">
             <h3 id={headingId}>{t('Ranks')} {String(start).padStart(2, '0')}—{String(end).padStart(2, '0')}</h3>
-          </div>
+          </div>}
           <ol className="cover-grid" start={start}>
             {groupItems.map((item) => {
               const rank = rankById.get(item.id) ?? 0;
               const localRank = periodRank?.rankById.get(item.id);
               const localRankLabel = localRank && periodRank ? `${periodRank.label} #${localRank}` : undefined;
               return <li key={item.id} className={`cover-card cover-card--${item.category}`}>
-                <button className="cover-card-open" onClick={() => onSelect(item)} aria-label={`${item.title}, ${t('Rank')} ${rank}`}>
+                <button className="cover-card-open" onClick={() => onSelect(item)} aria-label={shelf === 'collection' ? `${item.title}, ${t('Rank')} ${rank}` : item.title}>
                   <span className="cover-card-art"><Artwork item={item} size="large" /></span>
-                  <span className="cover-card-copy"><span><strong>{item.title}</strong><small>{item.creator}</small></span><span className="cover-card-stats"><b>#{rank}</b>{localRankLabel && <span className="period-stat">{localRankLabel}</span>}<span>{item.year ?? t('Year unknown')}</span><span>{Math.round(item.rating)} Elo</span></span></span>
+                  <span className="cover-card-copy"><span><strong>{item.title}</strong><small>{item.creator}</small></span><span className="cover-card-stats">{shelf === 'collection' && <b>#{rank}</b>}{shelf === 'collection' && localRankLabel && <span className="period-stat">{localRankLabel}</span>}<span>{item.year ?? t('Year unknown')}</span>{shelf === 'collection' && <span>{Math.round(item.rating)} Elo</span>}</span></span>
                 </button>
                 <div className="cover-card-actions">
                   <button className="cover-card-action cover-card-search" onClick={() => void openArtworkSearch(item)} aria-label={t('Search the web for {title}', { title: item.title })} title={t('Search the web')}><Search size={16} aria-hidden="true" /></button>
-                  <button className="cover-card-action cover-card-fight" onClick={() => onFight(item)} aria-label={`${t('Make this item compete')}: ${item.title}`} title={t('Make this item compete')}><Swords size={16} aria-hidden="true" /></button>
+                  <button className="cover-card-action cover-card-fight" onClick={() => onAction(item)} aria-label={`${shelf === 'collection' ? t('Make this item compete') : t('Add to collection')}: ${item.title}`} title={shelf === 'collection' ? t('Make this item compete') : t('Add to collection')}>{shelf === 'collection' ? <Swords size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}</button>
                 </div>
-                {isProvisional(item) && <span className="cover-card-placing"><Zap size={11} />{t('placing')}</span>}
+                {shelf === 'collection' && isProvisional(item) && <span className="cover-card-placing"><Zap size={11} />{t('placing')}</span>}
               </li>;
             })}
           </ol>
@@ -490,13 +493,15 @@ function QuoteCarousel({ item }: { item: RankedItem }) {
   </section>;
 }
 
-function ItemDrawer({ item, rank, onClose, onDelete, onCover, onEdit }: {
+function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onMoveToCollection }: {
   item: RankedItem;
   rank: number;
+  shelf: ArtShelf;
   onClose: () => void;
   onDelete: () => void;
   onCover: (imageUrl?: string) => Promise<void>;
   onEdit: () => void;
+  onMoveToCollection: () => void;
 }) {
   const { language, t } = useI18n();
   const ref = useRef<HTMLElement>(null);
@@ -534,7 +539,7 @@ function ItemDrawer({ item, rank, onClose, onDelete, onCover, onEdit }: {
   };
   const requestDelete = () => {
     setMoreActionsOpen(false);
-    if (window.confirm(t('Remove {title} from the collection?', { title: item.title }))) onDelete();
+    if (window.confirm(t(shelf === 'collection' ? 'Remove {title} from the collection?' : 'Remove {title} from the watchlist?', { title: item.title }))) onDelete();
     else requestAnimationFrame(() => moreActionsButtonRef.current?.focus());
   };
   return (
@@ -544,16 +549,15 @@ function ItemDrawer({ item, rank, onClose, onDelete, onCover, onEdit }: {
         <Artwork item={item} size="large" />
         <div className="drawer-body">
           <div className="drawer-details-column">
-            <span className="eyebrow">#{rank} · {categoryCopy(item.category, t).label}</span>
+            <span className="eyebrow">{shelf === 'collection' ? `#${rank} · ` : `${t('Watchlist')} · `}{categoryCopy(item.category, t).label}</span>
             <h2 id="item-title">{item.title}</h2><p className="drawer-creator">{item.creator}{item.year ? ` · ${item.year}` : ''}</p>
             <button type="button" className="drawer-web-search" onClick={() => void openArtworkSearch(item)} aria-label={t('Search the web for {title}', { title: item.title })}><Search size={15} aria-hidden="true" />{t('Search the web')}</button>
-            <div className="drawer-rating"><strong>{Math.round(item.rating)}</strong><span>{t('Elo rating')}</span><i /> <strong>{item.wins}–{item.losses}</strong><span>{t('record')}</span></div>
-            {isProvisional(item) && <div className="placement-note"><Zap size={17} /><div><strong>{t('Fast-track active')}</strong><span>{Math.max(0, 8 - item.comparisons)} {t('more choices to settle its position.')}</span></div></div>}
+            {shelf === 'collection' && <><div className="drawer-rating"><strong>{Math.round(item.rating)}</strong><span>{t('Elo rating')}</span><i /> <strong>{item.wins}–{item.losses}</strong><span>{t('record')}</span></div>{isProvisional(item) && <div className="placement-note"><Zap size={17} /><div><strong>{t('Fast-track active')}</strong><span>{Math.max(0, 8 - item.comparisons)} {t('more choices to settle its position.')}</span></div></div>}</>}
             <dl className="metadata">
               <div><dt>{t('Genre')}</dt><dd>{item.genres.join(', ') || t('Not set')}</dd></div>
               <div><dt>{t('Country')}</dt><dd>{item.countries?.join(', ') || t('Not set')}</dd></div>
               <div><dt>{t('Series / movement')}</dt><dd>{item.series || item.movement || t('Not set')}</dd></div>
-              <div><dt>{t('Comparisons')}</dt><dd>{item.comparisons}</dd></div>
+              {shelf === 'collection' && <div><dt>{t('Comparisons')}</dt><dd>{item.comparisons}</dd></div>}
               <div><dt>{t('Added')}</dt><dd>{new Date(item.createdAt).toLocaleDateString(localeFor(language))}</dd></div>
             </dl>
           </div>
@@ -565,13 +569,14 @@ function ItemDrawer({ item, rank, onClose, onDelete, onCover, onEdit }: {
             <h3 id="drawer-management-title">{t('Manage this item')}</h3>
             <div className="drawer-management-actions">
               <div className="drawer-management-main">
+                {shelf === 'watchlist' && <button type="button" className="drawer-management-button drawer-management-button--primary" onClick={onMoveToCollection}><Plus size={16} />{t('Add to collection')}</button>}
                 <button type="button" className="drawer-management-button" onClick={onEdit}><Pencil size={16} />{t('Edit details')}</button>
                 {!editingCover && <button type="button" className="drawer-management-button" onClick={() => setEditingCover(true)}><ImageIcon size={17} />{item.imageUrl ? t('Change cover') : t('Add cover')}</button>}
               </div>
               <div className="drawer-more-actions" ref={moreActionsRef}>
                 <button ref={moreActionsButtonRef} type="button" className="drawer-more-trigger" aria-label={t('More actions')} aria-expanded={moreActionsOpen} aria-controls="drawer-more-actions-popover" onClick={() => setMoreActionsOpen((open) => !open)}><MoreHorizontal size={19} aria-hidden="true" /></button>
                 {moreActionsOpen && <div id="drawer-more-actions-popover" className="drawer-more-popover">
-                  <button type="button" className="drawer-remove-action" onClick={requestDelete}><Trash2 size={16} aria-hidden="true" />{t('Remove from collection')}</button>
+                  <button type="button" className="drawer-remove-action" onClick={requestDelete}><Trash2 size={16} aria-hidden="true" />{shelf === 'collection' ? t('Remove from collection') : t('Remove from watchlist')}</button>
                 </div>}
               </div>
             </div>
@@ -602,6 +607,18 @@ function QuoteFields({ quotes, onChange }: { quotes: QuoteDraft[]; onChange: (qu
 
 const uniqueValues = (values: Array<string | undefined>) => [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b));
 
+function metadataSuggestions(existing: RankedItem[], category: CategoryId, excludeId?: string) {
+  const peers = existing.filter((entry) => entry.category === category && entry.id !== excludeId);
+  return {
+    creators: uniqueValues(peers.flatMap((entry) => [entry.creator, ...entry.creator.split(',')])),
+    genres: uniqueValues(peers.flatMap((entry) => entry.genres)),
+    countries: uniqueValues(peers.flatMap((entry) => entry.countries ?? [])),
+    series: uniqueValues(peers.map((entry) => entry.series)),
+    movements: uniqueValues(peers.map((entry) => entry.movement)),
+    years: [...new Set(peers.map((entry) => entry.year).filter((year): year is number => Boolean(year)))].sort((a, b) => b - a)
+  };
+}
+
 function EditItemModal({ item, existing, onClose, onSave }: {
   item: RankedItem;
   existing: RankedItem[];
@@ -613,13 +630,7 @@ function EditItemModal({ item, existing, onClose, onSave }: {
   const [form, setForm] = useState<AddForm>(() => formForItem(item));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const peers = useMemo(() => existing.filter((entry) => entry.category === item.category && entry.id !== item.id), [existing, item.category, item.id]);
-  const creators = useMemo(() => uniqueValues(peers.flatMap((entry) => [entry.creator, ...entry.creator.split(',')])), [peers]);
-  const genres = useMemo(() => uniqueValues(peers.flatMap((entry) => entry.genres)), [peers]);
-  const countries = useMemo(() => uniqueValues(peers.flatMap((entry) => entry.countries ?? [])), [peers]);
-  const series = useMemo(() => uniqueValues(peers.map((entry) => entry.series)), [peers]);
-  const movements = useMemo(() => uniqueValues(peers.map((entry) => entry.movement)), [peers]);
-  const years = useMemo(() => [...new Set(peers.map((entry) => entry.year).filter((year): year is number => Boolean(year)))].sort((a, b) => b - a), [peers]);
+  const { creators, genres, countries, series, movements, years } = useMemo(() => metadataSuggestions(existing, item.category, item.id), [existing, item.category, item.id]);
   const definition = categoryCopy(item.category, t);
   useModalFocus(ref, onClose);
   const update = (key: keyof AddForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -649,7 +660,7 @@ function EditItemModal({ item, existing, onClose, onSave }: {
           <TagSuggestionField label={t('Genre / type')} value={form.genre} options={genres} onChange={(value) => update('genre', value)} placeholder={t('Add a genre or type')} />
           <TagSuggestionField label={t('Country')} value={form.country} options={countries} onChange={(value) => update('country', value)} placeholder={t('Add a country')} />
           <SuggestionField label={t('Series / collection')} value={form.series} options={series} onChange={(value) => update('series', value)} placeholder={t('Optional')} />
-          {item.category === 'paintings' && <SuggestionField label={t('Artistic movement')} value={form.movement} options={movements} onChange={(value) => update('movement', value)} placeholder={t('Optional')} />}
+          {(item.category === 'paintings' || item.category === 'sculptures') && <SuggestionField label={t('Artistic movement')} value={form.movement} options={movements} onChange={(value) => update('movement', value)} placeholder={t('Optional')} />}
           <QuoteFields quotes={form.quotes} onChange={(quotes) => setForm((current) => ({ ...current, quotes }))} />
           <label className="field field--wide"><span>{t('Notes')}</span><textarea rows={5} value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder={t('Why it matters, edition, location…')} /></label>
         </div>
@@ -660,8 +671,9 @@ function EditItemModal({ item, existing, onClose, onSave }: {
   </div>;
 }
 
-function CompletionModeModal({ item, current, total, onClose, onSave, onContinue }: {
+function CompletionModeModal({ item, existing, current, total, onClose, onSave, onContinue }: {
   item: RankedItem;
+  existing: RankedItem[];
   current: number;
   total: number;
   onClose: () => void;
@@ -674,16 +686,17 @@ function CompletionModeModal({ item, current, total, onClose, onSave, onContinue
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const fields = missingCompletionFields(item);
+  const { creators, genres, countries, series, movements, years } = useMemo(() => metadataSuggestions(existing, item.category, item.id), [existing, item.category, item.id]);
   const labels = {
-    year: t('Year'), genre: t('Genre / type'), country: t('Country'), series: t('Series / collection'), movement: t('Artistic movement')
+    creator: t('Creator'), year: t('Year'), genre: t('Genre / type'), country: t('Country'), series: t('Series / collection'), movement: t('Artistic movement')
   };
   const placeholders = {
-    year: '1968', genre: t('Add a genre or type'), country: t('Add a country'), series: t('Optional'), movement: t('Optional')
+    creator: item.category === 'books' || item.category === 'essays' || item.category === 'poems' ? t('Author') : t('Artist, architect, or studio'), year: '1968', genre: t('Add a genre or type'), country: t('Add a country'), series: t('Optional'), movement: t('Optional')
   };
   useEffect(() => { setForm(formForItem(item)); setSaving(false); setError(''); }, [item]);
   useModalFocus(ref, onClose, '[data-completion-field]');
 
-  const update = (field: 'year' | 'genre' | 'country' | 'series' | 'movement', value: string) => setForm((currentForm) => ({ ...currentForm, [field]: value }));
+  const update = (field: 'creator' | 'year' | 'genre' | 'country' | 'series' | 'movement', value: string) => setForm((currentForm) => ({ ...currentForm, [field]: value }));
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true); setError('');
@@ -708,7 +721,7 @@ function CompletionModeModal({ item, current, total, onClose, onSave, onContinue
       <form className="details-form completion-form" onSubmit={submit} onKeyDown={advanceOnEnter}>
         <p id="completion-instructions" className="form-intro">{t('Only missing fields are shown. Press Enter to continue; the last field saves and opens the next item.')}</p>
         <div className="field-grid completion-fields">
-          {fields.map((field) => <label key={field} className="field"><span>{labels[field]}</span><input data-completion-field inputMode={field === 'year' ? 'numeric' : undefined} pattern={field === 'year' ? '[0-9]{1,4}' : undefined} value={form[field]} placeholder={placeholders[field]} autoComplete="off" onChange={(event) => update(field, event.target.value)} /></label>)}
+          {fields.map((field) => field === 'creator' ? <SuggestionField key={field} completionField label={labels[field]} value={form.creator} options={creators} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'genre' ? <TagSuggestionField key={field} completionField label={labels[field]} value={form.genre} options={genres} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'country' ? <TagSuggestionField key={field} completionField label={labels[field]} value={form.country} options={countries} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'series' ? <SuggestionField key={field} completionField label={labels[field]} value={form.series} options={series} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'movement' ? <SuggestionField key={field} completionField label={labels[field]} value={form.movement} options={movements} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : <label key={field} className="field"><span>{labels[field]}</span><input data-completion-field list="completion-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} placeholder={placeholders[field]} autoComplete="off" onChange={(event) => update(field, event.target.value)} /><datalist id="completion-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>)}
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="modal-actions completion-actions"><span><kbd>Entrée</kbd> {t('next field')} · <kbd>Ctrl + Entrée</kbd> {t('skip item')} · <kbd>Esc</kbd> {t('exit')}</span><button type="button" className="text-button" onClick={onContinue} disabled={saving}>{t('Skip item')}</button><button className="button button--primary" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" /> : <Check />}{t('Save and continue')}</button></div>
@@ -717,9 +730,10 @@ function CompletionModeModal({ item, current, total, onClose, onSave, onContinue
   </div>;
 }
 
-function AddModal({ category, existing, onClose, onSave }: {
+function AddModal({ category, existing, shelf, onClose, onSave }: {
   category: CategoryId;
   existing: RankedItem[];
+  shelf: ArtShelf;
   onClose: () => void;
   onSave: (form: AddForm, category: CategoryId, imported?: ImportedItem) => Promise<void>;
 }) {
@@ -736,13 +750,7 @@ function AddModal({ category, existing, onClose, onSave }: {
   const [error, setError] = useState('');
   const provider = providerFor(itemCategory);
   const definition = categoryCopy(itemCategory, t);
-  const peers = useMemo(() => existing.filter((entry) => entry.category === itemCategory), [existing, itemCategory]);
-  const creators = useMemo(() => uniqueValues(peers.flatMap((entry) => [entry.creator, ...entry.creator.split(',')])), [peers]);
-  const genres = useMemo(() => uniqueValues(peers.flatMap((entry) => entry.genres)), [peers]);
-  const countries = useMemo(() => uniqueValues(peers.flatMap((entry) => entry.countries ?? [])), [peers]);
-  const series = useMemo(() => uniqueValues(peers.map((entry) => entry.series)), [peers]);
-  const movements = useMemo(() => uniqueValues(peers.map((entry) => entry.movement)), [peers]);
-  const years = useMemo(() => [...new Set(peers.map((entry) => entry.year).filter((year): year is number => Boolean(year)))].sort((a, b) => b - a), [peers]);
+  const { creators, genres, countries, series, movements, years } = useMemo(() => metadataSuggestions(existing, itemCategory), [existing, itemCategory]);
   useModalFocus(ref, onClose, '[data-add-primary]');
 
   const update = (key: keyof AddForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -780,7 +788,7 @@ function AddModal({ category, existing, onClose, onSave }: {
   return (
     <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <div ref={ref} className="modal add-modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
-        <div className="modal-head"><div><span className="eyebrow">{t('Add to')} {definition.label}</span><h2 id="add-title">{selected ? t('Check the details') : `${t('Find a')} ${definition.singular.toLocaleLowerCase()}`}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('Close')}><X /></button></div>
+        <div className="modal-head"><div><span className="eyebrow">{shelf === 'collection' ? `${t('Add to')} ${definition.label}` : t('Add to watchlist')}</span><h2 id="add-title">{selected ? t('Check the details') : `${t('Find a')} ${definition.singular.toLocaleLowerCase()}`}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('Close')}><X /></button></div>
         {!selected && provider && (
           <div className="segmented" aria-label={t('Add method')}>
             <button className={mode === 'catalogue' ? 'active' : ''} onClick={() => setMode('catalogue')}><Database size={16} />{t('Search catalogue')}</button>
@@ -821,7 +829,7 @@ function AddModal({ category, existing, onClose, onSave }: {
               <label className="field field--wide"><span>{t('Notes')}</span><textarea rows={3} value={form.notes} onChange={(e) => update('notes', e.target.value)} placeholder={t('Why it matters, edition, location…')} /></label>
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
-            <div className="modal-actions"><span><Zap size={15} />{t('New items enter fast-track placement')}</span><button className="button button--primary" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}{t('Add to ladder')}</button></div>
+            <div className="modal-actions"><span>{shelf === 'collection' && <><Zap size={15} />{t('New items enter fast-track placement')}</>}</span><button className="button button--primary" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}{shelf === 'collection' ? t('Add to ladder') : t('Add to watchlist')}</button></div>
           </form>
         )}
       </div>
@@ -854,6 +862,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   const [canUndo, setCanUndo] = useState(false);
   const [decisionPending, setDecisionPending] = useState(false);
   const [collectionView, setCollectionView] = useState<'ladder' | 'covers'>(() => localStorage.getItem('keystone-collection-view') === 'covers' ? 'covers' : 'ladder');
+  const [shelf, setShelf] = useState<ArtShelf>(() => localStorage.getItem('keystone-art-shelf') === 'watchlist' ? 'watchlist' : 'collection');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const t = useTranslator(preferences.language);
@@ -863,6 +872,11 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   const changeCollectionView = (next: 'ladder' | 'covers') => {
     setCollectionView(next);
     localStorage.setItem('keystone-collection-view', next);
+  };
+  const changeShelf = (next: ArtShelf) => {
+    setShelf(next);
+    localStorage.setItem('keystone-art-shelf', next);
+    if (next === 'watchlist' && view === 'duel') setView('ladder');
   };
 
   const refresh = useCallback(async () => setItems(await db.items.toArray()), []);
@@ -894,7 +908,9 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   }, [category]);
   useEffect(() => { void refreshMatchHistory(); }, [refreshMatchHistory]);
 
-  const categoryItems = useMemo(() => items.filter((item) => item.category === category).sort((a, b) => b.rating - a.rating), [items, category]);
+  const collectionItems = useMemo(() => itemsOnShelf(items, 'collection'), [items]);
+  const collectionCategoryItems = useMemo(() => collectionItems.filter((item) => item.category === category).sort((a, b) => b.rating - a.rating), [collectionItems, category]);
+  const categoryItems = useMemo(() => itemsOnShelf(items, shelf).filter((item) => item.category === category).sort((a, b) => shelf === 'collection' ? b.rating - a.rating : b.createdAt.localeCompare(a.createdAt)), [items, shelf, category]);
   const genres = useMemo(() => [...new Set(categoryItems.flatMap((item) => [...item.genres, item.movement ?? '', item.series ?? '']).filter(Boolean))].sort(), [categoryItems]);
   const countries = useMemo(() => [...new Set(categoryItems.flatMap((item) => item.countries ?? []))].sort(), [categoryItems]);
   const yearFromNumber = useMemo(() => parseYearFilter(yearFrom), [yearFrom]);
@@ -911,16 +927,20 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   const activeCompletionItem = useMemo(() => completionSession ? items.find((item) => item.id === completionSession.itemIds[completionSession.currentIndex]) : undefined, [items, completionSession]);
   const periodRank = useMemo<PeriodRankContext | undefined>(() => {
     if (yearFromNumber === undefined && yearToNumber === undefined) return undefined;
-    const rankById = buildYearRankMap(categoryItems, yearFromNumber, yearToNumber);
+    if (shelf === 'watchlist') return undefined;
+    const rankById = buildYearRankMap(collectionCategoryItems, yearFromNumber, yearToNumber);
     if (!rankById.size) return undefined;
     const label = yearFromNumber !== undefined && yearToNumber !== undefined
       ? (yearFromNumber === yearToNumber ? String(yearFromNumber) : `${yearFromNumber}-${yearToNumber}`)
       : yearFromNumber !== undefined ? t('Since {year}', { year: yearFromNumber }) : t('Until {year}', { year: yearToNumber! });
     return { label, rankById };
-  }, [categoryItems, yearFromNumber, yearToNumber, t]);
-  const counts = useMemo(() => Object.fromEntries(categories.map((entry) => [entry.id, items.filter((item) => item.category === entry.id).length])) as Record<CategoryId, number>, [items]);
-  const comparisons = categoryItems.reduce((total, item) => total + item.comparisons, 0) / 2;
-  const provisional = categoryItems.filter(isProvisional).length;
+  }, [collectionCategoryItems, shelf, yearFromNumber, yearToNumber, t]);
+  const counts = useMemo(() => {
+    const activeItems = itemsOnShelf(items, shelf);
+    return Object.fromEntries(categories.map((entry) => [entry.id, activeItems.filter((item) => item.category === entry.id).length])) as Record<CategoryId, number>;
+  }, [items, shelf]);
+  const comparisons = collectionCategoryItems.reduce((total, item) => total + item.comparisons, 0) / 2;
+  const provisional = collectionCategoryItems.filter(isProvisional).length;
   const activeFilters = Number(genre !== 'all') + Number(country !== 'all') + Number(Boolean(yearFrom)) + Number(Boolean(yearTo));
 
   const toast = (message: string) => {
@@ -945,14 +965,14 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
     }
   };
   const nextPair = useCallback((contenderId = fixedContender) => {
-    const result = chooseOpponent(categoryItems, contenderId, recentOpponents);
+    const result = chooseOpponent(collectionCategoryItems, contenderId, recentOpponents);
     setPair(result);
     if (result) setRecentOpponents((current) => [result[1].id, ...current].slice(0, 4));
-  }, [categoryItems, fixedContender, recentOpponents]);
+  }, [collectionCategoryItems, fixedContender, recentOpponents]);
   const openDuel = (item?: RankedItem) => {
     const contender = item?.id;
     setFixedContender(contender); setView('duel');
-    const result = chooseOpponent(categoryItems, contender, recentOpponents);
+    const result = chooseOpponent(collectionCategoryItems, contender, recentOpponents);
     setPair(result); setSelected(undefined);
   };
   const choose = useCallback(async (winner: RankedItem, loser: RankedItem) => {
@@ -968,7 +988,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
       setMatchHistory((current) => [...current, result.match]);
       const next = items.map((item) => item.id === result.winner.id ? result.winner : item.id === result.loser.id ? result.loser : item);
       setItems(next);
-      const nextCategory = next.filter((item) => item.category === category);
+      const nextCategory = next.filter((item) => item.category === category && itemsOnShelf([item], 'collection').length > 0);
       const contender = fixedContender ? (result.winner.id === fixedContender ? result.winner : result.loser.id === fixedContender ? result.loser : undefined) : undefined;
       const newPair = chooseOpponent(nextCategory, contender?.id, [loser.id, ...recentOpponents]);
       setPair(newPair); setCanUndo(true); toast(`${winner.title} ${t('moved up')}`);
@@ -1017,10 +1037,18 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
       series: form.series.trim() || undefined, movement: form.movement.trim() || undefined,
       quotes: form.quotes.filter((quote) => quote.text.trim()).map((quote) => ({ id: quote.id, text: quote.text.trim(), comment: quote.comment.trim() || undefined })),
       notes: form.notes.trim() || undefined,
+      shelf,
       rating: 1200, wins: 0, losses: 0, comparisons: 0, createdAt: timestamp, updatedAt: timestamp,
       source: imported?.source ?? 'manual', sourceId: imported?.sourceId
     };
-    await db.items.add(item); setItems((current) => [...current, item]); toast(`${item.title} ${t('added — fast-track active')}`);
+    await db.items.add(item); setItems((current) => [...current, item]); toast(shelf === 'collection' ? `${item.title} ${t('added — fast-track active')}` : t('{title} added to the watchlist', { title: item.title }));
+  };
+  const transferToCollection = async (item: RankedItem) => {
+    const moved = moveToCollection(item);
+    await db.items.put(moved);
+    setItems((current) => current.map((entry) => entry.id === moved.id ? moved : entry));
+    setSelected(undefined);
+    toast(t('{title} added to the collection — fast-track active', { title: moved.title }));
   };
   const deleteItem = async (item: RankedItem) => {
     await db.transaction('rw', db.items, db.matches, async () => {
@@ -1061,7 +1089,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
       const key = normalizeShortcut(event);
       if (key === preferences.shortcuts.focusSearch) { event.preventDefault(); searchRef.current?.focus(); }
       if (key === preferences.shortcuts.addItem) setShowAdd(true);
-      if (key === preferences.shortcuts.startDuel && categoryItems.length >= 2) openDuel();
+      if (key === preferences.shortcuts.startDuel && shelf === 'collection' && collectionCategoryItems.length >= 2) openDuel();
     };
     window.addEventListener('keydown', keys); return () => window.removeEventListener('keydown', keys);
   });
@@ -1095,24 +1123,24 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
             <nav className="art-category-tabs" aria-label={t('Your collections')} role="tablist">{categories.map((entry,index)=>{const Icon=categoryIcons[entry.id];return <button key={entry.id} role="tab" tabIndex={category===entry.id?0:-1} className={category===entry.id?'is-active':''} aria-selected={category===entry.id} onKeyDown={event=>handleCategoryKey(event,index)} onClick={()=>selectCategory(entry.id)}><Icon size={16}/><span>{categoryCopy(entry.id,t).label}</span><small>{counts[entry.id]}</small></button>})}</nav>
             <header className="topbar">
               <div><span className="eyebrow">{definition.eyebrow}</span><h1>{definition.label}</h1></div>
-              <div className="top-actions">{headerAction}<button className={`button button--outline statistics-toggle ${view === 'statistics' ? 'active' : ''}`} onClick={() => setView(view === 'statistics' ? 'ladder' : 'statistics')}>{view === 'statistics' ? <ListTree size={17} /> : <BarChart3 size={17} />}{view === 'statistics' ? t('View ladder') : t('Statistics')}</button><button className="button button--outline duel-start" disabled={categoryItems.length < 2} onClick={() => openDuel()}><Swords size={17} />{t('Start a duel')}<kbd>{shortcutLabel(preferences.shortcuts.startDuel)}</kbd></button><button className="button button--primary add-item-button" onClick={() => setShowAdd(true)}><Plus size={17} />{t('Add')} {definition.singular.toLocaleLowerCase()}<kbd>{shortcutLabel(preferences.shortcuts.addItem)}</kbd></button></div>
+              <div className="top-actions">{headerAction}<button className={`button button--outline statistics-toggle ${view === 'statistics' ? 'active' : ''}`} onClick={() => setView(view === 'statistics' ? 'ladder' : 'statistics')}>{view === 'statistics' ? <ListTree size={17} /> : <BarChart3 size={17} />}{view === 'statistics' ? t('View ladder') : t('Statistics')}</button>{shelf === 'collection' && <button className="button button--outline duel-start" disabled={collectionCategoryItems.length < 2} onClick={() => openDuel()}><Swords size={17} />{t('Start a duel')}<kbd>{shortcutLabel(preferences.shortcuts.startDuel)}</kbd></button>}<button className="button button--primary add-item-button" onClick={() => setShowAdd(true)}><Plus size={17} />{shelf === 'collection' ? `${t('Add')} ${definition.singular.toLocaleLowerCase()}` : t('Add to watchlist')}<kbd>{shortcutLabel(preferences.shortcuts.addItem)}</kbd></button></div>
             </header>
-            {view === 'statistics' ? <StatisticsDashboard items={categoryItems} matches={matchHistory} loading={statisticsLoading} onSelect={setSelected} onFight={openDuel} /> : <><section className="overview" aria-label={t('Collection summary')}>
-              <div className="stat stat--leader"><span className="stat-icon"><KonomiMark /></span><div><small>{t('Current favorite')}</small><strong>{categoryItems[0]?.title ?? t('Nothing ranked')}</strong><span>{categoryItems[0]?.creator ?? t('Add an item to begin')}</span></div></div>
-              <div className="stat"><span className="stat-icon"><BarChart3 /></span><div><small>{t('Collection')}</small><strong>{categoryItems.length}</strong><span>{definition.label.toLocaleLowerCase()} {t('ranked')}</span></div></div>
+            {view === 'statistics' ? <StatisticsDashboard items={collectionCategoryItems} matches={matchHistory} loading={statisticsLoading} onSelect={setSelected} onFight={openDuel} /> : <><section className="overview" aria-label={t('Collection summary')}>
+              <div className="stat stat--leader"><span className="stat-icon"><KonomiMark /></span><div><small>{t('Current favorite')}</small><strong>{collectionCategoryItems[0]?.title ?? t('Nothing ranked')}</strong><span>{collectionCategoryItems[0]?.creator ?? t('Add an item to begin')}</span></div></div>
+              <div className="stat"><span className="stat-icon"><BarChart3 /></span><div><small>{t('Collection')}</small><strong>{collectionCategoryItems.length}</strong><span>{definition.label.toLocaleLowerCase()} {t('ranked')}</span></div></div>
               <div className="stat"><span className="stat-icon"><Swords /></span><div><small>{t('Decisions made')}</small><strong>{Math.round(comparisons)}</strong><span>{t('head-to-head choices')}</span></div></div>
               <div className="stat"><span className="stat-icon"><Zap /></span><div><small>{t('Fast-track')}</small><strong>{provisional}</strong><span>{t('still finding their place')}</span></div></div>
             </section>
             <section className="collection" aria-labelledby="ladder-heading">
-              <div className="section-head"><h2 id="ladder-heading">{t('Your ladder')}</h2></div>
-              <PeriodHighlights items={categoryItems} onSelect={setSelected} onApplyPeriod={(start, end) => { setYearFrom(String(start)); setYearTo(String(end)); setShowFilters(true); }} />
+              <div className="section-head"><h2 id="ladder-heading">{shelf === 'collection' ? t('Your ladder') : t('Watchlist')}</h2></div>
+              {shelf === 'collection' && <PeriodHighlights items={collectionCategoryItems} onSelect={setSelected} onApplyPeriod={(start, end) => { setYearFrom(String(start)); setYearTo(String(end)); setShowFilters(true); }} />}
               <div className="toolbar">
                 <label className="search-box"><Search size={18} /><span className="sr-only">{t('Fuzzy search this collection')}</span><input ref={searchRef} type="search" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.currentTarget.blur(); } }} placeholder={t('Fuzzy search title, creator, series…')} /><kbd>{shortcutLabel(preferences.shortcuts.focusSearch)}</kbd></label>
                 <button className={`filter-button ${showFilters || activeFilters ? 'active' : ''}`} onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}><ListFilter size={17} />{t('Filters')} {activeFilters > 0 && <span>{activeFilters}</span>}<ChevronDown size={15} /></button>
-                <button className="filter-button completion-button" onClick={startCompletion} disabled={!completionItems.length} aria-label={t('Fill missing details')}><ListTodo size={17} />{t('Fill details')} {completionItems.length > 0 && <span>{completionItems.length}</span>}</button>
-                <span className="result-count">{filtered.length} / {categoryItems.length}</span>
-                <button className="filter-button copy-list-button" onClick={() => void copyFilteredList()} disabled={!filtered.length}><ClipboardCopy size={17} />{t('Copy list')}</button>
-                <div className="view-toggle" aria-label={t('Collection view')}><button className={collectionView === 'ladder' ? 'active' : ''} onClick={() => changeCollectionView('ladder')} aria-pressed={collectionView === 'ladder'} title={t('Ladder view')}><ListTree /><span className="sr-only">{t('Ladder view')}</span></button><button className={collectionView === 'covers' ? 'active' : ''} onClick={() => changeCollectionView('covers')} aria-pressed={collectionView === 'covers'} title={t('Cover grid view')}><Grid3X3 /><span className="sr-only">{t('Cover grid view')}</span></button></div>
+                {completionItems.length > 0 && <button className="filter-button completion-button" onClick={startCompletion} aria-label={t('Fill missing details')}><ListTodo size={17} />{t('Fill details')}<span>{completionItems.length}</span></button>}
+                <button className="filter-button copy-list-button" onClick={() => void copyFilteredList()} disabled={!filtered.length}><ClipboardCopy size={17} />{t('Copy list')}<span>{filtered.length}</span></button>
+                <div className="shelf-toggle" aria-label={t('Art list')}><button className={shelf === 'collection' ? 'active' : ''} onClick={() => changeShelf('collection')} aria-pressed={shelf === 'collection'}>{t('Collection')}</button><button className={shelf === 'watchlist' ? 'active' : ''} onClick={() => changeShelf('watchlist')} aria-pressed={shelf === 'watchlist'}>{t('Watchlist')}</button></div>
+                <div className="view-toggle" aria-label={t('Collection view')}><button className={collectionView === 'ladder' ? 'active' : ''} onClick={() => changeCollectionView('ladder')} aria-pressed={collectionView === 'ladder'} title={t('List view')}><ListTree /><span className="sr-only">{t('List view')}</span></button><button className={collectionView === 'covers' ? 'active' : ''} onClick={() => changeCollectionView('covers')} aria-pressed={collectionView === 'covers'} title={t('Grid view')}><Grid3X3 /><span className="sr-only">{t('Grid view')}</span></button></div>
               </div>
               {showFilters && <div className="filter-panel">
                 <label><span>{t('Genre, series, or movement')}</span><select value={genre} onChange={(event) => setGenre(event.target.value)}><option value="all">{t('All classifications')}</option>{genres.map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -1121,15 +1149,15 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
                 <label><span>{t('To year')}</span><input inputMode="numeric" value={yearTo} onChange={(event) => setYearTo(event.target.value)} placeholder={t('Any')} /></label>
                 <button className="text-button" onClick={() => { setGenre('all'); setCountry('all'); setYearFrom(''); setYearTo(''); }}>{t('Clear filters')}</button>
               </div>}
-              {categoryItems.length === 0 ? <EmptyState onAdd={() => setShowAdd(true)} /> : filtered.length === 0 ? <div className="no-results"><Search /><h3>{t('No matches')}</h3><p>{t('Try a broader search or clear your filters.')}</p></div> : collectionView === 'covers' ? <CoverGrid items={filtered} fullRanking={categoryItems} periodRank={periodRank} onSelect={setSelected} onFight={openDuel} /> : <Ladder items={filtered} fullRanking={categoryItems} periodRank={periodRank} onSelect={setSelected} onFight={openDuel} />}
+              {categoryItems.length === 0 ? <EmptyState shelf={shelf} onAdd={() => setShowAdd(true)} /> : filtered.length === 0 ? <div className="no-results"><Search /><h3>{t('No matches')}</h3><p>{t('Try a broader search or clear your filters.')}</p></div> : collectionView === 'covers' ? <CoverGrid items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} /> : <Ladder items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} />}
             </section></>}
           </>
         )}
       </main>
-      {showAdd && <AddModal category={category} existing={items} onClose={() => setShowAdd(false)} onSave={saveItem} />}
+      {showAdd && <AddModal category={category} existing={items} shelf={shelf} onClose={() => setShowAdd(false)} onSave={saveItem} />}
       {editing && <EditItemModal item={editing} existing={items} onClose={() => setEditing(undefined)} onSave={(form) => updateDetails(editing, form)} />}
-      {selected && <ItemDrawer item={selected} rank={categoryItems.findIndex((item) => item.id === selected.id) + 1} onClose={() => setSelected(undefined)} onDelete={() => deleteItem(selected)} onCover={(imageUrl) => updateCover(selected, imageUrl)} onEdit={() => { setEditing(selected); setSelected(undefined); }} />}
-      {completionSession && activeCompletionItem && <CompletionModeModal item={activeCompletionItem} current={completionSession.currentIndex + 1} total={completionSession.itemIds.length} onClose={() => setCompletionSession(undefined)} onSave={(form) => updateDetails(activeCompletionItem, form)} onContinue={continueCompletion} />}
+      {selected && <ItemDrawer item={selected} rank={collectionCategoryItems.findIndex((item) => item.id === selected.id) + 1} shelf={itemsOnShelf([selected], 'watchlist').length ? 'watchlist' : 'collection'} onClose={() => setSelected(undefined)} onDelete={() => deleteItem(selected)} onCover={(imageUrl) => updateCover(selected, imageUrl)} onEdit={() => { setEditing(selected); setSelected(undefined); }} onMoveToCollection={() => void transferToCollection(selected)} />}
+      {completionSession && activeCompletionItem && <CompletionModeModal item={activeCompletionItem} existing={items} current={completionSession.currentIndex + 1} total={completionSession.itemIds.length} onClose={() => setCompletionSession(undefined)} onSave={(form) => updateDetails(activeCompletionItem, form)} onContinue={continueCompletion} />}
       <div className="toast-region" aria-live="polite">{toasts.map((entry) => <div className="toast" key={entry.id}><Check size={16} />{entry.message}</div>)}</div>
     </div></I18nProvider>
   );

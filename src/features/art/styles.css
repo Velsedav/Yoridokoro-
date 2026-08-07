@@ -134,8 +134,12 @@ kbd { font: 500 9px/1 'DM Mono', monospace; border: 1px solid #cdc8bc; border-bo
 .filter-button:hover, .filter-button.active { border-color: #b7b2a7; background: #f3f0e9; }
 .filter-button > span { min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent); color: var(--accent-text, white); display: grid; place-items: center; font: 500 9px 'DM Mono', monospace; }
 .completion-button { color: var(--accent); }
-.copy-list-button { color: var(--accent); }
+.copy-list-button { color: var(--accent); margin-left: auto; }
 .result-count { margin-left: auto; color: #9c988f; font: 400 9px 'DM Mono', monospace; }
+.shelf-toggle { height: 36px; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-subtle); display: flex; flex: 0 0 auto; }
+.shelf-toggle button { min-width: 82px; min-height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); padding: 0 10px; font-size: 9px; font-weight: 700; }
+.shelf-toggle button:hover { color: var(--text); }
+.shelf-toggle button.active { background: var(--surface-raised); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
 .view-toggle { height: 36px; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-subtle); display: flex; }
 .view-toggle button { width: 32px; min-height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); display: grid; place-items: center; padding: 0; }
 .view-toggle button svg { width: 15px; }
@@ -175,6 +179,7 @@ kbd { font: 500 9px/1 'DM Mono', monospace; border: 1px solid #cdc8bc; border-bo
 
 .ladder-shell { border-top: 1px solid var(--line); }
 .table-head, .ladder-open { display: grid; grid-template-columns: 78px minmax(230px, 1.55fr) minmax(115px, .72fr) minmax(88px, .45fr) 100px 82px; align-items: center; }
+.ladder-shell--watchlist .table-head, .ladder-shell--watchlist .ladder-open { grid-template-columns: minmax(260px, 1.6fr) minmax(150px, .8fr) minmax(100px, .45fr) minmax(90px, .4fr); }
 .table-head { min-height: 35px; padding-right: 114px; color: #9b978e; font: 400 8px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: .09em; }
 .ladder-list { list-style: none; margin: 0; padding: 0; position: relative; width: 100%; }
 .ladder-row { min-height: 70px; border-top: 1px solid #e0dcd3; display: flex; align-items: stretch; position: absolute; inset: 0 0 auto 0; width: 100%; background: transparent; transition: background .15s, box-shadow .15s; }
@@ -199,10 +204,12 @@ kbd { font: 500 9px/1 'DM Mono', monospace; border: 1px solid #cdc8bc; border-bo
 .rating-cell { display: grid; gap: 3px; }
 .rating-cell strong { font: 500 13px 'DM Mono', monospace; }
 .rating-cell small { display: flex; align-items: center; gap: 3px; color: #ad7844; font-size: 8px; }
+.watchlist-added { color: var(--text-muted); font: 400 9px 'DM Mono', monospace; }
 .row-action { width: 114px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-right: 10px; }
 .rating-gap { color: #aaa69d; font: 400 8px 'DM Mono', monospace; }
 .cover-rank-groups { display: grid; gap: 30px; }
 .cover-rank-group { min-width: 0; display: grid; gap: 12px; }
+.cover-rank-group--watchlist { gap: 0; }
 .cover-rank-heading { min-height: 32px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
 .cover-rank-heading h3 { margin: 0; color: var(--text); font: 500 12px/1 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
 .cover-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 12px; }
@@ -445,6 +452,7 @@ kbd { font: 500 9px/1 'DM Mono', monospace; border: 1px solid #cdc8bc; border-bo
 .drawer-management-actions { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: end; gap: 6px; }
 .drawer-management-main { display: grid; gap: 3px; }
 .drawer-management-button { min-height: 38px; width: 100%; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--text-muted); display: flex; align-items: center; gap: 9px; text-align: left; font-size: 10px; }
+.drawer-management-button--primary { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .drawer-management-button:hover { background: color-mix(in srgb, var(--accent) 7%, var(--surface-subtle)); color: var(--text); }
 .drawer-management-button svg { flex: 0 0 auto; color: var(--accent); }
 .drawer-more-actions { position: relative; align-self: end; }

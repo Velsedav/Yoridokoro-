@@ -147,6 +147,29 @@
   transition: width .18s ease, padding .18s ease;
 }
 
+.close-overlay-path-pending {
+    color: var(--text-muted);
+}
+
+.close-overlay-path-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 92px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.close-overlay-path-pending-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.45;
+}
+
 .yoridokoro-brand {
   min-height: 52px;
   padding: 0 8px 14px;
@@ -540,3 +563,4 @@
   .yoridokoro-sidebar :is(.obsidian-nav-link,.yoridokoro-more-nav > summary) { justify-content: center; padding-inline: 0!important; }
   .yoridokoro-more-nav > div { margin-left: 0; padding-left: 0; border-left: 0; }
 }
+.playnite-import-warning{position:fixed;z-index:80;right:18px;bottom:42px;max-width:390px;min-height:38px;padding:8px 9px 8px 12px;border:1px solid color-mix(in srgb,var(--warning,#bfa243) 45%,var(--border-color));border-radius:8px;background:color-mix(in srgb,var(--warning,#bfa243) 10%,var(--card-bg));color:var(--text-color);box-shadow:0 8px 24px rgba(0,0,0,.14);display:flex;align-items:center;gap:9px;font-size:12px}.playnite-import-warning>svg{flex:none;color:var(--warning,#bfa243)}.playnite-import-warning button{width:28px;height:28px;margin-left:auto;padding:0;border:0;border-radius:6px;background:transparent;color:inherit;display:grid;place-items:center;cursor:pointer}.playnite-import-warning button:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
