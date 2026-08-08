@@ -8,12 +8,18 @@ interface Props {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 }
 
-export default function BingoModal({ open, title, onClose, children }: Props) {
+export default function BingoModal({ open, title, onClose, children, className = "" }: Props) {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (open) {
@@ -26,7 +32,7 @@ export default function BingoModal({ open, title, onClose, children }: Props) {
       focusable[0]?.focus();
 
       function handleKeyDown(e: KeyboardEvent) {
-        if (e.key === "Escape") { onClose(); return; }
+        if (e.key === "Escape") { onCloseRef.current(); return; }
         if (e.key === "Tab") {
           const focusableList = Array.from(
             el!.querySelectorAll<HTMLElement>(
@@ -48,7 +54,7 @@ export default function BingoModal({ open, title, onClose, children }: Props) {
     } else {
       previousFocusRef.current?.focus();
     }
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -59,7 +65,7 @@ export default function BingoModal({ open, title, onClose, children }: Props) {
       role="presentation"
     >
       <div
-        className="modal-content"
+        className={`modal-content ${className}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="bingo-modal-title"

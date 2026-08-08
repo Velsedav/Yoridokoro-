@@ -16,6 +16,7 @@ import {
   deleteMediaItem,
   deleteSubobjective,
   getObjective,
+  getObjectiveTimeBetween,
   getTimeStatsForSubobjectives,
   listMediaForSubobjectives,
   listSubobjectives,
@@ -25,6 +26,12 @@ import {
 } from "../../lib/bingoals/db";
 import { clamp01, daysAgo, formatDuration } from "../../lib/bingoals/format";
 import { computeObjectivePercent, objectiveProgressLabel, computeTotalMs, computeLastStudiedTs } from "../../lib/bingoals/progress";
+import {
+  formatAverageDuration,
+  objectiveTimeValue,
+  startOfCurrentYear,
+  type ObjectiveTimePeriod,
+} from "../../lib/bingoals/timeAverages";
 import { titleToHue } from "../../lib/bingoals/color";
 import { sortStripsForMemoriesView } from "../../lib/bingoals/sortStrips";
 import { useTranslation } from "../../lib/i18n";
@@ -48,7 +55,9 @@ function formatDaysAgo(d: number | null, t: (k: string) => string) {
 type RunningTimer = { subId: string; startedAt: number; durationMs: number | null }
 
 const OBJECTIVE_TIMER_KEY = 'bingoals.timerMinutes'
+const OBJECTIVE_TIME_PERIOD_KEY = 'bingoals.objectiveTimePeriod'
 const OBJECTIVE_TIMER_PRESETS = [5, 15, 25, 45, 60, 90, 120] as const
+const OBJECTIVE_TIME_PERIODS: ObjectiveTimePeriod[] = ['total', 'weekly', 'monthly', 'quarterly']
 function getObjectiveTimerMinutes() {
   const parsed = Math.floor(Number(localStorage.getItem(OBJECTIVE_TIMER_KEY) ?? 25))
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 720 ? parsed : 25
@@ -74,6 +83,13 @@ export default function BingoObjectivePage() {
   const [subs, setSubs] = useState<Subobjective[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [timeMap, setTimeMap] = useState<Map<string, { total_ms: number; last_end: number | null }>>(new Map());
+  const [yearToDateMs, setYearToDateMs] = useState(0)
+  const [timePeriod, setTimePeriod] = useState<ObjectiveTimePeriod>(() => {
+    const stored = localStorage.getItem(OBJECTIVE_TIME_PERIOD_KEY)
+    return OBJECTIVE_TIME_PERIODS.includes(stored as ObjectiveTimePeriod)
+      ? stored as ObjectiveTimePeriod
+      : 'total'
+  })
   const [playingSubId, setPlayingSubId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [running, setRunning] = useState<RunningTimer | null>(null);
@@ -104,14 +120,21 @@ export default function BingoObjectivePage() {
   }
 
   async function reload() {
-    const o = await getObjective(objectiveId)
-    const s = await listSubobjectives(objectiveId)
+    const now = Date.now()
+    const [o, s, yearTotal] = await Promise.all([
+      getObjective(objectiveId),
+      listSubobjectives(objectiveId),
+      getObjectiveTimeBetween(objectiveId, startOfCurrentYear(now), now),
+    ])
     const ids = s.map((x) => x.id)
-    const tStats = await getTimeStatsForSubobjectives(ids)
-    const m = await listMediaForSubobjectives(ids)
+    const [tStats, m] = await Promise.all([
+      getTimeStatsForSubobjectives(ids),
+      listMediaForSubobjectives(ids),
+    ])
     setObj(o)
     setSubs(s)
     setTimeMap(tStats)
+    setYearToDateMs(yearTotal)
     setMedia(m)
     setPlayingSubId((prev) => (prev && s.some((x) => x.id === prev) ? prev : null))
     setActiveSubId((prev) => {
@@ -129,6 +152,10 @@ export default function BingoObjectivePage() {
   useEffect(() => {
     localStorage.setItem('bingoals.listView', listView)
   }, [listView])
+
+  useEffect(() => {
+    localStorage.setItem(OBJECTIVE_TIME_PERIOD_KEY, timePeriod)
+  }, [timePeriod])
 
   useEffect(() => {
     runningRef.current = running
@@ -165,6 +192,10 @@ export default function BingoObjectivePage() {
   const percentText = percent === null ? "—" : `${Math.round(percent * 100)}%`;
 
   const totalMs = useMemo(() => computeTotalMs(timeMap), [timeMap])
+  const displayedTimeMs = objectiveTimeValue(totalMs, yearToDateMs, timePeriod)
+  const displayedTime = timePeriod === 'total'
+    ? formatDuration(displayedTimeMs)
+    : `${formatAverageDuration(displayedTimeMs)} ${t(`bingoals.time_${timePeriod}_suffix`)}`
   const lastStudiedTs = useMemo(() => computeLastStudiedTs(timeMap, subs), [timeMap, subs])
   const lastStudiedDays = daysAgo(lastStudiedTs)
 
@@ -364,7 +395,24 @@ export default function BingoObjectivePage() {
           </div>
           <div className="objPage-headerMeta">
             <span><Target size={14} aria-hidden="true" /><small>{t('bingoals.last_action')}</small><strong>{formatDaysAgo(lastStudiedDays, t)}</strong></span>
-            <span><Clock3 size={14} aria-hidden="true" /><small>{t('bingoals.invested_time')}</small><strong>{formatDuration(totalMs)}</strong></span>
+            <span className="objPage-timeMetric">
+              <Clock3 size={14} aria-hidden="true" />
+              <small>{t('bingoals.invested_time')}</small>
+              <strong>{displayedTime}</strong>
+              <span className="objPage-timePeriodToggle" role="group" aria-label={t('bingoals.time_period_aria')}>
+                {OBJECTIVE_TIME_PERIODS.map((period) => (
+                  <button
+                    key={period}
+                    type="button"
+                    className={`objPage-timePeriodBtn${timePeriod === period ? ' objPage-timePeriodBtn--active' : ''}`}
+                    onClick={() => setTimePeriod(period)}
+                    aria-pressed={timePeriod === period}
+                  >
+                    {t(`bingoals.time_period_${period}`)}
+                  </button>
+                ))}
+              </span>
+            </span>
           </div>
           <div className="objPage-controls">
             <div className="objPage-viewToggle" role="group" aria-label="Affichage de l’objectif">

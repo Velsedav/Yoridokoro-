@@ -3,6 +3,7 @@ import { ArrowRight, Brain, Check, Heart, NotebookPen, Pause, Play, Plus, Refres
 import { useNavigate } from 'react-router-dom'
 import { getSessionEvidence, getSessions, getSubjects, type Session, type SessionEvidence, type Subject } from '../lib/db'
 import NextStudyStep from '../components/NextStudyStep'
+import CulturalBanner from '../components/CulturalBanner'
 import { daysSinceContact, getPeople, type Person } from '../lib/relations'
 import { createEisenhowerTask, deleteEisenhowerTask, EISENHOWER_QUADRANTS, getEisenhowerTasks, moveEisenhowerTask, setEisenhowerTaskDone, type EisenhowerQuadrant, type EisenhowerTask } from '../lib/eisenhower'
 import { getAllChapters } from '../lib/chapters'
@@ -323,6 +324,7 @@ export default function TodayDashboard() {
 
   return (
     <div className="yd-page">
+      <CulturalBanner />
       <header className="yd-header">
         <div><span className="yd-eyebrow"><Sparkles size={14} /> Votre point d’appui</span><h1>Aujourd’hui</h1><p>{dateLabel} · Une seule prochaine étape, puis le droit de s’arrêter.</p></div>
       </header>

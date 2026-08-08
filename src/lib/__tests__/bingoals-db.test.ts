@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanupEmptyYearsBeforeOldestGrid, ensureYearSlots, listDashboardMediaSummaries } from '../bingoals/db'
+import { cleanupEmptyYearsBeforeOldestGrid, ensureYearSlots, getObjectiveTimeBetween, listDashboardMediaSummaries } from '../bingoals/db'
 
 describe('ensureYearSlots', () => {
   afterEach(() => {
@@ -92,5 +92,26 @@ describe('listDashboardMediaSummaries', () => {
     }])
     expect(select).toHaveBeenCalledTimes(2)
     expect(select.mock.calls[1][1]).toContain('ROW_NUMBER() OVER')
+  })
+})
+
+describe('getObjectiveTimeBetween', () => {
+  afterEach(() => {
+    delete (window as any).electronAPI
+  })
+
+  it('loads only the portion of objective time inside the requested range', async () => {
+    const select = vi.fn().mockResolvedValue([{ total_ms: 7_200_000 }])
+    ;(window as any).electronAPI = {
+      db: { select, execute: vi.fn(), transaction: vi.fn() },
+    }
+
+    await expect(getObjectiveTimeBetween('objective-1', 100, 200)).resolves.toBe(7_200_000)
+
+    expect(select).toHaveBeenCalledTimes(1)
+    expect(select.mock.calls[0][0]).toBe('bingo')
+    expect(select.mock.calls[0][1]).toContain('ts.duration_ms *')
+    expect(select.mock.calls[0][1]).toContain('ts.started_at = ts.ended_at')
+    expect(select.mock.calls[0][2]).toEqual([100, 200, 100, 200, 200, 100, 'objective-1'])
   })
 })

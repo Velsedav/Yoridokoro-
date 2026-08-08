@@ -204,6 +204,26 @@ function applyMainSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_analytics_events_session ON analytics_events(session_id, occurred_at);
     CREATE INDEX IF NOT EXISTS idx_analytics_events_opportunity ON analytics_events(opportunity_id, occurred_at);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_analytics_events_dedupe ON analytics_events(dedupe_key) WHERE dedupe_key IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS cultural_events(
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'cultural',
+      country TEXT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NULL,
+      recurrence_type TEXT NOT NULL DEFAULT 'specific',
+      show_before_days INTEGER NOT NULL DEFAULT 14,
+      show_after_days INTEGER NOT NULL DEFAULT 3,
+      image_data TEXT NULL,
+      image_position_x REAL NOT NULL DEFAULT 50,
+      image_position_y REAL NOT NULL DEFAULT 50,
+      image_zoom REAL NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'active',
+      retired_at TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_cultural_events_status_date ON cultural_events(status, start_date);
     CREATE TABLE IF NOT EXISTS study_data_snapshots(
       kind TEXT PRIMARY KEY,
       version INTEGER NOT NULL,
@@ -253,7 +273,7 @@ function applyMainSchema(db: Database.Database) {
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_session_blocks_session_idx ON session_blocks(session_id, idx)')
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_source_ref ON time_entries(source_ref) WHERE source_ref IS NOT NULL')
     db.exec('UPDATE subjects SET importance_weight = 5 WHERE importance_weight IS NULL OR importance_weight < 1 OR importance_weight > 10')
-    db.pragma('user_version = 6')
+    db.pragma('user_version = 7')
   })
   migrate()
 }

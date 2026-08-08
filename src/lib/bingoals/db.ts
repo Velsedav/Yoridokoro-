@@ -466,6 +466,27 @@ export async function deleteAllBingoData() {
   await db.execute(`DELETE FROM bingo_quotes`)
 }
 
+export async function getObjectiveTimeBetween(objectiveId: string, rangeStart: number, rangeEnd: number) {
+  const db = await getBingoDb()
+  const rows = await db.select<{ total_ms: number }[]>(
+    `SELECT COALESCE(SUM(
+       CASE
+         WHEN ts.started_at = ts.ended_at THEN
+           CASE WHEN ts.started_at >= ? AND ts.started_at < ? THEN ts.duration_ms ELSE 0 END
+         WHEN ts.ended_at <= ? OR ts.started_at >= ? THEN 0
+         ELSE ts.duration_ms *
+           (MIN(ts.ended_at, ?) - MAX(ts.started_at, ?)) * 1.0 /
+           NULLIF(ts.ended_at - ts.started_at, 0)
+       END
+     ), 0) AS total_ms
+     FROM subobjectives so
+     LEFT JOIN time_sessions ts ON ts.subobjective_id = so.id
+     WHERE so.objective_id = ?`,
+    [rangeStart, rangeEnd, rangeStart, rangeEnd, rangeEnd, rangeStart, objectiveId]
+  )
+  return Math.max(0, Number(rows[0]?.total_ms ?? 0))
+}
+
 export async function importBingoBackupFrom(filePath: string) {
   const srcBytes = await fsAPI().readFile(filePath) as Uint8Array
   const userData = await fsAPI().getUserDataPath() as string

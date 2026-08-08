@@ -45,6 +45,14 @@ describe('study database migrations', () => {
     expect(mainSource).toContain('UPDATE subjects SET importance_weight = 5')
   })
 
+  it('keeps manual cultural events and their retirement boundary in the main database', () => {
+    expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS cultural_events')
+    expect(mainSource).toContain('recurrence_type TEXT NOT NULL')
+    expect(mainSource).toContain('image_position_x REAL NOT NULL DEFAULT 50')
+    expect(mainSource).toContain('retired_at TEXT NULL')
+    expect(mainSource).toContain("db.pragma('user_version = 7')")
+  })
+
   it('adds stable chapter links and idempotent session effects', () => {
     expect(mainSource).toContain("ensureColumn('session_blocks', 'chapter_id', 'TEXT NULL')")
     expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS session_effects')

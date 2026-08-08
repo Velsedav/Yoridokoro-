@@ -71,12 +71,15 @@ describe('Yoridokoro backup format', () => {
     expect(exportSource).toContain('b.actual_seconds ?? 0')
     expect(exportSource).toContain('entry.source_detail_ref??null')
     expect(exportSource).toContain('entry.source_detail_label??null')
+    expect(exportSource).toContain("db.select('SELECT * FROM cultural_events")
+    expect(exportSource).toContain('data.cultural_events ?? []')
+    expect(exportSource).toContain('INSERT OR IGNORE INTO cultural_events')
   })
 
   it('creates durable session evidence with the database migration', () => {
     const mainSource = readFileSync(resolve(process.cwd(), 'electron/main.ts'), 'utf8')
     expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS session_evidence')
-    expect(mainSource).toContain("db.pragma('user_version = 6')")
+    expect(mainSource).toContain("db.pragma('user_version = 7')")
     expect(mainSource).toContain('CREATE TABLE IF NOT EXISTS session_context')
     expect(mainSource).toContain("ensureColumn('session_blocks', 'actual_seconds'")
   })

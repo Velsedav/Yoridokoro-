@@ -76,7 +76,7 @@ function base64ToBytes(dataUrl: string): Uint8Array {
 async function dumpStudyBuddyDb() {
   const db = await getDb();
   const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
-    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events] = await Promise.all([
+    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events] = await Promise.all([
     db.select<any[]>('SELECT * FROM subjects'),
     db.select('SELECT * FROM tags'),
     db.select('SELECT * FROM subject_tags'),
@@ -100,6 +100,7 @@ async function dumpStudyBuddyDb() {
     db.select('SELECT * FROM activity_events ORDER BY occurred_at'),
     db.select('SELECT * FROM eisenhower_tasks ORDER BY done, created_at'),
     db.select('SELECT * FROM analytics_events ORDER BY occurred_at'),
+    db.select('SELECT * FROM cultural_events ORDER BY start_date'),
   ]);
 
   const userData = await fsAPI().getUserDataPath() as string;
@@ -116,7 +117,7 @@ async function dumpStudyBuddyDb() {
   }
 
   return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
-    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, subject_covers };
+    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events, subject_covers };
 }
 
 async function dumpBingoDb() {
@@ -477,6 +478,20 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
         [event.id,event.event_type,event.event_version??1,event.occurred_at,event.timezone_offset_minutes??0,event.monotonic_ms??null,event.visit_id??'imported',event.opportunity_id??null,event.recommendation_id??null,event.session_id??null,event.block_id??null,event.subject_id??null,event.chapter_id??null,event.policy_id??null,event.policy_version??null,event.payload_json??'{}',event.quality_flags??'[]',event.dedupe_key??null,event.recorded_at??event.occurred_at]
       );
+    } catch {}
+  }
+  for (const event of data.cultural_events ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR IGNORE INTO cultural_events(
+          id,name,category,country,start_date,end_date,recurrence_type,show_before_days,show_after_days,
+          image_data,image_position_x,image_position_y,image_zoom,status,retired_at,created_at,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        [event.id,event.name,event.category??'cultural',event.country??null,event.start_date,event.end_date??null,
+          event.recurrence_type??'specific',event.show_before_days??14,event.show_after_days??3,event.image_data??null,
+          event.image_position_x??50,event.image_position_y??50,event.image_zoom??1,event.status??'active',
+          event.retired_at??null,event.created_at??new Date().toISOString(),event.updated_at??event.created_at??new Date().toISOString()]
+      )
     } catch {}
   }
 }
