@@ -357,6 +357,8 @@ function ArtSettingsPanel() {
             <p className="obs-settings-hint">Ces clés restent uniquement sur cet appareil et servent à compléter les fiches Art.</p>
             <label className="obs-settings-field"><span>Jeton de lecture TMDB</span><input type="password" value={credentials.tmdbReadToken||''} onChange={event=>updateCredentials({tmdbReadToken:event.target.value})} autoComplete="off"/></label>
             <label className="obs-settings-field"><span>Clé API RAWG</span><input type="password" value={credentials.rawgApiKey||''} onChange={event=>updateCredentials({rawgApiKey:event.target.value})} autoComplete="off"/></label>
+            <label className="obs-settings-field"><span>IGDB Client ID</span><input value={credentials.igdbClientId||''} onChange={event=>updateCredentials({igdbClientId:event.target.value})} autoComplete="off"/></label>
+            <label className="obs-settings-field"><span>IGDB Client Secret</span><input type="password" value={credentials.igdbClientSecret||''} onChange={event=>updateCredentials({igdbClientSecret:event.target.value})} autoComplete="off"/></label>
         </section>
         <section className="obs-settings-section">
             <h2 className="obs-settings-section-label"><Keyboard size={14}/> Raccourcis Art</h2>

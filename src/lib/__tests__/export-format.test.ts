@@ -46,6 +46,7 @@ describe('Yoridokoro backup format', () => {
     storage.setItem('study-buddy-workout-sets', '{"squat":3}')
     storage.setItem('yoridokoro-new-setting', 'yes')
     storage.setItem('yoridokoro-observation-pseudonym-salt-v1', 'never-export-me')
+    storage.setItem('keystone-catalogue-credentials-v1', '{"igdbClientSecret":"never-export-me"}')
     storage.setItem('unrelated-extension-token', 'secret')
 
     const dump = dumpPortableLocalStorage(storage)
@@ -53,6 +54,7 @@ describe('Yoridokoro backup format', () => {
     expect(dump['study-buddy-workout-sets']).toBe('{"squat":3}')
     expect(dump['yoridokoro-new-setting']).toBe('yes')
     expect(dump).not.toHaveProperty('yoridokoro-observation-pseudonym-salt-v1')
+    expect(dump).not.toHaveProperty('keystone-catalogue-credentials-v1')
     expect(dump).not.toHaveProperty('unrelated-extension-token')
   })
 

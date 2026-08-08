@@ -57,6 +57,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   catalogue: {
     fetchJson: <T>(url: string): Promise<{ ok: boolean; status: number; data: T }> =>
       ipcRenderer.invoke('catalogue:fetchJson', url),
+    testIgdb: (clientId: string, clientSecret: string): Promise<void> =>
+      ipcRenderer.invoke('catalogue:testIgdb', clientId, clientSecret),
+    searchIgdbGames: <T>(clientId: string, clientSecret: string, query: string): Promise<T[]> =>
+      ipcRenderer.invoke('catalogue:searchIgdbGames', clientId, clientSecret, query),
   },
 
   autostart: {

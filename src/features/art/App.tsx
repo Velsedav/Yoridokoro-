@@ -748,6 +748,8 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [catalogueNotice, setCatalogueNotice] = useState('');
+  const [catalogueSource, setCatalogueSource] = useState('');
   const provider = providerFor(itemCategory);
   const definition = categoryCopy(itemCategory, t);
   const { creators, genres, countries, series, movements, years } = useMemo(() => metadataSuggestions(existing, itemCategory), [existing, itemCategory]);
@@ -764,9 +766,18 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
   const searchCatalogue = async (event: FormEvent) => {
     event.preventDefault();
     if (!provider || !query.trim()) return;
-    setLoading(true); setError('');
-    try { setResults(await provider.search(query.trim(), itemCategory)); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : t('Search failed.')); }
+    setLoading(true); setError(''); setCatalogueNotice(''); setResults([]);
+    try {
+      setResults(await provider.search(query.trim(), itemCategory));
+      setCatalogueSource(provider.activeSourceLabel?.() ?? provider.label);
+      setCatalogueNotice(provider.notice?.() ?? '');
+    }
+    catch (cause) {
+      const notice = provider.notice?.() ?? '';
+      setCatalogueSource(provider.activeSourceLabel?.() ?? provider.label);
+      if (notice) setCatalogueNotice(notice);
+      else setError(cause instanceof Error ? cause.message : t('Search failed.'));
+    }
     finally { setLoading(false); }
   };
   const submit = async (event: FormEvent) => {
@@ -802,7 +813,8 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
               <input id="catalogue-query" data-add-primary value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`${t('Search')} ${definition.label.toLocaleLowerCase()}…`} autoComplete="off" />
               <button className="button button--dark" disabled={loading || !query.trim()}>{loading ? <LoaderCircle className="spin" size={17} /> : t('Search')}</button>
             </form>
-            <p className="source-note">{provider.label}. {t('Choose one to fill what the catalogue knows.')}{provider.attribution && <> <a href={provider.attribution.url} target="_blank" rel="noreferrer">{provider.attribution.label}</a>.</>}</p>
+            <p className="source-note">{catalogueSource || provider.label}. {t('Choose one to fill what the catalogue knows.')}{(catalogueSource || provider.label) === 'IGDB' ? <> <a href="https://www.igdb.com/" target="_blank" rel="noreferrer">Data and images by IGDB</a>.</> : provider.attribution && <> <a href={provider.attribution.url} target="_blank" rel="noreferrer">{provider.attribution.label}</a>.</>}</p>
+            {catalogueNotice && <p className="catalogue-warning" role="status">{t(catalogueNotice)}</p>}
             {error && <p className="form-error" role="alert">{error}</p>}
             {results.length > 0 ? <ul className="search-results">
               {results.map((item) => <li key={item.sourceId}><button onClick={() => selectResult(item)}>

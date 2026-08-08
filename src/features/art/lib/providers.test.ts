@@ -13,6 +13,7 @@ describe('TMDB catalogue provider', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    delete (window as any).electronAPI;
   });
 
   it('requires a locally configured read token', async () => {
@@ -49,10 +50,11 @@ describe('RAWG catalogue provider', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    delete (window as any).electronAPI;
   });
 
-  it('requires a locally configured API key', async () => {
-    await expect(rawg.search('Outer Wilds', 'games')).rejects.toThrow('Settings → Catalogues');
+  it('explains how to continue when neither game catalogue is configured', async () => {
+    await expect(rawg.search('Outer Wilds', 'games')).rejects.toThrow('IGDB is not configured');
   });
 
   it('maps game details, developer, artwork, year, and genres', async () => {
@@ -77,6 +79,91 @@ describe('RAWG catalogue provider', () => {
     });
     expect(fetchMock.mock.calls[0][0]).toContain('key=local-rawg-key');
     expect(rawg.attribution?.url).toBe('https://rawg.io/');
+  });
+
+  it('does not call IGDB when RAWG succeeds or correctly returns no results', async () => {
+    saveCatalogueCredentials({ rawgApiKey: 'local-rawg-key', igdbClientId: 'igdb-id', igdbClientSecret: 'igdb-secret' });
+    const searchIgdbGames = vi.fn();
+    (window as any).electronAPI = { catalogue: { searchIgdbGames } };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(rawg.search('No Such Game', 'games')).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(searchIgdbGames).not.toHaveBeenCalled();
+    expect(rawg.activeSourceLabel?.()).toBe('RAWG');
+  });
+
+  it.each([
+    ['a RAWG 5xx response', () => new Response('{}', { status: 503 })],
+    ['a RAWG network failure', () => Promise.reject(new TypeError('offline'))],
+  ])('falls back exclusively to IGDB after %s', async (_label, rawgResponse) => {
+    saveCatalogueCredentials({ rawgApiKey: 'local-rawg-key', igdbClientId: 'igdb-id', igdbClientSecret: 'igdb-secret' });
+    const searchIgdbGames = vi.fn().mockResolvedValue([{
+      id: 70,
+      name: 'System Shock',
+      first_release_date: 759974400,
+      cover: { url: '//images.igdb.com/igdb/image/upload/t_thumb/co1.jpg' },
+      genres: [{ name: 'Role-playing' }],
+      involved_companies: [{ developer: true, company: { name: 'Looking Glass Studios' } }]
+    }]);
+    (window as any).electronAPI = { catalogue: { searchIgdbGames } };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(rawgResponse));
+
+    const [game] = await rawg.search('System Shock', 'games');
+
+    expect(game).toMatchObject({ source: 'igdb', sourceId: '70', title: 'System Shock', creator: 'Looking Glass Studios', year: 1994, genres: ['Role-playing'] });
+    expect(game.imageUrl).toBe('https://images.igdb.com/igdb/image/upload/t_cover_big/co1.jpg');
+    expect(searchIgdbGames).toHaveBeenCalledWith('igdb-id', 'igdb-secret', 'System Shock');
+    expect(rawg.activeSourceLabel?.()).toBe('IGDB');
+    expect(rawg.notice?.()).toContain('Showing IGDB results');
+  });
+
+  it('falls back to IGDB when RAWG exceeds its timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      saveCatalogueCredentials({ rawgApiKey: 'local-rawg-key', igdbClientId: 'igdb-id', igdbClientSecret: 'igdb-secret' });
+      const searchIgdbGames = vi.fn().mockResolvedValue([]);
+      (window as any).electronAPI = { catalogue: { searchIgdbGames } };
+      vi.stubGlobal('fetch', vi.fn().mockImplementation((_url, init: RequestInit) => new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+      })));
+
+      const search = rawg.search('Timeout Game', 'games');
+      await vi.advanceTimersByTimeAsync(8_000);
+
+      await expect(search).resolves.toEqual([]);
+      expect(searchIgdbGames).toHaveBeenCalledOnce();
+      expect(rawg.notice?.()).toContain('RAWG timed out');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('uses IGDB after an invalid RAWG key and keeps a clear warning', async () => {
+    saveCatalogueCredentials({ rawgApiKey: 'invalid', igdbClientId: 'igdb-id', igdbClientSecret: 'igdb-secret' });
+    (window as any).electronAPI = { catalogue: { searchIgdbGames: vi.fn().mockResolvedValue([]) } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })));
+
+    await expect(rawg.search('Thief', 'games')).resolves.toEqual([]);
+    expect(rawg.activeSourceLabel?.()).toBe('IGDB');
+    expect(rawg.notice?.()).toContain('RAWG rejected the saved key');
+  });
+
+  it('does not use IGDB for an ordinary non-availability RAWG 4xx response', async () => {
+    saveCatalogueCredentials({ rawgApiKey: 'local-rawg-key', igdbClientId: 'igdb-id', igdbClientSecret: 'igdb-secret' });
+    const searchIgdbGames = vi.fn();
+    (window as any).electronAPI = { catalogue: { searchIgdbGames } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 404 })));
+
+    await expect(rawg.search('Thief', 'games')).rejects.toThrow('RAWG search failed');
+    expect(searchIgdbGames).not.toHaveBeenCalled();
+  });
+
+  it('keeps manual entry available when RAWG fails and IGDB is not configured', async () => {
+    saveCatalogueCredentials({ rawgApiKey: 'local-rawg-key' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 502 })));
+    await expect(rawg.search('Thief', 'games')).rejects.toThrow('Manual entry remains available');
   });
 });
 

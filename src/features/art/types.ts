@@ -51,7 +51,7 @@ export interface RankedItem {
   comparisons: number;
   createdAt: string;
   updatedAt: string;
-  source: 'manual' | 'open-library' | 'musicbrainz' | 'itunes' | 'artic' | 'met' | 'poetrydb' | 'tmdb' | 'rawg' | 'wikidata' | 'emdb' | 'playnite';
+  source: 'manual' | 'open-library' | 'musicbrainz' | 'itunes' | 'artic' | 'met' | 'poetrydb' | 'tmdb' | 'rawg' | 'igdb' | 'wikidata' | 'emdb' | 'playnite';
   sourceId?: string;
 }
 

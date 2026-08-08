@@ -6,6 +6,7 @@ import Database from 'better-sqlite3'
 import { normalizeSqlStatement } from './sqlParams'
 import { normalizeExternalUrl, normalizeRemoteImageUrl } from './security'
 import { readPlayniteSessions } from './playnite'
+import { searchIgdbGames, testIgdbCredentials } from './igdb'
 
 // ── Linux GPU fixes ───────────────────────────────────────────────────────────
 // White screen on Debian/GNOME caused by DMABUF buffer sharing failing in
@@ -547,6 +548,23 @@ ipcMain.handle('catalogue:fetchJson', async (_e, rawUrl: string) => {
   try { data = await response.json() }
   catch { data = null }
   return { ok: response.ok, status: response.status, data }
+})
+
+function checkedIgdbCredentials(clientId: unknown, clientSecret: unknown) {
+  if (typeof clientId !== 'string' || typeof clientSecret !== 'string' || !clientId.trim() || !clientSecret.trim()) {
+    throw new Error('IGDB Client ID and Client Secret are required.')
+  }
+  if (clientId.length > 256 || clientSecret.length > 512) throw new Error('IGDB credentials are invalid.')
+  return { clientId: clientId.trim(), clientSecret: clientSecret.trim() }
+}
+
+ipcMain.handle('catalogue:testIgdb', async (_e, clientId: unknown, clientSecret: unknown) => {
+  await testIgdbCredentials(checkedIgdbCredentials(clientId, clientSecret), net.fetch)
+})
+
+ipcMain.handle('catalogue:searchIgdbGames', async (_e, clientId: unknown, clientSecret: unknown, query: unknown) => {
+  if (typeof query !== 'string' || !query.trim() || query.length > 300) throw new Error('The IGDB search is invalid.')
+  return searchIgdbGames(checkedIgdbCredentials(clientId, clientSecret), query, net.fetch)
 })
 
 // ── IPC: autostart ────────────────────────────────────────────────────────────

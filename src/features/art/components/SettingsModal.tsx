@@ -8,7 +8,7 @@ import {
 } from '../lib/dataPortability';
 import { importExternalCandidates, isConsumedItem, scanExternalFiles, type ExternalScan } from '../lib/externalImports';
 import { importPlayniteRanking, parsePlayniteRanking, previewPlayniteRanking, type PlayniteRankingPreview } from '../lib/playniteRankingImport';
-import { loadCatalogueCredentials, saveCatalogueCredentials, testRawgConnection, testTmdbConnection } from '../lib/catalogCredentials';
+import { loadCatalogueCredentials, saveCatalogueCredentials, testIgdbConnection, testRawgConnection, testTmdbConnection } from '../lib/catalogCredentials';
 import {
   defaultShortcuts, normalizeShortcut, shortcutDefinitions, shortcutLabel, themeFamilies, themes,
   type Preferences, type ShortcutAction
@@ -114,6 +114,12 @@ export function SettingsModal({ preferences, onChange, onDataChanged, onClose }:
   const [rawgStatus, setRawgStatus] = useState(loadCatalogueCredentials().rawgApiKey ? t('RAWG is connected on this device.') : '');
   const [rawgError, setRawgError] = useState('');
   const [testingRawg, setTestingRawg] = useState(false);
+  const [igdbClientId, setIgdbClientId] = useState(() => loadCatalogueCredentials().igdbClientId ?? '');
+  const [igdbClientSecret, setIgdbClientSecret] = useState(() => loadCatalogueCredentials().igdbClientSecret ?? '');
+  const [showIgdbClientSecret, setShowIgdbClientSecret] = useState(false);
+  const [igdbStatus, setIgdbStatus] = useState(loadCatalogueCredentials().igdbClientId && loadCatalogueCredentials().igdbClientSecret ? t('IGDB is connected on this device.') : '');
+  const [igdbError, setIgdbError] = useState('');
+  const [testingIgdb, setTestingIgdb] = useState(false);
   useModalFocus(ref, onClose);
   const consumedExternalCount = externalScan?.candidates.filter(isConsumedItem).length ?? 0;
   const watchedMovieCount = externalScan?.candidates.filter((candidate) => isConsumedItem(candidate) && candidate.category === 'movies').length ?? 0;
@@ -249,6 +255,24 @@ export function SettingsModal({ preferences, onChange, onDataChanged, onClose }:
     saveCatalogueCredentials({ ...loadCatalogueCredentials(), rawgApiKey: undefined });
     setRawgApiKey(''); setRawgError(''); setRawgStatus('RAWG disconnected from this device.');
   };
+  const connectIgdb = async () => {
+    const clientId = igdbClientId.trim();
+    const clientSecret = igdbClientSecret.trim();
+    if (!clientId || !clientSecret) { setIgdbError('Paste both the IGDB Client ID and Client Secret first.'); return; }
+    setTestingIgdb(true); setIgdbError(''); setIgdbStatus('');
+    try {
+      await testIgdbConnection(clientId, clientSecret);
+      saveCatalogueCredentials({ ...loadCatalogueCredentials(), igdbClientId: clientId, igdbClientSecret: clientSecret });
+      setIgdbClientId(clientId); setIgdbClientSecret(clientSecret);
+      setIgdbStatus('IGDB connected. Automatic game-search fallback is ready.');
+    } catch (cause) {
+      setIgdbError(cause instanceof Error ? cause.message : 'IGDB could not be connected.');
+    } finally { setTestingIgdb(false); }
+  };
+  const disconnectIgdb = () => {
+    saveCatalogueCredentials({ ...loadCatalogueCredentials(), igdbClientId: undefined, igdbClientSecret: undefined });
+    setIgdbClientId(''); setIgdbClientSecret(''); setIgdbError(''); setIgdbStatus('IGDB disconnected from this device.');
+  };
 
   return (
     <div className="overlay settings-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -304,6 +328,15 @@ export function SettingsModal({ preferences, onChange, onDataChanged, onClose }:
                 {rawgError && <p className="form-error" role="alert">{rawgError}</p>}
                 {rawgStatus && <p className="inline-status" role="status"><Check />{rawgStatus}</p>}
                 <a className="catalogue-attribution" href="https://rawg.io/" target="_blank" rel="noreferrer">Data and images by RAWG</a>
+              </article>
+              <article>
+                <div className="catalogue-setting-head"><span className="data-action-icon"><KeyRound /></span><div><h3>IGDB</h3><p>{t('Automatic fallback when RAWG is temporarily unavailable.')}</p></div><span className={`connection-badge ${loadCatalogueCredentials().igdbClientId && loadCatalogueCredentials().igdbClientSecret ? 'connected' : ''}`}>{loadCatalogueCredentials().igdbClientId && loadCatalogueCredentials().igdbClientSecret ? t('Connected') : t('Not connected')}</span></div>
+                <label className="credential-field"><span>IGDB Client ID</span><div><input value={igdbClientId} onChange={(event) => { setIgdbClientId(event.target.value); setIgdbError(''); setIgdbStatus(''); }} autoComplete="off" spellCheck={false} placeholder="Paste your Twitch application Client ID" /></div></label>
+                <label className="credential-field"><span>IGDB Client Secret</span><div><input type={showIgdbClientSecret ? 'text' : 'password'} value={igdbClientSecret} onChange={(event) => { setIgdbClientSecret(event.target.value); setIgdbError(''); setIgdbStatus(''); }} autoComplete="off" spellCheck={false} placeholder="Paste your Twitch application Client Secret" /><button type="button" className="icon-button" onClick={() => setShowIgdbClientSecret((visible) => !visible)} aria-label={showIgdbClientSecret ? 'Hide IGDB secret' : 'Show IGDB secret'}>{showIgdbClientSecret ? <EyeOff /> : <Eye />}</button></div></label>
+                <div className="catalogue-setting-actions"><button className="button button--primary" onClick={connectIgdb} disabled={testingIgdb || !igdbClientId.trim() || !igdbClientSecret.trim()}>{testingIgdb ? t('Testing…') : t('Save and test')}</button>{loadCatalogueCredentials().igdbClientId && loadCatalogueCredentials().igdbClientSecret && <button className="button button--outline" onClick={disconnectIgdb} disabled={testingIgdb}><Unplug />{t('Disconnect')}</button>}</div>
+                {igdbError && <p className="form-error" role="alert">{t(igdbError)}</p>}
+                {igdbStatus && <p className="inline-status" role="status"><Check />{t(igdbStatus)}</p>}
+                <a className="catalogue-attribution" href="https://dev.twitch.tv/console/apps" target="_blank" rel="noreferrer">{t('Create credentials in the Twitch Developer Console')}</a>
               </article>
             </div>
             {catalogueError && <p className="form-error" role="alert">{catalogueError}</p>}

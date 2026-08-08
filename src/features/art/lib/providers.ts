@@ -5,6 +5,8 @@ type SearchProvider = {
   label: string;
   supports: CategoryId[];
   attribution?: { label: string; url: string };
+  activeSourceLabel?: () => string;
+  notice?: () => string;
   search: (query: string, category: CategoryId, signal?: AbortSignal) => Promise<ImportedItem[]>;
 };
 
@@ -376,42 +378,132 @@ type RawgSearchResult = {
   background_image?: string | null;
 };
 
+type IgdbSearchResult = {
+  id: number;
+  name: string;
+  first_release_date?: number;
+  cover?: { url?: string };
+  genres?: Array<{ name?: string }>;
+  involved_companies?: Array<{ developer?: boolean; company?: { name?: string } }>;
+};
+
+type RawgFailureKind = 'configuration' | 'availability' | 'response';
+
+class RawgFailure extends Error {
+  constructor(readonly kind: RawgFailureKind, message: string) { super(message); }
+}
+
+const RAWG_TIMEOUT_MS = 8_000;
+
+async function fetchRawg(url: string, signal?: AbortSignal) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RAWG_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener('abort', abortFromCaller, { once: true });
+  try {
+    return await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+  } catch (cause) {
+    if (signal?.aborted) throw cause;
+    throw new RawgFailure('availability', controller.signal.aborted
+      ? 'RAWG timed out.'
+      : 'RAWG could not be reached because of a network problem.');
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortFromCaller);
+  }
+}
+
 async function rawgRequest<T>(path: string, signal?: AbortSignal): Promise<T> {
   const apiKey = loadCatalogueCredentials().rawgApiKey;
-  if (!apiKey) throw new Error('Connect RAWG in Settings → Catalogues before searching video games.');
+  if (!apiKey) throw new RawgFailure('configuration', 'RAWG is not configured in Settings → Catalogues.');
   const separator = path.includes('?') ? '&' : '?';
-  const response = await fetch(`https://api.rawg.io/api${path}${separator}key=${encodeURIComponent(apiKey)}`, {
-    signal,
-    headers: { Accept: 'application/json' }
-  });
-  if (response.status === 401 || response.status === 403) throw new Error('RAWG rejected the saved key. Reconnect it in Settings → Catalogues.');
-  if (!response.ok) throw new Error('RAWG did not respond.');
+  const response = await fetchRawg(`https://api.rawg.io/api${path}${separator}key=${encodeURIComponent(apiKey)}`, signal);
+  if (response.status === 401 || response.status === 403) throw new RawgFailure('configuration', 'RAWG rejected the saved key. Reconnect it in Settings → Catalogues.');
+  if (response.status >= 500 || response.status === 408 || response.status === 429) throw new RawgFailure('availability', 'RAWG is temporarily unavailable.');
+  if (!response.ok) throw new RawgFailure('response', `RAWG search failed (${response.status}).`);
   return response.json() as Promise<T>;
+}
+
+let rawgNotice = '';
+let rawgActiveSource = 'RAWG';
+
+const igdbImage = (url?: string) => url
+  ? (url.startsWith('//') ? `https:${url}` : url).replace('/t_thumb/', '/t_cover_big/')
+  : undefined;
+
+async function igdbFallback(query: string, rawgFailure: RawgFailure): Promise<ImportedItem[]> {
+  const { igdbClientId, igdbClientSecret } = loadCatalogueCredentials();
+  rawgActiveSource = 'IGDB';
+  if (!igdbClientId || !igdbClientSecret) {
+    rawgNotice = rawgFailure.kind === 'configuration'
+      ? 'RAWG configuration needs attention and IGDB is not configured. Manual entry remains available.'
+      : 'RAWG is unavailable and IGDB is not configured. Manual entry remains available.';
+    throw new Error(rawgNotice);
+  }
+  const bridge = typeof window !== 'undefined' ? (window as any).electronAPI?.catalogue : undefined;
+  if (!bridge?.searchIgdbGames) {
+    rawgNotice = 'RAWG and IGDB are unavailable. Manual entry remains available.';
+    throw new Error(rawgNotice);
+  }
+  try {
+    const results = await bridge.searchIgdbGames(igdbClientId, igdbClientSecret, query) as IgdbSearchResult[];
+    rawgNotice = `${rawgFailure.message} Showing IGDB results instead.`;
+    return results.slice(0, 12).map((result): ImportedItem => {
+      const developers = result.involved_companies
+        ?.filter(company => company.developer)
+        .map(company => company.company?.name)
+        .filter(Boolean) as string[] | undefined;
+      return {
+        source: 'igdb',
+        sourceId: String(result.id),
+        title: result.name,
+        creator: developers?.join(', ') || 'Unknown developer',
+        year: result.first_release_date ? new Date(result.first_release_date * 1000).getUTCFullYear() : undefined,
+        imageUrl: igdbImage(result.cover?.url),
+        genres: result.genres?.map(genre => genre.name).filter(Boolean) as string[] | undefined,
+      };
+    });
+  } catch (cause) {
+    rawgNotice = 'RAWG and IGDB are unavailable. Manual entry remains available.';
+    throw new Error(rawgNotice);
+  }
 }
 
 export const rawg: SearchProvider = {
   label: 'RAWG',
   supports: ['games'],
   attribution: { label: 'Data and images by RAWG', url: 'https://rawg.io/' },
+  activeSourceLabel: () => rawgActiveSource,
+  notice: () => rawgNotice,
   async search(query, _category, signal) {
-    const search = await rawgRequest<{ results: RawgSearchResult[] }>(
-      `/games?search=${encodeURIComponent(query)}&search_precise=true&page_size=12`,
-      signal
-    );
+    rawgNotice = '';
+    rawgActiveSource = 'RAWG';
+    try {
+      const search = await rawgRequest<{ results: RawgSearchResult[] }>(
+        `/games?search=${encodeURIComponent(query)}&search_precise=true&page_size=12`,
+        signal
+      );
+      if (search.results.length === 0) return [];
 
-    return Promise.all(search.results.slice(0, 12).map(async (result): Promise<ImportedItem> => {
-      const details = await rawgRequest<any>(`/games/${result.id}`, signal);
-      const developers = details.developers?.map((developer: any) => developer.name).filter(Boolean);
-      return {
-        source: 'rawg',
-        sourceId: String(result.id),
-        title: details.name ?? result.name,
-        creator: developers?.join(', ') || 'Unknown developer',
-        year: yearFrom(details.released ?? result.released),
-        imageUrl: details.background_image ?? result.background_image ?? undefined,
-        genres: details.genres?.map((genre: any) => genre.name).filter(Boolean) ?? []
-      };
-    }));
+      return await Promise.all(search.results.slice(0, 12).map(async (result): Promise<ImportedItem> => {
+        const details = await rawgRequest<any>(`/games/${result.id}`, signal);
+        const developers = details.developers?.map((developer: any) => developer.name).filter(Boolean);
+        return {
+          source: 'rawg',
+          sourceId: String(result.id),
+          title: details.name ?? result.name,
+          creator: developers?.join(', ') || 'Unknown developer',
+          year: yearFrom(details.released ?? result.released),
+          imageUrl: details.background_image ?? result.background_image ?? undefined,
+          genres: details.genres?.map((genre: any) => genre.name).filter(Boolean) ?? []
+        };
+      }));
+    } catch (cause) {
+      if (cause instanceof RawgFailure && (cause.kind === 'availability' || cause.kind === 'configuration')) {
+        return igdbFallback(query, cause);
+      }
+      throw cause;
+    }
   }
 };
 
