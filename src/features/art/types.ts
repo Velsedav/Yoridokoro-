@@ -32,6 +32,8 @@ export interface RankedItem {
   title: string;
   creator: string;
   year?: number;
+  /** Runtime captured for movies and albums added by versions that support it. */
+  durationMinutes?: number;
   imageUrl?: string;
   genres: string[];
   countries?: string[];
@@ -81,6 +83,7 @@ export interface ImportedItem {
   title: string;
   creator: string;
   year?: number;
+  durationMinutes?: number;
   imageUrl?: string;
   genres?: string[];
   countries?: string[];

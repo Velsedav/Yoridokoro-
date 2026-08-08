@@ -39,6 +39,11 @@ export interface TimeEntrySummary {
   last_entry_at: string | null
 }
 
+export interface HistoryTimeEntry extends TimeEntry {
+  activity_kind: ActivityKind | null
+  activity_domains: string | null
+}
+
 export interface ActivityEvent {
   id: string
   activity_id: string
@@ -115,6 +120,19 @@ export async function getTimeEntries(from?: Date, to?: Date): Promise<TimeEntry[
   const db = await getDb()
   if (from && to) return db.select<TimeEntry[]>(`SELECT * FROM time_entries WHERE started_at >= $1 AND started_at < $2 ORDER BY started_at DESC`, [from.toISOString(), to.toISOString()])
   return db.select<TimeEntry[]>(`SELECT * FROM time_entries ORDER BY started_at DESC`)
+}
+
+export async function getHistoryTimeEntries(from: Date, to: Date): Promise<HistoryTimeEntry[]> {
+  const db = await getDb()
+  return db.select<HistoryTimeEntry[]>(`
+    SELECT t.*, a.kind AS activity_kind,
+      COALESCE((SELECT GROUP_CONCAT(l.domain, '|') FROM activity_links l WHERE l.activity_id=t.activity_id), '') AS activity_domains
+    FROM time_entries t
+    LEFT JOIN activities a ON a.id=t.activity_id
+    WHERE t.started_at < $2
+      AND (t.ended_at > $1 OR (t.started_at=t.ended_at AND t.started_at >= $1))
+    ORDER BY t.started_at DESC
+  `, [from.toISOString(), to.toISOString()])
 }
 
 export async function getTimeEntrySummary(): Promise<TimeEntrySummary> {

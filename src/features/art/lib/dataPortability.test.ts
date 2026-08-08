@@ -11,8 +11,10 @@ const item: RankedItem = {
 
 describe('data portability', () => {
   it('exports ranked statistics as CSV', () => {
-    const csv = createStatsCsv([item]);
+    const csv = createStatsCsv([{ ...item, durationMinutes: 145 }]);
     expect(csv).toContain('"movies","1","Paris, Texas"');
+    expect(csv).toContain('"duration_minutes"');
+    expect(csv).toContain('"1984","145","1240"');
     expect(csv).toContain('"0.7500"');
   });
 
@@ -28,6 +30,16 @@ describe('data portability', () => {
       preferences: { theme: 'keystone', shortcuts: defaultShortcuts }
     }));
     expect(backup.items).toHaveLength(1);
+  });
+
+  it('accepts legacy items without duration and preserves duration on newer items', () => {
+    const backup = parseBackup(JSON.stringify({
+      format: 'keystone-backup', version: 1, exportedAt: '2026-01-01',
+      items: [item, { ...item, id: 'album-1', category: 'albums', durationMinutes: 42 }], matches: [],
+      preferences: { theme: 'keystone', shortcuts: defaultShortcuts }
+    }));
+    expect(backup.items[0].durationMinutes).toBeUndefined();
+    expect(backup.items[1].durationMinutes).toBe(42);
   });
 
   it('adds new default shortcuts when reading an older backup', () => {

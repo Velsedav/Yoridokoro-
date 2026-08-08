@@ -392,7 +392,7 @@
 
 .obsidian-quote-text {
   flex: 1;
-  font-size: 12px;
+  font-size: 14px;
   font-style: italic;
   color: var(--text-muted, #7d8590);
   white-space: nowrap;

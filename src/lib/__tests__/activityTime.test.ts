@@ -9,7 +9,28 @@ vi.mock('../db', () => ({
   getDb: vi.fn(async () => db),
 }))
 
-import { deleteTimeEntry, updateTimeEntry } from '../activityTime'
+import { deleteTimeEntry, getHistoryTimeEntries, updateTimeEntry } from '../activityTime'
+
+describe('getHistoryTimeEntries', () => {
+  beforeEach(() => {
+    db.select.mockReset()
+    db.execute.mockReset()
+  })
+
+  it('reads only History entries overlapping the period with their existing activity classification', async () => {
+    db.select.mockResolvedValue([])
+    const from = new Date('2026-08-03T00:00:00.000Z')
+    const to = new Date('2026-08-10T00:00:00.000Z')
+
+    await getHistoryTimeEntries(from, to)
+
+    expect(db.select).toHaveBeenCalledTimes(1)
+    expect(db.select.mock.calls[0][0]).toContain('FROM time_entries t')
+    expect(db.select.mock.calls[0][0]).toContain("GROUP_CONCAT(l.domain, '|')")
+    expect(db.select.mock.calls[0][0]).toContain('t.started_at < $2')
+    expect(db.select.mock.calls[0][1]).toEqual([from.toISOString(), to.toISOString()])
+  })
+})
 
 describe('deleteTimeEntry', () => {
   beforeEach(() => {

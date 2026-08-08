@@ -557,6 +557,7 @@ function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onM
               <div><dt>{t('Genre')}</dt><dd>{item.genres.join(', ') || t('Not set')}</dd></div>
               <div><dt>{t('Country')}</dt><dd>{item.countries?.join(', ') || t('Not set')}</dd></div>
               <div><dt>{t('Series / movement')}</dt><dd>{item.series || item.movement || t('Not set')}</dd></div>
+              {item.durationMinutes && <div><dt>{t('Duration')}</dt><dd>{durationForDisplay(item.durationMinutes)}</dd></div>}
               {shelf === 'collection' && <div><dt>{t('Comparisons')}</dt><dd>{item.comparisons}</dd></div>}
               <div><dt>{t('Added')}</dt><dd>{new Date(item.createdAt).toLocaleDateString(localeFor(language))}</dd></div>
             </dl>
@@ -589,13 +590,19 @@ function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onM
 }
 
 type QuoteDraft = { id: string; text: string; comment: string };
-type AddForm = { title: string; creator: string; year: string; genre: string; country: string; series: string; movement: string; quotes: QuoteDraft[]; notes: string; imageUrl: string };
+type AddForm = { title: string; creator: string; year: string; durationMinutes: string; genre: string; country: string; series: string; movement: string; quotes: QuoteDraft[]; notes: string; imageUrl: string };
 const newQuoteDraft = (): QuoteDraft => ({ id: crypto.randomUUID(), text: '', comment: '' });
-const blankForm = (): AddForm => ({ title: '', creator: '', year: '', genre: '', country: '', series: '', movement: '', quotes: [], notes: '', imageUrl: '' });
+const blankForm = (): AddForm => ({ title: '', creator: '', year: '', durationMinutes: '', genre: '', country: '', series: '', movement: '', quotes: [], notes: '', imageUrl: '' });
 const formForItem = (item: RankedItem): AddForm => ({
-  title: item.title, creator: item.creator, year: item.year ? String(item.year) : '', genre: item.genres.join(', '), country: item.countries?.join(', ') ?? '',
+  title: item.title, creator: item.creator, year: item.year ? String(item.year) : '', durationMinutes: item.durationMinutes ? String(item.durationMinutes) : '', genre: item.genres.join(', '), country: item.countries?.join(', ') ?? '',
   series: item.series ?? '', movement: item.movement ?? '', quotes: quotesForItem(item).map((quote) => ({ id: quote.id, text: quote.text, comment: quote.comment ?? '' })), notes: item.notes ?? '', imageUrl: item.imageUrl ?? ''
 });
+
+const durationForDisplay = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return hours ? `${hours} h${remainder ? ` ${remainder} min` : ''}` : `${minutes} min`;
+};
 
 function QuoteFields({ quotes, onChange }: { quotes: QuoteDraft[]; onChange: (quotes: QuoteDraft[]) => void }) {
   const update = (id: string, key: 'text' | 'comment', value: string) => onChange(quotes.map((quote) => quote.id === id ? { ...quote, [key]: value } : quote));
@@ -657,6 +664,7 @@ function EditItemModal({ item, existing, onClose, onSave }: {
           <label className="field field--wide"><span>{t('Title')} <i>{t('required')}</i></span><input required value={form.title} onChange={(event) => update('title', event.target.value)} /></label>
           <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={item.category === 'books' || item.category === 'essays' ? t('Author') : item.category === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
           <label className="field"><span>{t('Year')}</span><input list="edit-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} onChange={(event) => update('year', event.target.value)} /><datalist id="edit-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>
+          {(item.category === 'movies' || item.category === 'albums') && <label className="field"><span>{t('Duration (minutes)')}</span><input type="number" min="1" step="1" inputMode="numeric" value={form.durationMinutes} onChange={(event) => update('durationMinutes', event.target.value)} placeholder={t('Optional')} /></label>}
           <TagSuggestionField label={t('Genre / type')} value={form.genre} options={genres} onChange={(value) => update('genre', value)} placeholder={t('Add a genre or type')} />
           <TagSuggestionField label={t('Country')} value={form.country} options={countries} onChange={(value) => update('country', value)} placeholder={t('Add a country')} />
           <SuggestionField label={t('Series / collection')} value={form.series} options={series} onChange={(value) => update('series', value)} placeholder={t('Optional')} />
@@ -756,11 +764,16 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
   useModalFocus(ref, onClose, '[data-add-primary]');
 
   const update = (key: keyof AddForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const selectResult = (item: ImportedItem) => {
-    setSelected(item);
+  const selectResult = async (item: ImportedItem) => {
+    setLoading(true);
+    let detailed = item;
+    try { if (!item.durationMinutes && provider?.hydrate) detailed = await provider.hydrate(item); }
+    catch { /* Duration remains editable when the catalogue cannot provide it. */ }
+    finally { setLoading(false); }
+    setSelected(detailed);
     setForm({
-      title: item.title, creator: item.creator, year: item.year ? String(item.year) : '', genre: item.genres?.join(', ') ?? '',
-      movement: item.movement ?? '', series: item.series ?? '', country: item.countries?.join(', ') ?? '', quotes: [], notes: '', imageUrl: item.imageUrl ?? ''
+      title: detailed.title, creator: detailed.creator, year: detailed.year ? String(detailed.year) : '', durationMinutes: detailed.durationMinutes ? String(detailed.durationMinutes) : '', genre: detailed.genres?.join(', ') ?? '',
+      movement: detailed.movement ?? '', series: detailed.series ?? '', country: detailed.countries?.join(', ') ?? '', quotes: [], notes: '', imageUrl: detailed.imageUrl ?? ''
     });
   };
   const searchCatalogue = async (event: FormEvent) => {
@@ -817,7 +830,7 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
             {catalogueNotice && <p className="catalogue-warning" role="status">{t(catalogueNotice)}</p>}
             {error && <p className="form-error" role="alert">{error}</p>}
             {results.length > 0 ? <ul className="search-results">
-              {results.map((item) => <li key={item.sourceId}><button onClick={() => selectResult(item)}>
+              {results.map((item) => <li key={item.sourceId}><button disabled={loading} onClick={() => void selectResult(item)}>
                 <span className="result-art">{item.imageUrl ? <img src={item.imageUrl} alt="" /> : <Library size={18} />}</span>
                 <span><strong>{item.title}</strong><small>{item.creator}{item.year ? ` · ${item.year}` : ''}</small></span><ArrowRight size={18} />
               </button></li>)}
@@ -833,6 +846,7 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
               <label className="field field--wide"><span>{t('Title')} <i>{t('required')}</i></span><input data-add-primary required value={form.title} onChange={(e) => update('title', e.target.value)} /></label>
               <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={itemCategory === 'books' || itemCategory === 'essays' || itemCategory === 'poems' ? t('Author') : itemCategory === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
               <label className="field"><span>{t('Year')}</span><input list="add-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} onChange={(e) => update('year', e.target.value)} placeholder="1968" /><datalist id="add-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>
+              {(itemCategory === 'movies' || itemCategory === 'albums') && <label className="field"><span>{t('Duration (minutes)')}</span><input type="number" min="1" step="1" inputMode="numeric" value={form.durationMinutes} onChange={(event) => update('durationMinutes', event.target.value)} placeholder={t('Optional')} /></label>}
               <TagSuggestionField label={t('Genre / type')} value={form.genre} options={genres} onChange={(value) => update('genre', value)} placeholder={t('Add a genre or type')} />
               <TagSuggestionField label={t('Country')} value={form.country} options={countries} onChange={(value) => update('country', value)} placeholder={t('Add a country')} />
               <SuggestionField label={t('Series / collection')} value={form.series} options={series} onChange={(value) => update('series', value)} placeholder={t('Optional')} />
@@ -853,6 +867,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   const [items, setItems] = useState<RankedItem[]>([]);
   const [category, setCategory] = useState<CategoryId>('books');
   const [loading, setLoading] = useState(true);
+  const [databaseReady, setDatabaseReady] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [query, setQuery] = useState('');
   const [genre, setGenre] = useState('all');
@@ -894,10 +909,12 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   const refresh = useCallback(async () => setItems(await db.items.toArray()), []);
   const openCollection = useCallback(async () => {
     setLoading(true);
+    setDatabaseReady(false);
     setLoadError('');
     try {
       await prepareArtDatabase();
       await refresh();
+      setDatabaseReady(true);
     } catch (cause) {
       console.error('Could not open the Art collection', cause);
       setLoadError(cause instanceof Error ? cause.message : String(cause));
@@ -906,18 +923,25 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
     }
   }, [refresh]);
   const refreshMatchHistory = useCallback(async () => {
+    if (!databaseReady) {
+      setStatisticsLoading(false);
+      return;
+    }
     setStatisticsLoading(true);
     try { setMatchHistory(await db.matches.where('category').equals(category).toArray()); }
     finally { setStatisticsLoading(false); }
-  }, [category]);
+  }, [category, databaseReady]);
   useEffect(() => {
     void openCollection();
   }, [openCollection]);
   useEffect(() => {
+    if (!databaseReady) return;
     let active = true;
-    db.matches.where('category').equals(category).count().then((count) => { if (active) setCanUndo(count > 0); });
+    db.matches.where('category').equals(category).count()
+      .then((count) => { if (active) setCanUndo(count > 0); })
+      .catch((cause) => console.error('Could not read Art match history', cause));
     return () => { active = false; };
-  }, [category]);
+  }, [category, databaseReady]);
   useEffect(() => { void refreshMatchHistory(); }, [refreshMatchHistory]);
 
   const collectionItems = useMemo(() => itemsOnShelf(items, 'collection'), [items]);
@@ -1045,6 +1069,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
     const item: RankedItem = {
       id: crypto.randomUUID(), category: itemCategory, title: form.title.trim(), creator: form.creator.trim(),
       year: form.year ? Number(form.year) : undefined, imageUrl: form.imageUrl || undefined,
+      durationMinutes: (itemCategory === 'movies' || itemCategory === 'albums') && Number(form.durationMinutes) > 0 ? Math.round(Number(form.durationMinutes)) : undefined,
       genres: form.genre.split(',').map((value) => value.trim()).filter(Boolean), countries: form.country.split(',').map((value) => value.trim()).filter(Boolean), tags: [],
       series: form.series.trim() || undefined, movement: form.movement.trim() || undefined,
       quotes: form.quotes.filter((quote) => quote.text.trim()).map((quote) => ({ id: quote.id, text: quote.text.trim(), comment: quote.comment.trim() || undefined })),
@@ -1082,6 +1107,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
     const updated: RankedItem = {
       ...item,
       title: form.title.trim(), creator: form.creator.trim(), year: form.year ? Number(form.year) : undefined,
+      durationMinutes: (item.category === 'movies' || item.category === 'albums') && Number(form.durationMinutes) > 0 ? Math.round(Number(form.durationMinutes)) : undefined,
       genres: form.genre.split(',').map((value) => value.trim()).filter(Boolean),
       countries: form.country.split(',').map((value) => value.trim()).filter(Boolean),
       series: form.series.trim() || undefined, movement: form.movement.trim() || undefined,

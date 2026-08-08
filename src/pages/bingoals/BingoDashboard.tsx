@@ -17,6 +17,7 @@ import {
 import { arrangeBingoCells, BINGO_LAYOUTS, BINGO_LAYOUT_DEFINITIONS, canUseBingoLayout, type BingoGridLayout } from '../../lib/bingoals/layout'
 import { daysAgo, formatDuration } from "../../lib/bingoals/format";
 import { computeObjectivePercent, objectiveProgressLabel } from "../../lib/bingoals/progress";
+import { formatAverageDuration, objectiveTimeValue, type ObjectiveTimePeriod } from "../../lib/bingoals/timeAverages";
 import "../../styles/bingoals.css";
 import { useTranslation } from "../../lib/i18n";
 import { playSFX, SFX } from "../../lib/sounds";
@@ -28,17 +29,21 @@ type Cell = {
   objective_id: string | null;
   objective: Objective | null;
   total_ms: number;
+  year_to_date_ms: number;
   last_progress_at: number | null;
   percent: number | null;
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
+const CARD_TIME_PERIODS: ObjectiveTimePeriod[] = ['total', 'weekly', 'monthly', 'quarterly'];
+const CARD_TIME_ROTATION_MS = 4_000;
 let DASH_CACHE: Record<number, Cell[]> = {};
 const EMPTY_CELLS: Cell[] = Array.from({ length: 16 }, (_, slot_index) => ({
   slot_index,
   objective_id: null,
   objective: null,
   total_ms: 0,
+  year_to_date_ms: 0,
   last_progress_at: null,
   percent: null,
 }));
@@ -68,6 +73,7 @@ export default function BingoDashboard() {
   const [oldestYear, setOldestYear] = useState(CURRENT_YEAR);
   const [yearsReady, setYearsReady] = useState(false);
   const [gridFocusIndex, setGridFocusIndex] = useState(0)
+  const [cardTimePeriodIndex, setCardTimePeriodIndex] = useState(0)
   const gridRef = useRef<HTMLDivElement>(null)
   const hasAutofocusedGrid = useRef(false)
 
@@ -117,7 +123,15 @@ export default function BingoDashboard() {
           last_progress_at = last > 0 ? last : null;
         }
 
-        return { slot_index: r.slot_index, objective_id: r.objective_id, objective, total_ms: r.total_ms ?? 0, last_progress_at, percent };
+        return {
+          slot_index: r.slot_index,
+          objective_id: r.objective_id,
+          objective,
+          total_ms: r.total_ms ?? 0,
+          year_to_date_ms: r.year_to_date_ms ?? 0,
+          last_progress_at,
+          percent,
+        };
       });
 
       DASH_CACHE[year] = out;
@@ -157,6 +171,15 @@ export default function BingoDashboard() {
     load(selectedYear);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedYear, yearsReady]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCardTimePeriodIndex((index) => (index + 1) % CARD_TIME_PERIODS.length)
+    }, CARD_TIME_ROTATION_MS)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  const cardTimePeriod = CARD_TIME_PERIODS[cardTimePeriodIndex]
 
   const viewCells = useMemo(() => {
     const clone = [...cells];
@@ -372,6 +395,7 @@ export default function BingoDashboard() {
                 t={t}
                 mediaSummary={c.objective_id ? mediaMap.get(c.objective_id) : undefined}
                 subobjectives={subMap.get(c.objective.id) ?? []}
+                timePeriod={cardTimePeriod}
                 gridIndex={visualIndex}
                 isGridTabStop={gridFocusIndex === visualIndex}
                 onGridFocus={() => setGridFocusIndex(visualIndex)}
@@ -533,7 +557,7 @@ function CreateObjectiveModal(props: { slotIndex: number | null; year: number; o
 }
 
 const DashboardCard = memo(function DashboardCard({
-  c, nav, load, t, mediaSummary, subobjectives, gridIndex, isGridTabStop, onGridFocus, onGridKeyDown
+  c, nav, load, t, mediaSummary, subobjectives, timePeriod, gridIndex, isGridTabStop, onGridFocus, onGridKeyDown
 }: {
   c: Cell;
   nav: (path: string) => void;
@@ -541,6 +565,7 @@ const DashboardCard = memo(function DashboardCard({
   t: (key: string) => string;
   mediaSummary: ObjectiveMediaSummary | undefined;
   subobjectives: Subobjective[];
+  timePeriod: ObjectiveTimePeriod;
   gridIndex: number;
   isGridTabStop: boolean;
   onGridFocus: () => void;
@@ -552,6 +577,11 @@ const DashboardCard = memo(function DashboardCard({
   const cover = c.objective!.cover_data;
   const firstLink = mediaSummary?.links[0] ?? null;
   const label = objectiveProgressLabel(c.objective!, subobjectives);
+  const timeValueMs = objectiveTimeValue(c.total_ms, c.year_to_date_ms ?? 0, timePeriod)
+  const timeLabel = t(`bingoals.time_period_${timePeriod}`)
+  const timeValue = timePeriod === 'total'
+    ? formatDuration(timeValueMs)
+    : `${formatAverageDuration(timeValueMs)} ${t(`bingoals.time_${timePeriod}_suffix`)}`
   const relativeActivity = d === null
     ? '—'
     : d <= 0
@@ -604,9 +634,14 @@ const DashboardCard = memo(function DashboardCard({
             <small>{t('bingoals.last_action')}</small>
             <strong><span className={`cardStatusDot cardStatusDot--${status}`} />{relativeActivity}</strong>
           </div>
-          <div className="cardFooterStat cardFooterStat--time">
-            <small>{t('bingoals.invested_time')}</small>
-            <strong><Clock3 size={12} aria-hidden="true" />{formatDuration(c.total_ms)}</strong>
+          <div
+            className="cardFooterStat cardFooterStat--time"
+            aria-label={`${t('bingoals.invested_time')} — ${timeLabel}: ${timeValue}`}
+          >
+            <small key={`time-label-${timePeriod}`} className="cardTimeCycle">{timeLabel}</small>
+            <strong key={`time-value-${timePeriod}`} className="cardTimeCycle">
+              <Clock3 size={12} aria-hidden="true" />{timeValue}
+            </strong>
           </div>
         </div>
 
@@ -639,6 +674,7 @@ const DashboardCard = memo(function DashboardCard({
   return prev.c.objective?.updated_at === next.c.objective?.updated_at &&
     prev.c.percent === next.c.percent &&
     prev.c.total_ms === next.c.total_ms &&
+    prev.c.year_to_date_ms === next.c.year_to_date_ms &&
     prev.c.last_progress_at === next.c.last_progress_at &&
     prev.c.objective?.pin_bottom === next.c.objective?.pin_bottom &&
     prev.c.objective?.frequency_days === next.c.objective?.frequency_days &&
@@ -646,6 +682,7 @@ const DashboardCard = memo(function DashboardCard({
     prev.c.slot_index === next.c.slot_index &&
     prev.mediaSummary === next.mediaSummary &&
     prev.subobjectives === next.subobjectives &&
+    prev.timePeriod === next.timePeriod &&
     prev.gridIndex === next.gridIndex &&
     prev.isGridTabStop === next.isGridTabStop;
 });

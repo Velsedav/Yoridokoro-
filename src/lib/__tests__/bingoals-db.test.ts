@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanupEmptyYearsBeforeOldestGrid, ensureYearSlots, getObjectiveTimeBetween, listDashboardMediaSummaries } from '../bingoals/db'
+import { cleanupEmptyYearsBeforeOldestGrid, ensureYearSlots, getObjectiveTimeBetween, listDashboardMediaSummaries, listDashboardRows } from '../bingoals/db'
 
 describe('ensureYearSlots', () => {
   afterEach(() => {
@@ -92,6 +92,29 @@ describe('listDashboardMediaSummaries', () => {
     }])
     expect(select).toHaveBeenCalledTimes(2)
     expect(select.mock.calls[1][1]).toContain('ROW_NUMBER() OVER')
+  })
+})
+
+describe('listDashboardRows', () => {
+  afterEach(() => {
+    delete (window as any).electronAPI
+  })
+
+  it('loads lifetime and prorated year-to-date time in the dashboard query', async () => {
+    const select = vi.fn().mockResolvedValue([])
+    ;(window as any).electronAPI = {
+      db: { select, execute: vi.fn(), transaction: vi.fn() },
+    }
+    const now = new Date(2026, 7, 8, 12, 0, 0).getTime()
+    const yearStart = new Date(2026, 0, 1).getTime()
+
+    await listDashboardRows(2026, now)
+
+    expect(select).toHaveBeenCalledTimes(1)
+    expect(select.mock.calls[0][0]).toBe('bingo')
+    expect(select.mock.calls[0][1]).toContain('AS year_to_date_ms')
+    expect(select.mock.calls[0][1]).toContain('NULLIF(ts.ended_at - ts.started_at, 0)')
+    expect(select.mock.calls[0][2]).toEqual([yearStart, now, yearStart, now, now, yearStart, 2026])
   })
 })
 

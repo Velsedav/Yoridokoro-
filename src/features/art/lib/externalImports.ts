@@ -9,6 +9,7 @@ export interface ExternalCandidate {
   title: string;
   creator: string;
   year?: number;
+  durationMinutes?: number;
   genres: string[];
   countries?: string[];
   tags: string[];
@@ -32,6 +33,13 @@ export interface ExternalScan {
 const clean = (value?: string | null) => (value ?? '').replace(/\s+/g, ' ').trim();
 const splitComma = (value?: string) => (value ?? '').split(',').map(clean).filter(Boolean);
 const normalizedTitle = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+const durationMinutesFrom = (value?: string) => {
+  const hours = Number(value?.match(/(\d+)\s*h/i)?.[1] ?? 0);
+  const minutes = Number(value?.match(/(\d+)\s*m(?:in)?/i)?.[1] ?? 0);
+  if (hours || minutes) return hours * 60 + minutes;
+  const numeric = Number(value?.match(/\d+/)?.[0] ?? 0);
+  return numeric > 0 ? numeric : undefined;
+};
 
 type EmdbWatchStatus = { watched: boolean; watchedDate?: string; mediaType: 'movie' | 'tv'; canonicalTitle: string };
 
@@ -125,6 +133,7 @@ export function parseEmdbHtml(html: string, fileId: string): ExternalCandidate |
   return {
     source: 'emdb', sourceId: fileId, category: 'movies', title: titleMatch[1],
     creator: directors.join(', ') || 'Unknown director', year: Number(titleMatch[2]),
+    durationMinutes: durationMinutesFrom(fields.get('Runtime') ?? fields.get('Duration')),
     genres: splitComma(fields.get('Genres')), countries: splitComma(fields.get('Country') ?? fields.get('Countries')), tags, coverFileName: coverFileName || undefined
   };
 }
@@ -260,7 +269,7 @@ export async function importExternalCandidates(candidates: ExternalCandidate[], 
     sourceIds.add(sourceKey); identities.add(itemIdentity);
     additions.push({
       id: crypto.randomUUID(), category: candidate.category, title: candidate.title, creator: candidate.creator,
-      year: candidate.year, imageUrl: candidate.imageUrl, genres: candidate.genres, countries: candidate.countries, tags: candidate.tags, series: candidate.series, notes: candidate.notes,
+      year: candidate.year, durationMinutes: candidate.durationMinutes, imageUrl: candidate.imageUrl, genres: candidate.genres, countries: candidate.countries, tags: candidate.tags, series: candidate.series, notes: candidate.notes,
       rating: 1200, wins: 0, losses: 0, comparisons: 0, createdAt: timestamp, updatedAt: timestamp,
       source: candidate.source, sourceId: candidate.sourceId
     });

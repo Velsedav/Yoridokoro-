@@ -383,17 +383,29 @@ export async function addLink(subobjectiveId: string, url: string, label: string
 
 export type DashboardRow = (SlotRow & Partial<Objective>) & {
   total_ms: number;
+  year_to_date_ms: number;
   last_end: number | null;
 };
 
-export async function listDashboardRows(year: number): Promise<DashboardRow[]> {
+export async function listDashboardRows(year: number, now = Date.now()): Promise<DashboardRow[]> {
   const db = await getBingoDb()
+  const yearStart = new Date(new Date(now).getFullYear(), 0, 1).getTime()
   return db.select<DashboardRow[]>(`
     SELECT
       s.slot_index, s.objective_id,
       o.id, o.title, o.goal_kind, o.goal_target, o.goal_unit, o.cover_data,
       o.current_value, o.created_at, o.updated_at, o.pin_bottom, o.frequency_days,
       COALESCE(SUM(ts.duration_ms), 0) AS total_ms,
+      COALESCE(SUM(
+        CASE
+          WHEN ts.started_at = ts.ended_at THEN
+            CASE WHEN ts.started_at >= ? AND ts.started_at < ? THEN ts.duration_ms ELSE 0 END
+          WHEN ts.ended_at <= ? OR ts.started_at >= ? THEN 0
+          ELSE ts.duration_ms *
+            (MIN(ts.ended_at, ?) - MAX(ts.started_at, ?)) * 1.0 /
+            NULLIF(ts.ended_at - ts.started_at, 0)
+        END
+      ), 0) AS year_to_date_ms,
       MAX(ts.ended_at) AS last_end
     FROM bingo_year_slots s
     LEFT JOIN objectives o ON o.id = s.objective_id
@@ -404,7 +416,7 @@ export async function listDashboardRows(year: number): Promise<DashboardRow[]> {
              o.goal_unit, o.cover_data, o.current_value, o.created_at, o.updated_at,
              o.pin_bottom, o.frequency_days
     ORDER BY s.slot_index ASC
-  `, [year])
+  `, [yearStart, now, yearStart, now, now, yearStart, year])
 }
 
 export async function addManualTimeDelta(subobjectiveId: string, deltaMs: number) {

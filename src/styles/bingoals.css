@@ -3776,6 +3776,16 @@
 
 .bingo-dashboard-page .cardFooterStat--time { text-align: right; }
 .bingo-dashboard-page .cardFooterStat--time strong { justify-content: flex-end; font-family: var(--font-mono, 'DM Mono', monospace); }
+.bingo-dashboard-page .cardTimeCycle { animation: bingo-card-time-cycle 280ms ease-out both; }
+
+@keyframes bingo-card-time-cycle {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bingo-dashboard-page .cardTimeCycle { animation: none; }
+}
 
 .bingo-dashboard-page .card--has-cover :is(.cardTitle, .cardProgressCount, .cardFooterStat strong) { color: #fff; }
 .bingo-dashboard-page .card--has-cover :is(.cardProgressLine, .cardFooterStat small) { color: rgba(255, 255, 255, .76); }

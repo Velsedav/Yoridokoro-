@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { getSessionEvidence, getSessions, getSubjects, type Session, type SessionEvidence, type Subject } from '../lib/db'
 import NextStudyStep from '../components/NextStudyStep'
 import CulturalBanner from '../components/CulturalBanner'
+import TimeDistributionPanel from '../components/TimeDistributionPanel'
 import { daysSinceContact, getPeople, type Person } from '../lib/relations'
 import { createEisenhowerTask, deleteEisenhowerTask, EISENHOWER_QUADRANTS, getEisenhowerTasks, moveEisenhowerTask, setEisenhowerTaskDone, type EisenhowerQuadrant, type EisenhowerTask } from '../lib/eisenhower'
 import { getAllChapters } from '../lib/chapters'
@@ -179,7 +180,6 @@ export default function TodayDashboard() {
 
   const activeSubject = active?.draft?.find(block => block.type === 'WORK' && block.subject_id)?.subject_id
   const activeName = subjects.find(subject => subject.id === activeSubject)?.name || 'Session en cours'
-  const dateLabel = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   const focusRemaining = adhdSprint ? Math.max(0, Math.ceil((adhdSprint.endsAt - activityNow.getTime()) / 1000)) : 0
 
   // Enter is the page-level commitment shortcut. It remains available after a
@@ -325,9 +325,6 @@ export default function TodayDashboard() {
   return (
     <div className="yd-page">
       <CulturalBanner />
-      <header className="yd-header">
-        <div><span className="yd-eyebrow"><Sparkles size={14} /> Votre point d’appui</span><h1>Aujourd’hui</h1><p>{dateLabel} · Une seule prochaine étape, puis le droit de s’arrêter.</p></div>
-      </header>
 
       {active ? (
         <section className="yd-active" aria-labelledby="active-session-title">
@@ -353,6 +350,8 @@ export default function TodayDashboard() {
           </section>
         )
       )}
+
+      <TimeDistributionPanel />
 
       <section className="yd-continuity-row" aria-label="Continuité de l’étude">
         <article className="yd-continuity" aria-labelledby="continuity-title">

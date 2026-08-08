@@ -3856,7 +3856,7 @@ input[type="checkbox"] {
   letter-spacing: 0.08em;
   font-style: normal;
   font-family: var(--font-heading);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* Card frames: sharp edges, primary 1.5px border, hard-edge shadow */

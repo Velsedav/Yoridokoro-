@@ -35,6 +35,7 @@ function isItem(value: unknown): value is RankedItem {
   return typeof item.id === 'string' && categoryIds.includes(item.category as any) &&
     typeof item.title === 'string' && typeof item.creator === 'string' &&
     typeof item.rating === 'number' && typeof item.comparisons === 'number' &&
+    (item.durationMinutes === undefined || (typeof item.durationMinutes === 'number' && Number.isFinite(item.durationMinutes) && item.durationMinutes > 0)) &&
     (item.shelf === undefined || item.shelf === 'collection' || item.shelf === 'watchlist');
 }
 
@@ -79,12 +80,12 @@ export async function restoreBackup(backup: KeystoneBackup, mode: 'replace' | 'm
 const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 
 export function createStatsCsv(items: RankedItem[]): string {
-  const headers = ['category', 'rank', 'title', 'creator', 'year', 'rating', 'wins', 'losses', 'comparisons', 'win_rate', 'genres', 'countries', 'series', 'movement', 'source', 'added_at'];
+  const headers = ['category', 'rank', 'title', 'creator', 'year', 'duration_minutes', 'rating', 'wins', 'losses', 'comparisons', 'win_rate', 'genres', 'countries', 'series', 'movement', 'source', 'added_at'];
   const rows = categoryIds.flatMap((category) => items
     .filter((item) => item.category === category && shelfFor(item) === 'collection')
     .sort((a, b) => b.rating - a.rating)
     .map((item, index) => [
-      category, index + 1, item.title, item.creator, item.year ?? '', item.rating, item.wins, item.losses,
+      category, index + 1, item.title, item.creator, item.year ?? '', item.durationMinutes ?? '', item.rating, item.wins, item.losses,
       item.comparisons, item.comparisons ? (item.wins / item.comparisons).toFixed(4) : '0.0000',
       item.genres.join('|'), item.countries?.join('|') ?? '', item.series ?? '', item.movement ?? '', item.source, item.createdAt
     ]));

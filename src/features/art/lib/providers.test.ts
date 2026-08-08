@@ -28,6 +28,7 @@ describe('TMDB catalogue provider', () => {
         id: 348,
         title: 'Alien',
         release_date: '1979-05-25',
+        runtime: 117,
         poster_path: '/poster.jpg',
         genres: [{ name: 'Science Fiction' }, { name: 'Horror' }],
         belongs_to_collection: { name: 'Alien Collection' },
@@ -39,6 +40,7 @@ describe('TMDB catalogue provider', () => {
 
     expect(movie).toMatchObject({
       source: 'tmdb', sourceId: '348', title: 'Alien', creator: 'Ridley Scott', year: 1979,
+      durationMinutes: 117,
       genres: ['Science Fiction', 'Horror'], series: 'Alien Collection',
       imageUrl: 'https://image.tmdb.org/t/p/w500/poster.jpg'
     });
@@ -221,6 +223,26 @@ describe('MusicBrainz album artwork', () => {
 
     expect(album.imageUrl).toBe('https://coverartarchive.org/example-500.jpg');
     expect(fetchMock.mock.calls[1][0]).toContain('/release-group/c31a5e2b-0bf8-32e0-8aeb-ef4ba9973932');
+  });
+
+  it('loads only the selected album runtime and sums its track lengths', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ 'release-groups': [{
+        id: 'album-id', title: 'A Short Album', 'artist-credit': [{ name: 'Artist' }], tags: []
+      }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response('', { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ releases: [{ media: [{ tracks: [
+        { length: 180_000 }, { recording: { length: 210_000 } }
+      ] }] }] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const [result] = await musicBrainz.search('A Short Album', 'albums');
+    expect(result.durationMinutes).toBeUndefined();
+
+    const detailed = await musicBrainz.hydrate!(result);
+    expect(detailed.durationMinutes).toBe(7);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][0]).toContain('release-group=album-id');
   });
 
   it('keeps every exact album-title match instead of losing matches after the first twelve', async () => {

@@ -8,6 +8,7 @@ type SearchProvider = {
   activeSourceLabel?: () => string;
   notice?: () => string;
   search: (query: string, category: CategoryId, signal?: AbortSignal) => Promise<ImportedItem[]>;
+  hydrate?: (item: ImportedItem, signal?: AbortSignal) => Promise<ImportedItem>;
 };
 
 const yearFrom = (value?: string | number) => {
@@ -242,6 +243,18 @@ export const musicBrainz: SearchProvider = {
         : undefined,
       genres: (entry.tags ?? []).slice(0, 4).map((tag) => tag.name).filter((name): name is string => Boolean(name))
     })));
+  },
+  async hydrate(item, signal) {
+    const response = await fetch(`https://musicbrainz.org/ws/2/release?release-group=${encodeURIComponent(item.sourceId)}&inc=recordings&fmt=json&limit=1`, {
+      signal,
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) return item;
+    const data = await response.json() as { releases?: Array<{ media?: Array<{ tracks?: Array<{ length?: number; recording?: { length?: number } }> }> }> };
+    const release = data.releases?.[0];
+    const durationMs = release?.media?.flatMap((medium) => medium.tracks ?? [])
+      .reduce((total, track) => total + Math.max(0, Number(track.length ?? track.recording?.length) || 0), 0) ?? 0;
+    return durationMs > 0 ? { ...item, durationMinutes: Math.max(1, Math.round(durationMs / 60_000)) } : item;
   }
 };
 
@@ -348,6 +361,7 @@ export const tmdb: SearchProvider = {
           title: details.title ?? result.title ?? 'Untitled',
           creator: directors?.join(', ') || 'Unknown director',
           year: yearFrom(details.release_date ?? result.release_date),
+          durationMinutes: Number(details.runtime) > 0 ? Math.round(Number(details.runtime)) : undefined,
           imageUrl: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : undefined,
           genres: details.genres?.map((genre: any) => genre.name).filter(Boolean) ?? [],
           countries: details.production_countries?.map((country: any) => country.name).filter(Boolean) ?? [],

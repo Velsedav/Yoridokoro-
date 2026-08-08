@@ -23,6 +23,12 @@ if (process.platform === 'linux') {
 // ── SQLite setup ──────────────────────────────────────────────────────────────
 
 const userData = app.getPath('userData')
+// The development renderer runs on localhost while the packaged app runs from
+// file://, but Chromium would otherwise make both processes share QuotaManager
+// and cache files. A release left open could then make IndexedDB fail in dev
+// with an opaque UnknownError. Keep SQLite data shared for realistic testing,
+// while isolating Chromium's session storage in development.
+if (!app.isPackaged) app.setPath('sessionData', path.join(userData, 'dev-session'))
 let mainDb: Database.Database
 let bingoDb: Database.Database
 
