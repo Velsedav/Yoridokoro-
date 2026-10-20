@@ -84,7 +84,7 @@ export default function TimeDistributionPanel() {
     </div>
 
     <ul className="yd-time-legend">
-      {distribution.segments.map(segment => <li key={segment.category}>
+      {distribution.segments.filter(segment => segment.seconds > 0).map(segment => <li key={segment.category}>
         <i className={`yd-time-key yd-time-key--${segment.category}`} aria-hidden="true" />
         <span>{t(`time_distribution.category_${segment.category}`)}</span>
         <strong>{segment.percent}%</strong>

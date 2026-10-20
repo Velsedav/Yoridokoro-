@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BarChart3, BookOpen, Building2, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardCopy,
@@ -13,6 +13,7 @@ import { providerFor } from './lib/providers';
 import type { ArtQuote, CategoryId, ImportedItem, RankedItem } from './types';
 import { categories } from './types';
 import { useModalFocus } from './hooks/useModalFocus';
+import { dialogFocusables } from '../../hooks/useDialogFocus';
 import { imageFileToDataUrl } from './lib/images';
 import { categoryCopy, I18nProvider, localeFor, useI18n, useTranslator } from './lib/i18n';
 import { buildCategoryStatistics } from './lib/statistics';
@@ -101,13 +102,14 @@ function EmptyState({ shelf, onAdd }: { shelf: ArtShelf; onAdd: () => void }) {
   );
 }
 
-function Ladder({ items, fullRanking, periodRank, shelf, onSelect, onAction }: {
+function Ladder({ items, fullRanking, periodRank, shelf, onSelect, onAction, rowHeight = 70 }: {
   items: RankedItem[];
   fullRanking: RankedItem[];
   periodRank?: PeriodRankContext;
   shelf: ArtShelf;
   onSelect: (item: RankedItem) => void;
   onAction: (item: RankedItem) => void;
+  rowHeight?: number;
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLOListElement>(null);
@@ -120,11 +122,12 @@ function Ladder({ items, fullRanking, periodRank, shelf, onSelect, onAction }: {
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement,
-    estimateSize: () => 70,
+    estimateSize: () => rowHeight,
     overscan: 8,
     getItemKey: (index) => items[index].id,
     scrollMargin
   });
+  useLayoutEffect(() => { virtualizer.measure(); }, [rowHeight, virtualizer]);
   useLayoutEffect(() => {
     const measure = () => {
       if (!listRef.current) return;
@@ -142,7 +145,7 @@ function Ladder({ items, fullRanking, periodRank, shelf, onSelect, onAction }: {
   }, [getScrollElement, items.length]);
 
   return (
-    <div className={`ladder-shell ${shelf === 'watchlist' ? 'ladder-shell--watchlist' : ''}`}>
+    <div className={`ladder-shell ${shelf === 'watchlist' ? 'ladder-shell--watchlist' : ''}`} style={{ '--art-list-row-height': `${rowHeight}px` } as CSSProperties}>
       <div className="table-head" aria-hidden="true">{shelf === 'collection' ? <><span>{t('Rank')}</span><span>{t('Work')}</span><span className="details-head">{t('Details')}</span><span className="country-head">{t('Country')}</span><span className="record-head">{t('Record')}</span><span>{t('Rating')}</span></> : <><span>{t('Work')}</span><span>{t('Details')}</span><span>{t('Country')}</span><span>{t('Added')}</span></>}</div>
       <ol ref={listRef} className="ladder-list" aria-label={`${t('Collection')}, ${items.length}`} style={{ height: `${virtualizer.getTotalSize()}px` }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
@@ -293,53 +296,41 @@ function Sparkline({ values }: { values: number[] }) {
 }
 
 function StatisticsDashboard({ items, matches, loading, onSelect, onFight }: {
-  items: RankedItem[];
-  matches: MatchRecord[];
-  loading: boolean;
-  onSelect: (item: RankedItem) => void;
-  onFight: (item: RankedItem) => void;
+  items: RankedItem[]; matches: MatchRecord[]; loading: boolean;
+  onSelect: (item: RankedItem) => void; onFight: (item: RankedItem) => void;
 }) {
   const { t, language } = useI18n();
   const statistics = useMemo(() => buildCategoryStatistics(items, matches), [items, matches]);
   const coverage = items.length ? Math.round((statistics.comparedItems / items.length) * 100) : 0;
   const formatDate = (value: string) => new Intl.DateTimeFormat(localeFor(language), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value));
-
-  if (loading) return <section className="statistics-page"><div className="statistics-loading"><LoaderCircle className="spin" />{t('Calculating statistics…')}</div></section>;
-  return <section className="statistics-page" aria-labelledby="statistics-heading">
-    <div className="statistics-heading"><div><span className="eyebrow"><BarChart3 size={14} />{t('Your data')}</span><h2 id="statistics-heading">{t('Statistics')}</h2><p>{t('A live view of how your ranking is taking shape.')}</p></div><span>{t('Based on {count} recorded decisions', { count: statistics.decisions })}</span></div>
-
+  if (loading) return <section className="statistics-page"><div className="statistics-loading" role="status"><LoaderCircle className="spin" />{t('Calculating statistics…')}</div></section>;
+  return <section className="statistics-page statistics-page--editorial" aria-labelledby="statistics-heading">
+    <div className="statistics-heading"><h2 id="statistics-heading">{t('Statistics')}</h2><span>{items.length} {t('Works')}</span></div>
     <div className="statistics-summary">
       <article><small>{t('Coverage')}</small><strong>{coverage}%</strong><span>{statistics.comparedItems} / {items.length} {t('items compared')}</span><i><b style={{ width: `${coverage}%` }} /></i></article>
-      <article><small>{t('Average experience')}</small><strong>{statistics.averageComparisons.toFixed(1)}</strong><span>{t('duels per item')}</span></article>
-      <article><small>{t('Settled items')}</small><strong>{items.filter((item) => !isProvisional(item)).length}</strong><span>{t('with 8 or more duels')}</span></article>
+      <article><small>{t('Recorded duels')}</small><strong>{statistics.decisions}</strong><span>{t('Average experience')} · {statistics.averageComparisons.toFixed(1)}</span></article>
+      <article><small>{t('Settled items')}</small><strong>{items.filter(item => !isProvisional(item)).length}</strong><span>{t('with 8 or more duels')}</span></article>
     </div>
-
-    {statistics.decisions === 0 ? <div className="statistics-empty"><Swords /><h3>{t('No duel history yet')}</h3><p>{t('Make a few choices and this dashboard will start revealing patterns.')}</p></div> : <div className="statistics-grid">
-      <article className="statistics-panel statistics-panel--wide">
-        <header><div><h3>{t('Rating evolution')}</h3><p>{t('Your current top five across their latest duels')}</p></div></header>
-        <div className="evolution-list">{statistics.ratingSeries.map(({ item, ratings }, index) => <button key={item.id} onClick={() => onSelect(item)}><span className="evolution-rank">#{index + 1}</span><Artwork item={item} size="small" /><span className="evolution-name"><strong>{item.title}</strong><small>{item.creator}</small></span><Sparkline values={ratings} /><b>{Math.round(item.rating)}</b></button>)}</div>
-      </article>
-
-      <article className="statistics-panel">
-        <header><div><h3>{t('Biggest movers')}</h3><p>{t('Net change over the latest 50 decisions')}</p></div></header>
-        <ol className="mover-list">{statistics.biggestMovers.map(({ item, change, decisions }) => <li key={item.id}><button onClick={() => onSelect(item)}><Artwork item={item} size="small" /><span><strong>{item.title}</strong><small>{decisions} {t('recent duels')}</small></span><b className={change >= 0 ? 'positive' : 'negative'}>{change >= 0 ? '+' : ''}{Math.round(change)}</b></button></li>)}</ol>
-      </article>
-
-      <article className="statistics-panel">
-        <header><div><h3>{t('Needs more decisions')}</h3><p>{t('The least-tested items in this collection')}</p></div></header>
-        <ol className="uncertain-list">{statistics.uncertainItems.map((item) => <li key={item.id}><button onClick={() => onFight(item)}><span><strong>{item.title}</strong><small>{item.creator}</small></span><b>{item.comparisons}<small>/ 8</small></b><Swords size={15} /></button></li>)}</ol>
-      </article>
-
-      <article className="statistics-panel">
-        <header><div><h3>{t('Favorites by classification')}</h3><p>{t('Leaders within your genres, series, and movements')}</p></div></header>
-        {statistics.classificationFavorites.length ? <ol className="classification-list">{statistics.classificationFavorites.map(({ classification, item, itemCount }) => <li key={classification}><button onClick={() => onSelect(item)}><span><small>{classification} · {itemCount}</small><strong>{item.title}</strong></span><b>{Math.round(item.rating)}</b></button></li>)}</ol> : <p className="panel-empty">{t('Add genres, series, or movements to see this breakdown.')}</p>}
-      </article>
-
-      <article className="statistics-panel statistics-panel--history">
-        <header><div><h3>{t('Recent decisions')}</h3><p>{t('Your latest head-to-head choices')}</p></div></header>
-        <ol className="decision-list">{statistics.recentDecisions.map(({ match, winner, loser, change }) => <li key={match.id}><span className="decision-mark"><Check size={14} /></span><span><strong>{winner.title}</strong><small>{t('won against')} {loser.title}</small></span><b>+{Math.round(change)}</b><time dateTime={match.createdAt}>{formatDate(match.createdAt)}</time></li>)}</ol>
-      </article>
-    </div>}
+    {statistics.decisions === 0 ? <div className="statistics-empty"><Swords /><h3>{t('No duel history yet')}</h3>{items.length >= 2 && <button className="button button--primary" onClick={() => onFight(items[0])}><Swords size={16} />{t('Start a duel')}</button>}</div> : <>
+      <div className="statistics-grid statistics-primary-grid">
+        <article className="statistics-panel statistics-panel--evolution">
+          <header><h3>{t('Rating evolution')}</h3><small>{t('Top five')}</small></header>
+          <div className="evolution-list">{statistics.ratingSeries.map(({ item, ratings }, index) => <button key={item.id} onClick={() => onSelect(item)}><span className="evolution-rank">#{index + 1}</span><Artwork item={item} size="small" /><span className="evolution-name"><strong>{item.title}</strong><small>{item.creator}</small></span><Sparkline values={ratings} /><b title={t('Elo rating')}>{Math.round(item.rating)}</b></button>)}</div>
+        </article>
+        <article className="statistics-panel statistics-panel--next">
+          <header><h3>{t('Needs more decisions')}</h3><Swords size={17} aria-hidden="true" /></header>
+          <ol className="uncertain-list">{statistics.uncertainItems.map(item => <li key={item.id}><button onClick={() => onFight(item)}><Artwork item={item} size="small" /><span><strong>{item.title}</strong><small>{item.comparisons} {t('duels')}</small></span><ArrowRight size={17} /></button></li>)}</ol>
+        </article>
+        <article className="statistics-panel statistics-panel--movements">
+          <header><h3>{t('Biggest movers')}</h3><small>{t('Last 50 decisions')}</small></header>
+          <ol className="mover-list">{statistics.biggestMovers.map(({ item, change }) => <li key={item.id}><button onClick={() => onSelect(item)}><Artwork item={item} size="small" /><span><strong>{item.title}</strong><small>{item.creator}</small></span><b className={change >= 0 ? 'positive' : 'negative'}>{change >= 0 ? '+' : ''}{Math.round(change)}</b></button></li>)}</ol>
+        </article>
+      </div>
+      <div className="statistics-secondary-grid">
+        <details className="statistics-panel statistics-disclosure"><summary><h3>{t('Favorites by classification')}</h3><ChevronDown size={17} /></summary>{statistics.classificationFavorites.length ? <ol className="classification-list">{statistics.classificationFavorites.map(({ classification, item, itemCount }) => <li key={classification}><button onClick={() => onSelect(item)}><span><small>{classification} · {itemCount}</small><strong>{item.title}</strong></span><b>{Math.round(item.rating)}</b></button></li>)}</ol> : <p className="panel-empty">{t('Add genres, series, or movements to see this breakdown.')}</p>}</details>
+        <details className="statistics-panel statistics-disclosure"><summary><h3>{t('Recent decisions')}</h3><small>{statistics.recentDecisions.length}</small><ChevronDown size={17} /></summary><ol className="decision-list">{statistics.recentDecisions.map(({ match, winner, loser, change }) => <li key={match.id}><span className="decision-mark"><Check size={14} /></span><span><strong>{winner.title}</strong><small>{t('won against')} {loser.title}</small></span><b>+{Math.round(change)}</b><time dateTime={match.createdAt}>{formatDate(match.createdAt)}</time></li>)}</ol></details>
+      </div>
+    </>}
   </section>;
 }
 
@@ -355,6 +346,8 @@ function DuelView({ pair, onChoose, onSkip, onUndo, onExit, shortcuts, canUndo, 
   headerAction?: ReactNode;
 }) {
   const { t } = useI18n();
+  const viewRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => { viewRef.current?.scrollIntoView({ block: 'start' }); }, []);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (!pair || busy || event.repeat || isEditingText(event)) return;
@@ -369,26 +362,25 @@ function DuelView({ pair, onChoose, onSkip, onUndo, onExit, shortcuts, canUndo, 
     return () => window.removeEventListener('keydown', keydown);
   }, [pair, onChoose, onSkip, onUndo, onExit, shortcuts, canUndo, busy]);
 
-  if (!pair) return <EmptyState onAdd={onExit} />;
+  if (!pair) return <section ref={viewRef} className="duel-view"><div className="statistics-empty"><Swords /><h2>{t('No pairing available')}</h2><button className="button button--outline" onClick={onExit}><ArrowLeft size={17} />{t('Back to ladder')}</button></div></section>;
   return (
-    <section className="duel-view" aria-labelledby="duel-title">
+    <section ref={viewRef} className="duel-view duel-view--gallery" aria-labelledby="duel-title" aria-busy={busy}>
       <div className="duel-toolbar">
         <button className="back-button" onClick={onExit}><ArrowLeft size={17} />{t('Back to ladder')}</button>
         {headerAction}
       </div>
-      <div className="duel-heading"><span className="eyebrow"><Swords size={14} />{t('Head to head')}</span><h1 id="duel-title">{t('Which stays with you?')}</h1><p>{t('Trust the instinct. You can always change the order later.')}</p></div>
+      <div className="duel-heading"><h1 id="duel-title">{t('Which stays with you?')}</h1></div>
       <div className="duel-grid">
         {pair.map((item, index) => (
-          <button key={item.id} className="duel-card" disabled={busy} onClick={() => onChoose(item, pair[index === 0 ? 1 : 0])}>
+          <button key={item.id} className={`duel-card duel-card--${item.category}`} aria-label={`${t('Choose this one')} : ${item.title}`} disabled={busy} onClick={() => onChoose(item, pair[index === 0 ? 1 : 0])}>
             <Artwork item={item} size="large" />
             <span className="duel-key">{shortcutLabel(index === 0 ? shortcuts.duelLeft : shortcuts.duelRight)}</span>
-            <span className="duel-copy"><small>{item.year ?? t('Year unknown')} · {item.genres[0] ?? categoryCopy(item.category, t).label}</small><strong>{item.title}</strong><span>{item.creator}</span></span>
-            <span className="choose-label"><Check size={16} />{t('Choose this one')}</span>
+            <span className="duel-copy"><small>{item.year ?? t('Year unknown')} · {item.genres[0] ?? categoryCopy(item.category, t).label}</small><strong title={item.title}>{item.title}</strong><span title={item.creator}>{item.creator}</span></span>
           </button>
         ))}
-        <span className="versus" aria-hidden="true">{t('or')}</span>
+        <span className="versus" aria-hidden="true">VS</span>
       </div>
-      <div className="duel-footer"><div className="duel-footer-actions"><button className="text-button" onClick={onSkip} disabled={busy}>{t('Skip pairing')} <kbd>{shortcutLabel(shortcuts.duelSkip)}</kbd></button><button className="text-button undo-choice" onClick={onUndo} disabled={!canUndo || busy}><Undo2 size={13} />{t('Undo last choice')} <kbd>{shortcutLabel(shortcuts.duelUndo)}</kbd></button></div><span><kbd>{shortcutLabel(shortcuts.duelLeft)}</kbd> {t('left')} · <kbd>{shortcutLabel(shortcuts.duelRight)}</kbd> {t('right')} · <kbd>Esc</kbd> {t('exit')}</span></div>
+      <div className="duel-footer"><div className="duel-footer-actions"><button className="text-button" onClick={onSkip} disabled={busy}>{t('Skip pairing')} <kbd>{shortcutLabel(shortcuts.duelSkip)}</kbd></button><button className="text-button undo-choice" onClick={onUndo} disabled={!canUndo || busy}><Undo2 size={13} />{t('Undo last choice')} <kbd>{shortcutLabel(shortcuts.duelUndo)}</kbd></button></div><span className="duel-save-state" role="status">{busy ? t('Saving choice…') : <><kbd>Esc</kbd> {t('exit')}</>}</span></div>
     </section>
   );
 }
@@ -562,10 +554,10 @@ function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onM
               <div><dt>{t('Added')}</dt><dd>{new Date(item.createdAt).toLocaleDateString(localeFor(language))}</dd></div>
             </dl>
           </div>
-          <div className="drawer-content-column">
+          {(quotesForItem(item).length > 0 || item.notes?.trim()) && <div className="drawer-content-column">
             <QuoteCarousel item={item} />
             {item.notes && <section className="item-notes drawer-note-footer" aria-labelledby="item-notes-title"><h3 id="item-notes-title">{t('Personal note')}</h3><p>{item.notes}</p></section>}
-          </div>
+          </div>}
           <section className="drawer-management" aria-labelledby="drawer-management-title">
             <h3 id="drawer-management-title">{t('Manage this item')}</h3>
             <div className="drawer-management-actions">
@@ -626,6 +618,52 @@ function metadataSuggestions(existing: RankedItem[], category: CategoryId, exclu
   };
 }
 
+export function ArtworkFormFields({ form, category, existing, excludeId, onChange, categoryPicker }: {
+  form: AddForm; category: CategoryId; existing: RankedItem[]; excludeId?: string;
+  onChange: (form: AddForm) => void; categoryPicker?: ReactNode;
+}) {
+  const { t } = useI18n();
+  const id = useId();
+  const suggestions = useMemo(() => metadataSuggestions(existing, category, excludeId), [existing, category, excludeId]);
+  const update = (key: keyof AddForm, value: string) => onChange({ ...form, [key]: value });
+  return <div className="art-form-content">
+    {categoryPicker}
+    <div className="art-form-essentials">
+      <div className="art-form-cover"><CoverPicker value={form.imageUrl} onChange={value => update('imageUrl', value)} /></div>
+      <div className="art-form-identity">
+        <label className="field"><span>{t('Title')} <i>{t('required')}</i></span><input data-add-primary required value={form.title} onChange={event => update('title', event.target.value)} /></label>
+        <SuggestionField label={t('Creator')} value={form.creator} options={suggestions.creators} onChange={value => update('creator', value)} placeholder={['books', 'essays', 'poems'].includes(category) ? t('Author') : category === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
+      </div>
+    </div>
+    <details className="art-form-disclosure"><summary>{t('Details')}<ChevronDown size={16} /></summary><div className="field-grid">
+      <label className="field"><span>{t('Year')}</span><input list={`${id}-years`} inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} onChange={event => update('year', event.target.value)} /><datalist id={`${id}-years`}>{suggestions.years.map(value => <option key={value} value={value} />)}</datalist></label>
+      {['movies', 'albums'].includes(category) && <label className="field"><span>{t('Duration (minutes)')}</span><input type="number" min="1" step="1" value={form.durationMinutes} onChange={event => update('durationMinutes', event.target.value)} /></label>}
+      <TagSuggestionField label={t('Genre / type')} value={form.genre} options={suggestions.genres} onChange={value => update('genre', value)} placeholder={t('Add a genre or type')} />
+      <TagSuggestionField label={t('Country')} value={form.country} options={suggestions.countries} onChange={value => update('country', value)} placeholder={t('Add a country')} />
+      <SuggestionField label={t('Series / collection')} value={form.series} options={suggestions.series} onChange={value => update('series', value)} placeholder={t('Optional')} />
+      {['paintings', 'sculptures'].includes(category) && <SuggestionField label={t('Artistic movement')} value={form.movement} options={suggestions.movements} onChange={value => update('movement', value)} placeholder={t('Optional')} />}
+    </div></details>
+    <details className="art-form-disclosure"><summary>{t('Quotes')}{form.quotes.length > 0 && <small>{form.quotes.length}</small>}<ChevronDown size={16} /></summary><QuoteFields quotes={form.quotes} onChange={quotes => onChange({ ...form, quotes })} /></details>
+    <details className="art-form-disclosure"><summary>{t('Personal notes')}{form.notes.trim() && <small>{t('Saved text')}</small>}<ChevronDown size={16} /></summary><label className="field"><span className="sr-only">{t('Notes')}</span><textarea rows={4} value={form.notes} onChange={event => update('notes', event.target.value)} placeholder={t('Why it matters, edition, location…')} /></label></details>
+  </div>;
+}
+
+export function advanceArtworkField(event: ReactKeyboardEvent<HTMLFormElement>) {
+  if (event.defaultPrevented || event.isComposing || event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+  const target = event.target as HTMLElement;
+  if (!target.matches('input:not([type="file"]), select')) return;
+  event.preventDefault();
+  const controls = dialogFocusables(event.currentTarget).filter(element => element.matches('input:not([type="file"]),select,textarea,summary,button[type="submit"]'));
+  controls[Math.min(controls.indexOf(target) + 1, controls.length - 1)]?.focus();
+}
+
+export function revealInvalidArtworkField(event: React.FormEvent<HTMLFormElement>) {
+  const field = event.target as HTMLElement;
+  let details = field.closest('details');
+  while (details) { details.open = true; details = details.parentElement?.closest('details') ?? null; }
+  requestAnimationFrame(() => field.focus());
+}
+
 function EditItemModal({ item, existing, onClose, onSave }: {
   item: RankedItem;
   existing: RankedItem[];
@@ -637,10 +675,8 @@ function EditItemModal({ item, existing, onClose, onSave }: {
   const [form, setForm] = useState<AddForm>(() => formForItem(item));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const { creators, genres, countries, series, movements, years } = useMemo(() => metadataSuggestions(existing, item.category, item.id), [existing, item.category, item.id]);
   const definition = categoryCopy(item.category, t);
   useModalFocus(ref, onClose);
-  const update = (key: keyof AddForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.title.trim()) { setError(t('Title is required.')); return; }
@@ -648,30 +684,11 @@ function EditItemModal({ item, existing, onClose, onSave }: {
     try { await onSave(form); onClose(); }
     catch { setError(t('Could not save these changes. Your previous details are unchanged.')); setSaving(false); }
   };
-  const advanceOnEnter = (event: ReactKeyboardEvent<HTMLFormElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey || (event.target as HTMLElement).tagName === 'TEXTAREA') return;
-    const target = event.target as HTMLElement;
-    event.preventDefault();
-    const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('input, textarea, button[type="submit"]')).filter((element) => !(element as HTMLInputElement).disabled);
-    controls[Math.min(controls.indexOf(target) + 1, controls.length - 1)]?.focus();
-  };
   return <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <div ref={ref} className="modal edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-item-title">
-      <div className="modal-head"><div><span className="eyebrow">{t('Edit')} {definition.singular.toLocaleLowerCase()}</span><h2 id="edit-item-title">{t('Update the details')}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('Close editor')}><X /></button></div>
-      <form className="details-form" onSubmit={submit} onKeyDown={advanceOnEnter}>
-        <p className="form-intro">{t('Start typing to choose an existing value, or finish typing to create a new one. Press Enter or Tab to advance.')}</p>
-        <div className="field-grid">
-          <label className="field field--wide"><span>{t('Title')} <i>{t('required')}</i></span><input required value={form.title} onChange={(event) => update('title', event.target.value)} /></label>
-          <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={item.category === 'books' || item.category === 'essays' ? t('Author') : item.category === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
-          <label className="field"><span>{t('Year')}</span><input list="edit-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} onChange={(event) => update('year', event.target.value)} /><datalist id="edit-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>
-          {(item.category === 'movies' || item.category === 'albums') && <label className="field"><span>{t('Duration (minutes)')}</span><input type="number" min="1" step="1" inputMode="numeric" value={form.durationMinutes} onChange={(event) => update('durationMinutes', event.target.value)} placeholder={t('Optional')} /></label>}
-          <TagSuggestionField label={t('Genre / type')} value={form.genre} options={genres} onChange={(value) => update('genre', value)} placeholder={t('Add a genre or type')} />
-          <TagSuggestionField label={t('Country')} value={form.country} options={countries} onChange={(value) => update('country', value)} placeholder={t('Add a country')} />
-          <SuggestionField label={t('Series / collection')} value={form.series} options={series} onChange={(value) => update('series', value)} placeholder={t('Optional')} />
-          {(item.category === 'paintings' || item.category === 'sculptures') && <SuggestionField label={t('Artistic movement')} value={form.movement} options={movements} onChange={(value) => update('movement', value)} placeholder={t('Optional')} />}
-          <QuoteFields quotes={form.quotes} onChange={(quotes) => setForm((current) => ({ ...current, quotes }))} />
-          <label className="field field--wide"><span>{t('Notes')}</span><textarea rows={5} value={form.notes} onChange={(event) => update('notes', event.target.value)} placeholder={t('Why it matters, edition, location…')} /></label>
-        </div>
+    <div ref={ref} className="modal edit-modal art-editor-modal" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="edit-item-title">
+      <div className="modal-head"><div><span className="eyebrow">{t('Edit')} {definition.singular.toLocaleLowerCase()}</span><h2 id="edit-item-title">{item.title}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('Close editor')}><X /></button></div>
+      <form className="details-form" onSubmit={submit} onKeyDown={advanceArtworkField} onInvalidCapture={revealInvalidArtworkField}>
+        <ArtworkFormFields form={form} category={item.category} existing={existing} excludeId={item.id} onChange={setForm} />
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="modal-actions"><span>{definition.label}</span><button className="button button--primary" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" /> : <Check />}{t('Save changes')}</button></div>
       </form>
@@ -724,10 +741,10 @@ function CompletionModeModal({ item, existing, current, total, onClose, onSave, 
   };
 
   return <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-    <div ref={ref} className="modal completion-modal" role="dialog" aria-modal="true" aria-labelledby="completion-title" aria-describedby="completion-instructions">
+    <div ref={ref} className="modal completion-modal" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="completion-title">
       <div className="modal-head"><div><span className="eyebrow" role="status"><ListTodo size={14} />{t('Completion mode')} · {t('Item {current} of {total}', { current, total })}</span><h2 id="completion-title">{item.title}</h2><p>{item.creator}{item.year ? ` · ${item.year}` : ''}</p></div><button className="icon-button" onClick={onClose} aria-label={t('Exit completion mode')}><X /></button></div>
       <form className="details-form completion-form" onSubmit={submit} onKeyDown={advanceOnEnter}>
-        <p id="completion-instructions" className="form-intro">{t('Only missing fields are shown. Press Enter to continue; the last field saves and opens the next item.')}</p>
+        <div className="completion-progress" role="progressbar" aria-label={t('Completion mode')} aria-valuemin={0} aria-valuemax={total} aria-valuenow={current - 1}><span style={{ width: `${((current - 1) / total) * 100}%` }} /></div>
         <div className="field-grid completion-fields">
           {fields.map((field) => field === 'creator' ? <SuggestionField key={field} completionField label={labels[field]} value={form.creator} options={creators} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'genre' ? <TagSuggestionField key={field} completionField label={labels[field]} value={form.genre} options={genres} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'country' ? <TagSuggestionField key={field} completionField label={labels[field]} value={form.country} options={countries} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'series' ? <SuggestionField key={field} completionField label={labels[field]} value={form.series} options={series} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : field === 'movement' ? <SuggestionField key={field} completionField label={labels[field]} value={form.movement} options={movements} onChange={(value) => update(field, value)} placeholder={placeholders[field]} /> : <label key={field} className="field"><span>{labels[field]}</span><input data-completion-field list="completion-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} placeholder={placeholders[field]} autoComplete="off" onChange={(event) => update(field, event.target.value)} /><datalist id="completion-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>)}
         </div>
@@ -760,10 +777,13 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
   const [catalogueSource, setCatalogueSource] = useState('');
   const provider = providerFor(itemCategory);
   const definition = categoryCopy(itemCategory, t);
-  const { creators, genres, countries, series, movements, years } = useMemo(() => metadataSuggestions(existing, itemCategory), [existing, itemCategory]);
   useModalFocus(ref, onClose, '[data-add-primary]');
+  useEffect(() => {
+    if (mode !== 'manual' && !selected) return;
+    const frame = requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>('[data-add-primary]')?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [mode, selected]);
 
-  const update = (key: keyof AddForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const selectResult = async (item: ImportedItem) => {
     setLoading(true);
     let detailed = item;
@@ -800,18 +820,9 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
     try { await onSave(form, itemCategory, selected); onClose(); }
     catch { setError(t('Could not save this item.')); setSaving(false); }
   };
-  const advanceOnEnter = (event: ReactKeyboardEvent<HTMLFormElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey || (event.target as HTMLElement).tagName === 'TEXTAREA') return;
-    const target = event.target as HTMLElement;
-    if (target.tagName === 'BUTTON') return;
-    event.preventDefault();
-    const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('select, input, textarea, button[type="submit"]')).filter((el) => !(el as HTMLInputElement).disabled && !el.hasAttribute('hidden'));
-    controls[Math.min(controls.indexOf(target) + 1, controls.length - 1)]?.focus();
-  };
-
   return (
     <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div ref={ref} className="modal add-modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
+      <div ref={ref} className="modal add-modal art-editor-modal" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="add-title">
         <div className="modal-head"><div><span className="eyebrow">{shelf === 'collection' ? `${t('Add to')} ${definition.label}` : t('Add to watchlist')}</span><h2 id="add-title">{selected ? t('Check the details') : `${t('Find a')} ${definition.singular.toLocaleLowerCase()}`}</h2></div><button className="icon-button" onClick={onClose} aria-label={t('Close')}><X /></button></div>
         {!selected && provider && (
           <div className="segmented" aria-label={t('Add method')}>
@@ -837,25 +848,10 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
             </ul> : !loading && query && <div className="result-placeholder"><Search /><p>{t('Search the catalogue, then select the closest match.')}</p></div>}
           </div>
         ) : (
-          <form className="details-form" onSubmit={submit} onKeyDown={advanceOnEnter}>
-            {selected && <button type="button" className="back-button" onClick={() => { setSelected(undefined); setForm(blankForm); }}><ArrowLeft size={16} />{t('Back to results')}</button>}
-            <p className="form-intro">{t('Required fields are marked. Empty catalogue fields are ready for you—press Enter or Tab to move forward.')}</p>
-            <div className="field-grid">
-              {mode === 'manual' && <label className="field field--wide"><span>{t('Category')} <i>{t('required')}</i></span><select value={itemCategory} onChange={(event) => setItemCategory(event.target.value as CategoryId)}>{categories.map((entry) => <option key={entry.id} value={entry.id}>{categoryCopy(entry.id, t).label}</option>)}</select></label>}
-              <div className="field--wide"><CoverPicker value={form.imageUrl} onChange={(value) => update('imageUrl', value)} /></div>
-              <label className="field field--wide"><span>{t('Title')} <i>{t('required')}</i></span><input data-add-primary required value={form.title} onChange={(e) => update('title', e.target.value)} /></label>
-              <SuggestionField label={t('Creator')} value={form.creator} options={creators} onChange={(value) => update('creator', value)} placeholder={itemCategory === 'books' || itemCategory === 'essays' || itemCategory === 'poems' ? t('Author') : itemCategory === 'comics' ? t('Writer, artist, or studio') : t('Artist, architect, or studio')} />
-              <label className="field"><span>{t('Year')}</span><input list="add-years" inputMode="numeric" pattern="[0-9]{1,4}" value={form.year} onChange={(e) => update('year', e.target.value)} placeholder="1968" /><datalist id="add-years">{years.map((value) => <option key={value} value={value} />)}</datalist></label>
-              {(itemCategory === 'movies' || itemCategory === 'albums') && <label className="field"><span>{t('Duration (minutes)')}</span><input type="number" min="1" step="1" inputMode="numeric" value={form.durationMinutes} onChange={(event) => update('durationMinutes', event.target.value)} placeholder={t('Optional')} /></label>}
-              <TagSuggestionField label={t('Genre / type')} value={form.genre} options={genres} onChange={(value) => update('genre', value)} placeholder={t('Add a genre or type')} />
-              <TagSuggestionField label={t('Country')} value={form.country} options={countries} onChange={(value) => update('country', value)} placeholder={t('Add a country')} />
-              <SuggestionField label={t('Series / collection')} value={form.series} options={series} onChange={(value) => update('series', value)} placeholder={t('Optional')} />
-              {(itemCategory === 'paintings' || itemCategory === 'sculptures') && <SuggestionField label={t('Artistic movement')} value={form.movement} options={movements} onChange={(value) => update('movement', value)} placeholder={t('Optional')} />}
-              <QuoteFields quotes={form.quotes} onChange={(quotes) => setForm((current) => ({ ...current, quotes }))} />
-              <label className="field field--wide"><span>{t('Notes')}</span><textarea rows={3} value={form.notes} onChange={(e) => update('notes', e.target.value)} placeholder={t('Why it matters, edition, location…')} /></label>
-            </div>
+          <form className="details-form" onSubmit={submit} onKeyDown={advanceArtworkField} onInvalidCapture={revealInvalidArtworkField}>
+            <ArtworkFormFields form={form} category={itemCategory} existing={existing} onChange={setForm} categoryPicker={mode === 'manual' && <label className="field art-form-category"><span>{t('Category')}</span><select value={itemCategory} onChange={event => setItemCategory(event.target.value as CategoryId)}>{categories.map(entry => <option key={entry.id} value={entry.id}>{categoryCopy(entry.id, t).label}</option>)}</select></label>} />
             {error && <p className="form-error" role="alert">{error}</p>}
-            <div className="modal-actions"><span>{shelf === 'collection' && <><Zap size={15} />{t('New items enter fast-track placement')}</>}</span><button className="button button--primary" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}{shelf === 'collection' ? t('Add to ladder') : t('Add to watchlist')}</button></div>
+            <div className="modal-actions modal-actions--submit"><button className="button button--primary" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Check size={17} />}{shelf === 'collection' ? t('Add to ladder') : t('Add to watchlist')}</button></div>
           </form>
         )}
       </div>
@@ -863,7 +859,7 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
   );
 }
 
-export default function App({ headerAction }: { headerAction?: ReactNode } = {}) {
+export default function App({ headerAction, design }: { headerAction?: ReactNode; design?: 'rework' } = {}) {
   const [items, setItems] = useState<RankedItem[]>([]);
   const [category, setCategory] = useState<CategoryId>('books');
   const [loading, setLoading] = useState(true);
@@ -888,8 +884,12 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   const [recentOpponents, setRecentOpponents] = useState<string[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const [decisionPending, setDecisionPending] = useState(false);
-  const [collectionView, setCollectionView] = useState<'ladder' | 'covers'>(() => localStorage.getItem('keystone-collection-view') === 'covers' ? 'covers' : 'ladder');
+  const [collectionView, setCollectionView] = useState<'ladder' | 'covers'>(() => localStorage.getItem(design === 'rework' ? 'rework-collection-view' : 'keystone-collection-view') === 'ladder' ? 'ladder' : design === 'rework' || localStorage.getItem('keystone-collection-view') === 'covers' ? 'covers' : 'ladder');
   const [shelf, setShelf] = useState<ArtShelf>(() => localStorage.getItem('keystone-art-shelf') === 'watchlist' ? 'watchlist' : 'collection');
+  useEffect(() => {
+    const saved = localStorage.getItem(design === 'rework' ? 'rework-collection-view' : 'keystone-collection-view');
+    setCollectionView(saved === 'ladder' || saved === 'covers' ? saved : design === 'rework' ? 'covers' : 'ladder');
+  }, [design]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
   const t = useTranslator(preferences.language);
@@ -898,7 +898,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
 
   const changeCollectionView = (next: 'ladder' | 'covers') => {
     setCollectionView(next);
-    localStorage.setItem('keystone-collection-view', next);
+    localStorage.setItem(design === 'rework' ? 'rework-collection-view' : 'keystone-collection-view', next);
   };
   const changeShelf = (next: ArtShelf) => {
     setShelf(next);
@@ -1107,6 +1107,7 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
     const updated: RankedItem = {
       ...item,
       title: form.title.trim(), creator: form.creator.trim(), year: form.year ? Number(form.year) : undefined,
+      imageUrl: form.imageUrl || undefined,
       durationMinutes: (item.category === 'movies' || item.category === 'albums') && Number(form.durationMinutes) > 0 ? Math.round(Number(form.durationMinutes)) : undefined,
       genres: form.genre.split(',').map((value) => value.trim()).filter(Boolean),
       countries: form.country.split(',').map((value) => value.trim()).filter(Boolean),
@@ -1154,12 +1155,13 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
   if (loading) return <div className="app-loader"><span className="brand-mark"><KonomiMark /></span><p>{t('Opening your collection…')}</p></div>;
   if (loadError) return <div className="app-loader art-load-error" role="alert"><span className="brand-mark"><KonomiMark /></span><h1>{t('The collection could not be opened.')}</h1><p>{t('Your data has not been changed. Try opening it again.')}</p><button type="button" className="button button--primary" onClick={() => void openCollection()}>{t('Try again')}</button><details><summary>{t('Technical details')}</summary><code>{loadError}</code></details></div>;
   return (
-    <I18nProvider language={preferences.language}><div className="app" style={{ '--accent': categoryDefinition.accent } as React.CSSProperties}>
+    <I18nProvider language={preferences.language}><div className={`app${design === 'rework' ? ' rw-art' : ''}`} style={{ '--accent': categoryDefinition.accent } as React.CSSProperties}>
       <main className="main">
         {view === 'duel' ? <DuelView pair={pair} onChoose={choose} onSkip={() => nextPair()} onUndo={undoLastChoice} onExit={() => setView('ladder')} shortcuts={preferences.shortcuts} canUndo={canUndo} busy={decisionPending} headerAction={headerAction} /> : (
           <>
             <nav className="art-category-tabs" aria-label={t('Your collections')} role="tablist">{categories.map((entry,index)=>{const Icon=categoryIcons[entry.id];return <button key={entry.id} role="tab" tabIndex={category===entry.id?0:-1} className={category===entry.id?'is-active':''} aria-selected={category===entry.id} onKeyDown={event=>handleCategoryKey(event,index)} onClick={()=>selectCategory(entry.id)}><Icon size={16}/><span>{categoryCopy(entry.id,t).label}</span><small>{counts[entry.id]}</small></button>})}</nav>
             <header className="topbar">
+              {design === 'rework' && <div className="rw-art-heading"><h1>Art</h1></div>}
               <div><span className="eyebrow">{definition.eyebrow}</span><h1>{definition.label}</h1></div>
               <div className="top-actions">{headerAction}<button className={`button button--outline statistics-toggle ${view === 'statistics' ? 'active' : ''}`} onClick={() => setView(view === 'statistics' ? 'ladder' : 'statistics')}>{view === 'statistics' ? <ListTree size={17} /> : <BarChart3 size={17} />}{view === 'statistics' ? t('View ladder') : t('Statistics')}</button>{shelf === 'collection' && <button className="button button--outline duel-start" disabled={collectionCategoryItems.length < 2} onClick={() => openDuel()}><Swords size={17} />{t('Start a duel')}<kbd>{shortcutLabel(preferences.shortcuts.startDuel)}</kbd></button>}<button className="button button--primary add-item-button" onClick={() => setShowAdd(true)}><Plus size={17} />{shelf === 'collection' ? `${t('Add')} ${definition.singular.toLocaleLowerCase()}` : t('Add to watchlist')}<kbd>{shortcutLabel(preferences.shortcuts.addItem)}</kbd></button></div>
             </header>
@@ -1170,8 +1172,8 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
               <div className="stat"><span className="stat-icon"><Zap /></span><div><small>{t('Fast-track')}</small><strong>{provisional}</strong><span>{t('still finding their place')}</span></div></div>
             </section>
             <section className="collection" aria-labelledby="ladder-heading">
-              <div className="section-head"><h2 id="ladder-heading">{shelf === 'collection' ? t('Your ladder') : t('Watchlist')}</h2></div>
-              {shelf === 'collection' && <PeriodHighlights items={collectionCategoryItems} onSelect={setSelected} onApplyPeriod={(start, end) => { setYearFrom(String(start)); setYearTo(String(end)); setShowFilters(true); }} />}
+              <div className="section-head"><h2 id="ladder-heading">{shelf === 'collection' ? design === 'rework' && collectionView === 'covers' ? preferences.language === 'fr' ? 'Votre galerie' : 'Your gallery' : t('Your ladder') : t('Watchlist')}</h2></div>
+              {design !== 'rework' && shelf === 'collection' && <PeriodHighlights items={collectionCategoryItems} onSelect={setSelected} onApplyPeriod={(start, end) => { setYearFrom(String(start)); setYearTo(String(end)); setShowFilters(true); }} />}
               <div className="toolbar">
                 <label className="search-box"><Search size={18} /><span className="sr-only">{t('Fuzzy search this collection')}</span><input ref={searchRef} type="search" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.currentTarget.blur(); } }} placeholder={t('Fuzzy search title, creator, series…')} /><kbd>{shortcutLabel(preferences.shortcuts.focusSearch)}</kbd></label>
                 <button className={`filter-button ${showFilters || activeFilters ? 'active' : ''}`} onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}><ListFilter size={17} />{t('Filters')} {activeFilters > 0 && <span>{activeFilters}</span>}<ChevronDown size={15} /></button>
@@ -1187,7 +1189,8 @@ export default function App({ headerAction }: { headerAction?: ReactNode } = {})
                 <label><span>{t('To year')}</span><input inputMode="numeric" value={yearTo} onChange={(event) => setYearTo(event.target.value)} placeholder={t('Any')} /></label>
                 <button className="text-button" onClick={() => { setGenre('all'); setCountry('all'); setYearFrom(''); setYearTo(''); }}>{t('Clear filters')}</button>
               </div>}
-              {categoryItems.length === 0 ? <EmptyState shelf={shelf} onAdd={() => setShowAdd(true)} /> : filtered.length === 0 ? <div className="no-results"><Search /><h3>{t('No matches')}</h3><p>{t('Try a broader search or clear your filters.')}</p></div> : collectionView === 'covers' ? <CoverGrid items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} /> : <Ladder items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} />}
+              {categoryItems.length === 0 ? <EmptyState shelf={shelf} onAdd={() => setShowAdd(true)} /> : filtered.length === 0 ? <div className="no-results"><Search /><h3>{t('No matches')}</h3><p>{t('Try a broader search or clear your filters.')}</p></div> : collectionView === 'covers' ? <CoverGrid items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} /> : <Ladder rowHeight={design === 'rework' ? 82 : 70} items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} />}
+              {design === 'rework' && shelf === 'collection' && <PeriodHighlights items={collectionCategoryItems} onSelect={setSelected} onApplyPeriod={(start, end) => { setYearFrom(String(start)); setYearTo(String(end)); setShowFilters(true); }} />}
             </section></>}
           </>
         )}

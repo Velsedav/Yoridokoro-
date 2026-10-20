@@ -1,5 +1,6 @@
+import { persistActiveSession } from '../lib/activeSessionRecovery'
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { List, LayoutGrid, Columns, Search, Plus, CalendarClock, ArrowRight, BrainCircuit, Archive, BookOpen } from 'lucide-react'
+import { List, LayoutGrid, Search, Plus, CalendarClock, ArrowRight, BrainCircuit, Archive, BookOpen } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { Subject, Tag, StudyTimeSummary } from '../lib/db'
 import { getSubjectsWithTags, getStudyTimeSummary } from '../lib/db'
@@ -16,9 +17,21 @@ import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sess
 import { useTranslation } from '../lib/i18n'
 import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
 import './ObsidianHome.css'
+import { useRework } from '../design/rework/useRework'
+import { PageHeading } from '../design/rework/Primitives'
 
-type ViewMode = 'list' | 'board' | 'split'
+type ViewMode = 'list' | 'board'
 const LS_VIEW_KEY = 'obsidian-home-view'
+
+function readViewMode(updatedLayout: boolean): ViewMode {
+  const key = updatedLayout ? 'rework-study-view' : LS_VIEW_KEY
+  const saved = localStorage.getItem(key)
+  if (saved === 'split') {
+    localStorage.setItem(key, 'list')
+    return 'list'
+  }
+  return saved === 'list' || saved === 'board' ? saved : updatedLayout ? 'board' : 'list'
+}
 
 function useObsidianData() {
   const [subjects, setSubjects] = useState<(Subject & { tags: Tag[] })[]>([])
@@ -107,7 +120,6 @@ function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewCha
       <div className="ohi-view-toggle" role="group" aria-label={t('subjects.view_modes')}>
         <button className={`ohi-view-btn${view === 'list' ? ' ohi-view-active' : ''}`} title={t('subjects.list_view')} aria-label={t('subjects.list_view')} aria-pressed={view === 'list'} onClick={() => onViewChange('list')}><List size={16} aria-hidden="true" /></button>
         <button className={`ohi-view-btn${view === 'board' ? ' ohi-view-active' : ''}`} title={t('subjects.board_view')} aria-label={t('subjects.board_view')} aria-pressed={view === 'board'} onClick={() => onViewChange('board')}><LayoutGrid size={16} aria-hidden="true" /></button>
-        <button className={`ohi-view-btn${view === 'split' ? ' ohi-view-active' : ''}`} title={t('subjects.split_view')} aria-label={t('subjects.split_view')} aria-pressed={view === 'split'} onClick={() => onViewChange('split')}><Columns size={16} aria-hidden="true" /></button>
       </div>
       <button className="ohi-reflect-btn" title={reflectLabel} aria-label={reflectLabel} onClick={onReflect}>
         <BrainCircuit size={15} aria-hidden="true" />
@@ -120,13 +132,18 @@ function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewCha
 }
 
 export default function ObsidianHome() {
+  const rework = useRework()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { subjects, studyTime, allChapters, loading, setSubjects, setAllChapters } = useObsidianData()
   const [view, setView] = useState<ViewMode>(() => {
-    return (localStorage.getItem(LS_VIEW_KEY) as ViewMode) || 'list'
+    const updatedLayout = document.documentElement.dataset.theme?.startsWith('yoridokoro-')
+    return readViewMode(Boolean(updatedLayout))
   })
   const [filter, setFilter] = useState('')
+  useEffect(() => {
+    setView(readViewMode(rework))
+  }, [rework])
   const [quickStart, setQuickStart] = useState<{ subject: Subject; chapterName?: string } | null>(null)
   const [editingSubject, setEditingSubject] = useState<(Subject & { tags: Tag[] }) | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -209,7 +226,7 @@ export default function ObsidianHome() {
 
   function handleViewChange(v: ViewMode) {
     setView(v)
-    localStorage.setItem(LS_VIEW_KEY, v)
+    localStorage.setItem(rework ? 'rework-study-view' : LS_VIEW_KEY, v)
   }
 
   async function reloadSubjects() {
@@ -275,7 +292,7 @@ export default function ObsidianHome() {
       : createActiveSession(draft, true, analytics)
     localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
     localStorage.removeItem(SESSION_RETURN_PATH_KEY)
-    localStorage.setItem('activeSession', JSON.stringify(nextSession))
+    persistActiveSession(JSON.stringify(nextSession))
     await recordBehaviorEvent({
       eventType: 'session_created',
       opportunityId: analytics.opportunityId,
@@ -344,7 +361,8 @@ export default function ObsidianHome() {
   }
 
   return (
-    <div className="ohi-page">
+    <div className={`ohi-page${rework ? ' rw-study' : ''}`}>
+      {rework && <PageHeading title="Sujets" />}
       <header className="ohi-page-header">
         <span className="ohi-eyebrow"><BookOpen size={14} aria-hidden="true" /> {t('subjects.eyebrow')}</span>
         <h1>{t('subjects.title')}</h1>
@@ -396,14 +414,6 @@ export default function ObsidianHome() {
             subjects={filtered}
             allChapters={allChapters}
             onStart={startSubject}
-          />
-        )}
-        {view === 'split' && (
-          <SplitView
-            subjects={filtered}
-            allChapters={allChapters}
-            onStart={startSubject}
-            onEdit={setEditingSubject}
           />
         )}
       </div>
@@ -741,101 +751,6 @@ function BoardView({ subjects, allChapters, onStart }: BoardViewProps) {
         )
       })}
       {groups.length === 0 && <div className="ohi-empty">{t('subjects.no_match')}</div>}
-    </div>
-  )
-}
-
-// ── SplitView ─────────────────────────────────────────────────────────────────
-
-interface SplitViewProps {
-  subjects: (Subject & { tags: Tag[] })[]
-  allChapters: Chapter[]
-  onStart: (s: Subject) => void
-  onEdit: (s: Subject & { tags: Tag[] }) => void
-}
-
-function SplitView({ subjects, allChapters, onStart, onEdit }: SplitViewProps) {
-  const { t } = useTranslation()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (selectedId === null && subjects.length > 0) {
-      const pinned = subjects.find(s => s.pinned)
-      const fallback = [...subjects].sort((a, b) => a.name.localeCompare(b.name))[0]
-      setSelectedId(pinned?.id ?? fallback?.id ?? null)
-    }
-  }, [subjects, selectedId])
-
-  const selected = useMemo(() => subjects.find(s => s.id === selectedId) ?? null, [subjects, selectedId])
-
-  const selectedChapters = useMemo(
-    () => allChapters.filter(c => c.subjectId === selectedId && c.studyCount > 0),
-    [allChapters, selectedId]
-  )
-
-  const retention = selected ? getSubjectRetention(selected.id, allChapters) : null
-
-  return (
-    <div className="ohi-split">
-      <div className="ohi-split-list">
-        {subjects.map(subject => (
-          <div
-            key={subject.id}
-            className={`ohi-split-row${selectedId === subject.id ? ' ohi-split-selected' : ''}`}
-          >
-            <button
-              type="button"
-              className="ohi-split-select"
-              aria-pressed={selectedId === subject.id}
-              onClick={() => setSelectedId(subject.id)}
-            >
-              <span className="ohi-split-name">{subject.name}</span>
-            </button>
-            <button
-              className="ohi-start-btn ohi-start-sm"
-              aria-label={t('subjects.start_subject', { subject: subject.name })}
-              onClick={() => onStart(subject)}
-            >▶</button>
-          </div>
-        ))}
-        {subjects.length === 0 && <div className="ohi-empty">{t('subjects.no_match')}</div>}
-      </div>
-
-      <div className="ohi-split-detail">
-        {selected ? (
-          <>
-            <h2 className="ohi-split-detail-title">{selected.name}</h2>
-            <div className="ohi-split-detail-grid">
-              <span className="ohi-split-label">{t('subjects.last_studied')}</span>
-              <span className="ohi-split-val">
-                {selected.last_studied_at ? formatRelativeDate(selected.last_studied_at, t) : t('subjects.never')}
-              </span>
-              <span className="ohi-split-label">{t('subjects.total_time')}</span>
-              <span className="ohi-split-val ohi-mono">{formatH(selected.total_minutes / 60)}</span>
-              <span className="ohi-split-label" title={t('subjects.recall_estimate_hint')}>{t('subjects.recall_estimate')}</span>
-              <span className="ohi-split-val ohi-mono" title={t('subjects.recall_estimate_hint')} style={{ color: retentionColor(retention) }}>
-                {retention !== null ? `${retention}%` : '—'}
-              </span>
-              <span className="ohi-split-label">{t('subjects.chapters')}</span>
-              <span className="ohi-split-val">{t('subjects.studied_count', { count: selectedChapters.length })}</span>
-              {selected.tags.length > 0 && (
-                <>
-                  <span className="ohi-split-label">{t('subjects.tags')}</span>
-                  <span className="ohi-split-val">
-                    {selected.tags.map(t => <span key={t.id} className="ohi-tag">#{t.name}</span>)}
-                  </span>
-                </>
-              )}
-            </div>
-            <div className="ohi-split-actions">
-              <button className="ohi-launch-btn" onClick={() => onStart(selected)}>▶ {t('subjects.start_session')}</button>
-              <button className="ohi-edit-btn" onClick={() => onEdit(selected)}>✎ {t('subjects.edit')}</button>
-            </div>
-          </>
-        ) : (
-          <div className="ohi-empty">{t('subjects.select_subject')}</div>
-        )}
-      </div>
     </div>
   )
 }

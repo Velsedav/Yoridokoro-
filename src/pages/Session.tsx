@@ -1,3 +1,4 @@
+import { persistActiveSession, clearActiveSession } from '../lib/activeSessionRecovery'
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -288,7 +289,7 @@ export default function Session() {
             const currentVisitId = getBehaviorVisitId();
             const wasRecovered = parsed.runnerEntered === true && parsed.runnerVisitId !== currentVisitId;
             const entered = { ...parsed, runnerEntered: true, runnerVisitId: currentVisitId };
-            localStorage.setItem('activeSession', JSON.stringify(entered));
+            persistActiveSession(JSON.stringify(entered));
             setSession(entered);
             setRemaining(parsed.remainingSeconds);
             setPaused(parsed.paused || false);
@@ -354,7 +355,7 @@ export default function Session() {
     // Sync remaining/paused back to localStorage
     useEffect(() => {
         if (!session || persistedRef.current) return;
-        localStorage.setItem('activeSession', JSON.stringify({
+        persistActiveSession(JSON.stringify({
             ...session,
             remainingSeconds: remaining,
             paused
@@ -594,7 +595,7 @@ export default function Session() {
                 : persisted.completedWorkMinutes ?? {},
             displayedWorkMins: Math.max(Number(postSession.displayedWorkMins) || 0, Number(persisted.displayedWorkMins) || 0),
         };
-        localStorage.setItem('activeSession', JSON.stringify({
+        persistActiveSession(JSON.stringify({
             ...persisted,
             remainingSeconds: remaining,
             paused: true,
@@ -932,7 +933,7 @@ export default function Session() {
             setCompletedWorkMinutes(snapshot.workMinutesBySubject);
             setDisplayedWorkMins(snapshot.actualWorkMinutes);
             persistedRef.current = true;
-            localStorage.setItem('activeSession', JSON.stringify({
+            persistActiveSession(JSON.stringify({
                 ...session,
                 remainingSeconds: remaining,
                 paused: true,
@@ -1120,7 +1121,7 @@ export default function Session() {
         });
 
         clearPreRecalls();
-        localStorage.removeItem('activeSession');
+        clearActiveSession();
         localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY);
         setEndConfirmStep('none');
         const returnPath = localStorage.getItem(SESSION_RETURN_PATH_KEY) || '/';

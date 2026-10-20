@@ -5,10 +5,15 @@ import { formatSecondsMMSS } from '../lib/time';
 import { getAllChapters } from '../lib/chapters';
 import { useTranslation } from '../lib/i18n';
 import './MetacognitionMode.css';
+import { useRework } from '../design/rework/useRework';
+import { reworkPageTitle } from '../design/rework/pageTitles';
+import { useSettings } from '../lib/settings';
 
 const TOTAL_SECONDS = 15 * 60;
 
 export default function MetacognitionMode({ onComplete, onCancel }: { onComplete: () => void; onCancel?: () => void }) {
+    const rework = useRework();
+    const { language } = useSettings();
     const { t } = useTranslation();
     const [step, setStep] = useState(1);
     const [animKey, setAnimKey] = useState(0);
@@ -219,7 +224,7 @@ export default function MetacognitionMode({ onComplete, onCancel }: { onComplete
                     <span className="mc-header-icon" aria-hidden="true"><BrainCircuit size={20} /></span>
                     <div>
                         <span className="mc-eyebrow">{t('metacog.eyebrow') || 'Weekly system review'}</span>
-                        <h1 id="metacognition-title">{t('metacog.title') || 'Metacognition pit stop'}</h1>
+                        <h1 id="metacognition-title">{rework ? reworkPageTitle('/metacognition', language === 'fr') : t('metacog.title') || 'Metacognition pit stop'}</h1>
                         <p>{t('metacog.subtitle') || 'Study how you study · about 15 minutes'}</p>
                     </div>
                 </div>

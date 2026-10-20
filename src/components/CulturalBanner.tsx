@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Archive, CalendarDays, ChevronLeft, ChevronRight, ImagePlus, Pencil, Plus, RotateCcw, Search } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, ImagePlus, Pencil, Plus, RotateCcw, Search } from 'lucide-react'
 import BingoModal from './bingoals/BingoModal'
 import ImageImportModal from './bingoals/ImageImportModal'
 import {
@@ -9,6 +9,7 @@ import {
   culturalRelativeTime,
   formatCulturalOccurrenceDate,
   listCulturalEvents,
+  occurrenceForYear,
   saveCulturalEvent,
   type CulturalEvent,
   type CulturalEventCategory,
@@ -103,6 +104,7 @@ function EventEditor({ event, onClose, onSaved }: { event: CulturalEvent | null;
   return <>
     <BingoModal className="cultural-editor-modal" open={!imageOpen} title={event ? t('cultural.edit_title') : t('cultural.add_title')} onClose={onClose}>
       <form className="cultural-editor" onSubmit={(submitEvent) => { submitEvent.preventDefault(); void submit() }}>
+        <div className="cultural-editor-scroll">
         <div className="cultural-editor-fields">
           <label className="cultural-field cultural-field--wide"><span>{t('cultural.name')}</span><input autoFocus value={draft.name} onChange={e => update('name', e.target.value)} required /></label>
           <label className="cultural-field"><span>{t('cultural.category')}</span><select value={draft.category} onChange={e => update('category', e.target.value as CulturalEventCategory)}>{CULTURAL_EVENT_CATEGORIES.map(category => <option key={category} value={category}>{t(`cultural.category_${category}`)}</option>)}</select></label>
@@ -117,6 +119,7 @@ function EventEditor({ event, onClose, onSaved }: { event: CulturalEvent | null;
           <label className="cultural-field cultural-field--wide"><span>{t('cultural.status')}</span><select value={draft.status} onChange={e => update('status', e.target.value as CulturalEventStatus)}><option value="active">{t('cultural.active')}</option><option value="retired">{t('cultural.retired')}</option></select></label>
         </div>
 
+        <details className="cultural-image-options"><summary>{t('cultural.image_optional')}</summary>
         <section className="cultural-crop" aria-labelledby="cultural-image-heading">
           <div className="cultural-editor-heading"><div><strong id="cultural-image-heading">{t('cultural.image_optional')}</strong><small>{t('cultural.crop_help')}</small></div><div>
             <button type="button" className="btn" onClick={() => setImageOpen(true)}><ImagePlus size={15} /> {draft.image_data ? t('cultural.change_image') : t('cultural.choose_image')}</button>
@@ -131,7 +134,8 @@ function EventEditor({ event, onClose, onSaved }: { event: CulturalEvent | null;
             <label><span>{t('cultural.position_y')}</span><input type="range" min="0" max="100" value={draft.image_position_y} onChange={e => update('image_position_y', Number(e.target.value))} /></label>
             <label><span>{t('cultural.zoom')}</span><input type="range" min="1" max="3" step="0.05" value={draft.image_zoom} onChange={e => update('image_zoom', Number(e.target.value))} /></label>
           </div>}
-        </section>
+        </section></details>
+        </div>
 
         {error && <p className="cultural-editor-error" role="alert">{error}</p>}
         <div className="cultural-editor-actions"><button type="button" className="btn" onClick={onClose}>{t('bingoals.cancel')}</button><button type="submit" className="btn btn-primary" disabled={!draft.name.trim() || saving}>{saving ? t('bingoals.saving') : t('bingoals.save')}</button></div>
@@ -149,16 +153,34 @@ function relativeLabel(occurrence: CulturalOccurrence, now: Date, t: (key: strin
   return t('cultural.ended_days_ago', { count: relative.days })
 }
 
-function CulturalHistory({ events, locale, onClose, onEdit, onAdd }: { events: CulturalEvent[]; locale: string; onClose: () => void; onEdit: (event: CulturalEvent) => void; onAdd: () => void }) {
+function CulturalHistory({ events, locale, open, onClose, onEdit, onAdd }: { events: CulturalEvent[]; locale: string; open: boolean; onClose: () => void; onEdit: (event: CulturalEvent) => void; onAdd: () => void }) {
   const { t } = useTranslation()
+  const [view, setView] = useState<'all' | 'history'>('all')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<'all' | CulturalEventStatus>('all')
+  const [category, setCategory] = useState<'all' | CulturalEventCategory>('all')
   const history = useMemo(() => buildCulturalHistory(events), [events])
-  return <BingoModal className="cultural-manager-modal" open title={t('cultural.calendar_title')} onClose={onClose}>
+  const matches = (event: CulturalEvent) => (status === 'all' || event.status === status)
+    && (category === 'all' || event.category === category)
+    && `${event.name} ${event.country || ''} ${t(`cultural.category_${event.category}`)}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale))
+  const filteredEvents = events.filter(matches)
+  const filteredHistory = history.filter(occurrence => matches(occurrence.event))
+  const clearFilters = () => { setQuery(''); setStatus('all'); setCategory('all') }
+  return <BingoModal className="cultural-manager-modal" open={open} title={t('cultural.calendar_title')} onClose={onClose}>
     <div className="cultural-manager">
-      <section><header><div><strong>{t('cultural.all_events')}</strong><small>{events.length}</small></div><button type="button" className="btn btn-primary" onClick={onAdd}><Plus size={15} /> {t('cultural.add')}</button></header>
-        <div className="cultural-manager-list">{events.map(event => <button type="button" key={event.id} onClick={() => onEdit(event)}><span><strong>{event.name}</strong><small>{event.country || t(`cultural.category_${event.category}`)}</small></span><em className={`is-${event.status}`}>{t(`cultural.${event.status}`)}</em><Pencil size={14} /></button>)}</div>
-      </section>
-      <section><header><div><strong>{t('cultural.history')}</strong><small>{history.length}</small></div></header>
-        <div className="cultural-history-list">{history.length ? history.map(occurrence => <button type="button" key={occurrence.key} onClick={() => onEdit(occurrence.event)}><time>{formatCulturalOccurrenceDate(occurrence, locale)}</time><span><strong>{occurrence.event.name}</strong><small>{occurrence.event.country || t(`cultural.category_${occurrence.event.category}`)}</small></span>{occurrence.event.status === 'retired' && <em>{t('cultural.retired')}</em>}</button>) : <p>{t('cultural.no_history')}</p>}</div>
+      <div className="cultural-manager-toolbar"><div className="cultural-segmented" role="group" aria-label={t('cultural.calendar_title')}><button type="button" aria-pressed={view==='all'} onClick={()=>setView('all')}>{t('cultural.all_events')} ({events.length})</button><button type="button" aria-pressed={view==='history'} onClick={()=>setView('history')}>{t('cultural.history')}</button></div><button type="button" className="btn btn-primary" onClick={onAdd}><Plus size={15} /> {t('cultural.add')}</button></div>
+      <div className="cultural-manager-filters">
+        <label className="cultural-manager-search"><Search size={16} aria-hidden="true"/><input type="search" aria-label={t('cultural.search_events')} placeholder={t('cultural.search_events')} value={query} onChange={event=>setQuery(event.target.value)}/></label>
+        <select aria-label={t('cultural.status')} value={status} onChange={event=>setStatus(event.target.value as typeof status)}><option value="all">{t('cultural.all_statuses')}</option><option value="active">{t('cultural.active')}</option><option value="retired">{t('cultural.retired')}</option></select>
+        <select aria-label={t('cultural.category')} value={category} onChange={event=>setCategory(event.target.value as typeof category)}><option value="all">{t('cultural.all_categories')}</option>{CULTURAL_EVENT_CATEGORIES.map(value=><option key={value} value={value}>{t(`cultural.category_${value}`)}</option>)}</select>
+        {(query || status!=='all' || category!=='all')&&<button className="btn" type="button" onClick={clearFilters}>{t('cultural.clear_filters')}</button>}
+      </div>
+      <section><header><div><strong>{t(view==='all'?'cultural.all_events':'cultural.history')}</strong><small role="status">{view==='all'?filteredEvents.length:filteredHistory.length}</small></div></header>
+        {view==='all' ? <div className="cultural-manager-list">{filteredEvents.map(event => {
+          const original = occurrenceForYear(event, Number(event.start_date.slice(0,4)))
+          return <button type="button" key={event.id} onClick={() => onEdit(event)}><span><strong>{event.name}</strong><small>{[event.country,t(`cultural.category_${event.category}`)].filter(Boolean).join(' · ')}</small><small>{original && formatCulturalOccurrenceDate(original,locale)} · {t(`cultural.type_${event.recurrence_type}`)}</small></span><em className={`is-${event.status}`}>{t(`cultural.${event.status}`)}</em><Pencil size={14} aria-hidden="true"/></button>
+        })}{!filteredEvents.length&&<p>{events.length?t('cultural.no_matches'):t('cultural.empty_help')}</p>}</div>
+        : <div className="cultural-history-list">{filteredHistory.length ? filteredHistory.map(occurrence => <button type="button" key={occurrence.key} onClick={() => onEdit(occurrence.event)}><time>{formatCulturalOccurrenceDate(occurrence, locale)}</time><span><strong>{occurrence.event.name}</strong><small>{occurrence.event.country || t(`cultural.category_${occurrence.event.category}`)}</small></span>{occurrence.event.status === 'retired' && <em>{t('cultural.retired')}</em>}</button>) : <p>{history.length?t('cultural.no_matches'):t('cultural.no_history')}</p>}</div>}
       </section>
     </div>
   </BingoModal>
@@ -185,10 +207,10 @@ export default function CulturalBanner() {
   useEffect(() => { void reload() }, [])
   useEffect(() => { setIndex(current => occurrences.length ? current % occurrences.length : 0) }, [occurrences.length])
   useEffect(() => {
-    if (paused || occurrences.length < 2) return
+    if (paused || historyOpen || editor || occurrences.length < 2) return
     const timer = window.setInterval(() => setIndex(current => (current + 1) % occurrences.length), ROTATION_MS)
     return () => window.clearInterval(timer)
-  }, [paused, occurrences.length])
+  }, [paused, historyOpen, editor, occurrences.length])
 
   function previous() { setIndex(current => (current - 1 + occurrences.length) % occurrences.length) }
   function next() { setIndex(current => (current + 1) % occurrences.length) }
@@ -202,10 +224,10 @@ export default function CulturalBanner() {
       <CalendarDays size={22} aria-hidden="true" />
       <div><strong>{totallyEmpty ? t('cultural.empty_title') : t('cultural.no_upcoming')}</strong><small>{totallyEmpty ? t('cultural.empty_help') : t('cultural.no_upcoming_help')}</small></div>
       <button type="button" className="yd-primary-button" onClick={() => setEditor('new')}><Plus size={16} /> {t('cultural.add')}</button>
-      {!totallyEmpty && <button type="button" className="yd-secondary-button" onClick={() => setHistoryOpen(true)}><Archive size={16} /> {t('cultural.history')}</button>}
+      {!totallyEmpty && <button type="button" className="yd-secondary-button cultural-browse-button" onClick={() => setHistoryOpen(true)} aria-haspopup="dialog"><CalendarDays size={16} /> {t('cultural.all_events')}</button>}
     </section>
     {editor && <EventEditor event={editor === 'new' ? null : editor} onClose={() => setEditor(null)} onSaved={reload} />}
-    {historyOpen && <CulturalHistory events={events} locale={locale} onClose={() => setHistoryOpen(false)} onAdd={() => { setHistoryOpen(false); setEditor('new') }} onEdit={event => { setHistoryOpen(false); setEditor(event) }} />}
+    {historyOpen && <CulturalHistory events={events} locale={locale} open={!editor} onClose={() => setHistoryOpen(false)} onAdd={() => setEditor('new')} onEdit={event => setEditor(event)} />}
   </>
 
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(current.event.name)}`
@@ -229,13 +251,13 @@ export default function CulturalBanner() {
             <button type="button" onClick={() => (window as any).electronAPI.shell.openExternal(searchUrl)} title={t('cultural.google')} aria-label={t('cultural.google')}><Search size={16} /></button>
             <button type="button" onClick={() => setEditor('new')} title={t('cultural.add')} aria-label={t('cultural.add')}><Plus size={16} /></button>
             <button type="button" onClick={() => setEditor(current.event)} title={t('cultural.edit')} aria-label={t('cultural.edit')}><Pencil size={16} /></button>
-            <button type="button" onClick={() => setHistoryOpen(true)} title={t('cultural.history')} aria-label={t('cultural.history')}><Archive size={16} /></button>
+            <button type="button" className="cultural-browse-button" onClick={() => setHistoryOpen(true)} aria-haspopup="dialog"><CalendarDays size={16} aria-hidden="true" /> {t('cultural.all_events')}</button>
           </div>
         </div>
       </article>
       {occurrences.length > 1 && <><button type="button" className="cultural-banner-arrow cultural-banner-arrow--previous" onClick={previous} aria-label={t('cultural.previous')}><ChevronLeft size={22} /></button><button type="button" className="cultural-banner-arrow cultural-banner-arrow--next" onClick={next} aria-label={t('cultural.next')}><ChevronRight size={22} /></button></>}
     </section>
     {editor && <EventEditor event={editor === 'new' ? null : editor} onClose={() => setEditor(null)} onSaved={reload} />}
-    {historyOpen && <CulturalHistory events={events} locale={locale} onClose={() => setHistoryOpen(false)} onAdd={() => { setHistoryOpen(false); setEditor('new') }} onEdit={event => { setHistoryOpen(false); setEditor(event) }} />}
+    {historyOpen && <CulturalHistory events={events} locale={locale} open={!editor} onClose={() => setHistoryOpen(false)} onAdd={() => setEditor('new')} onEdit={event => setEditor(event)} />}
   </>
 }

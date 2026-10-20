@@ -11,6 +11,8 @@ export const languages: Array<{ id: LanguageId; label: string }> = [
 ];
 
 const fr: Record<string, string> = {
+  'Personal notes': 'Notes personnelles', 'Quotes': 'Citations', 'Saved text': 'Texte présent', 'Works': 'œuvres', 'Recorded duels': 'Duels enregistrés',
+  'Top five': 'Top 5', 'Last 50 decisions': '50 derniers choix', 'No pairing available': 'Aucun duel disponible', 'Saving choice…': 'Enregistrement…',
   'Duration': 'Durée', 'Duration (minutes)': 'Durée (minutes)',
   'RAWG is not configured in Settings → Catalogues. Showing IGDB results instead.': 'RAWG n’est pas configuré dans Paramètres → Catalogues. Les résultats IGDB sont affichés.', 'IGDB rejected the Client ID or Client Secret.': 'IGDB a rejeté le Client ID ou le Client Secret.', 'IGDB could not be reached. Try again in a moment.': 'IGDB est inaccessible. Réessayez dans un instant.',
   'RAWG configuration needs attention and IGDB is not configured. Manual entry remains available.': 'La configuration RAWG doit être corrigée et IGDB n’est pas configuré. La saisie manuelle reste disponible.', 'RAWG is unavailable and IGDB is not configured. Manual entry remains available.': 'RAWG est indisponible et IGDB n’est pas configuré. La saisie manuelle reste disponible.', 'RAWG and IGDB are unavailable. Manual entry remains available.': 'RAWG et IGDB sont indisponibles. La saisie manuelle reste disponible.',

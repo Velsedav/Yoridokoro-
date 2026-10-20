@@ -48,6 +48,7 @@ describe('Yoridokoro backup format', () => {
     storage.setItem('yoridokoro-observation-pseudonym-salt-v1', 'never-export-me')
     storage.setItem('keystone-catalogue-credentials-v1', '{"igdbClientSecret":"never-export-me"}')
     storage.setItem('unrelated-extension-token', 'secret')
+    storage.setItem('yoridokoro-active-session-checkpoint-v1', '{"session":"closed or running"}')
 
     const dump = dumpPortableLocalStorage(storage)
     expect(dump['study-buddy-observations']).toBe('["note"]')
@@ -56,6 +57,7 @@ describe('Yoridokoro backup format', () => {
     expect(dump).not.toHaveProperty('yoridokoro-observation-pseudonym-salt-v1')
     expect(dump).not.toHaveProperty('keystone-catalogue-credentials-v1')
     expect(dump).not.toHaveProperty('unrelated-extension-token')
+    expect(dump).not.toHaveProperty('yoridokoro-active-session-checkpoint-v1')
   })
 
   it('exports and restores allocation, chapter links, and idempotency records', () => {

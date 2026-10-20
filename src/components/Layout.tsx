@@ -1,6 +1,7 @@
+import { clearActiveSession } from '../lib/activeSessionRecovery'
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, BookOpen, BrainCircuit, Calendar, CalendarDays, Palette, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle, Heart, MoreHorizontal, AlertTriangle, X } from 'lucide-react';
+import { Home, BookOpen, BrainCircuit, Calendar, CalendarDays, Palette, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle, Heart, MoreHorizontal, AlertTriangle, X, Briefcase } from 'lucide-react';
 import { getQuotes, addQuote } from '../lib/db';
 import type { Quote } from '../lib/db';
 import QuoteEditorModal from './QuoteEditorModal';
@@ -15,6 +16,8 @@ import { useDialogFocus } from '../hooks/useDialogFocus';
 import { importPlayniteSessionsAtStartup } from '../lib/playniteImport';
 import { initialCloseOperations, updateCloseOperation, type CloseOperation } from '../lib/closeOperations';
 import './Layout.css';
+import { Navigation } from '../design/rework/Navigation';
+import { useRework } from '../design/rework/useRework';
 
 const MASCOT_DEFAULT_QUOTE = "The exam is won at home, not on exam day 🏠";
 const DEV_NAV_CLICKS = 4;
@@ -94,7 +97,8 @@ export default function Layout() {
     const location = useLocation();
     const navigate = useNavigate();
     const { t } = useTranslation();
-    const { theme, metacognitionDay } = useSettings();
+    const { theme, metacognitionDay, language } = useSettings();
+    const rework = useRework();
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [currentIdx, setCurrentIdx] = useState(0);
     const [animClass, setAnimClass] = useState('quote-visible');
@@ -193,6 +197,7 @@ export default function Layout() {
     const primaryNavItems = [
         { path: '/', label: 'Aujourd’hui', icon: Home },
         { path: '/calendar', label: 'Historique', icon: CalendarDays },
+        { path: '/career', label: 'Emploi', icon: Briefcase },
         { path: '/study', label: 'Sujets', icon: BookOpen },
         { path: '/plan', label: 'Pomodoro', icon: Calendar },
         { path: '/bingoals', label: 'Objectifs', icon: Target },
@@ -280,7 +285,7 @@ export default function Layout() {
 
     useEffect(() => { loadQuotes(); }, [loadQuotes]);
 
-    // Rotate quotes every 4.5s with anime-style bounce animation
+    // Give Rework quotes time to be read, keeping the existing theme cadence.
     useEffect(() => {
         if (quotes.length <= 1) return;
 
@@ -300,12 +305,12 @@ export default function Layout() {
             }, 300);
         }
 
-        const interval = setInterval(cycle, 4500);
+        const interval = setInterval(cycle, rework ? 20000 : 4500);
         return () => {
             clearInterval(interval);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [quotes.length]);
+    }, [quotes.length, rework]);
 
     // Global Zoom via Ctrl+Wheel
     useEffect(() => {
@@ -361,7 +366,7 @@ export default function Layout() {
 
     function discardSessionFromLayout() {
         if (!localStorage.getItem('activeSession')) return;
-        localStorage.removeItem('activeSession');
+        clearActiveSession();
         localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY);
         localStorage.removeItem(SESSION_RETURN_PATH_KEY);
         setNavWarningStep('none');
@@ -385,8 +390,8 @@ export default function Layout() {
 
     // ── Obsidian layout (unconditional — every theme is obsidian-*) ──────────
     return (
-        <div className="layout obsidian-layout yoridokoro-layout">
-                <nav className="obsidian-sidebar yoridokoro-sidebar" aria-label="Navigation principale">
+        <div className={`layout obsidian-layout yoridokoro-layout${rework ? ' rw-layout' : ''}`}>
+                {rework ? <Navigation items={[...primaryNavItems, ...secondaryNavItems]} french={language === 'fr'} onNavigate={handleNavClick} onDev={handleMascotClick} /> : <nav className="obsidian-sidebar yoridokoro-sidebar" aria-label="Navigation principale">
                     <div className="yoridokoro-brand">
                         <span className="yoridokoro-mark" aria-hidden="true">拠</span>
                         <span className="yoridokoro-brand-copy"><strong>Yoridokoro</strong><small>拠り所</small></span>
@@ -438,7 +443,7 @@ export default function Layout() {
                         </Link>
                         <button type="button" className="obsidian-dev-tap" onClick={handleMascotClick} aria-label={devNavVisible ? 'Désactiver le mode développeur' : 'Activer le mode développeur'} />
                     </div>
-                </nav>
+                </nav>}
 
                 <div className="obsidian-main-wrapper">
                     <main className={`main-content${isContainedWorkspace ? ' main-content-contained' : ''}`}>
@@ -446,19 +451,20 @@ export default function Layout() {
                             <Outlet />
                         </div>
                     </main>
-                    <div className="obsidian-quote-bar">
+                    <footer className="obsidian-quote-bar" aria-label={language === 'fr' ? 'Citation' : 'Quote'}>
+                            {rework && <span className="rw-quote-mark" aria-hidden="true">“</span>}
                             <span className={`obsidian-quote-text ${animClass}`}>
                                 {currentQuote}
                             </span>
                             <button
                                 className="obsidian-quote-edit"
                                 onClick={() => setEditorOpen(true)}
-                                title="Edit quotes"
-                                aria-label="Edit quotes"
+                                title={language === 'fr' ? 'Modifier les citations' : 'Edit quotes'}
+                                aria-label={language === 'fr' ? 'Modifier les citations' : 'Edit quotes'}
                             >
                                 <Pencil size={12} />
                             </button>
-                    </div>
+                    </footer>
                 </div>
 
                 {editorOpen && (

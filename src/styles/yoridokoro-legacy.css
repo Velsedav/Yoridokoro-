@@ -19,7 +19,7 @@
 :is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.bingoals-root,.metacognition-page) :is(button,a,input,select,textarea):focus-visible{outline:3px solid color-mix(in srgb,var(--y-accent) 72%,white);outline-offset:2px}
 :is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.bingoals-root,.metacognition-page) button{min-width:32px;min-height:32px}
 .yoridokoro-layout button{border-radius:var(--y-control-radius)!important}
-.yoridokoro-layout button[aria-label]:has(>svg:only-child){border-radius:50%!important}
+.yoridokoro-layout:not(.rw-layout) button[aria-label]:has(>svg:only-child){border-radius:50%!important}
 :is(.yd-page,.ac-page,.rel-page,.ohi-page,.op-root,.obs-learn-page,.oa-root,.obs-meta-page,.obs-settings-root,.metacognition-page) :is(input,select,textarea){border-color:var(--y-line);background:var(--y-raised);color:var(--y-ink)}
 
 /* Standard editorial pages share the same width and physical origin. */
@@ -37,7 +37,7 @@
 .ohi-content{overflow:visible;min-height:0}
 .ohi-review-queue{margin:0 0 18px;background:var(--y-raised);border-color:var(--y-line)}
 .ohi-board{padding:0}
-.ohi-list-wrap,.ohi-split{border:1px solid var(--y-line);border-radius:8px;background:var(--y-raised);overflow:auto}
+.ohi-list-wrap{border:1px solid var(--y-line);border-radius:8px;background:var(--y-raised);overflow:auto}
 .ohi-page :is(.ohi-subject-card,.ohi-stat-card,.ohi-quick-card){border:1px solid var(--y-line);border-radius:7px;background:var(--y-raised)}
 
 /* Full-height workspaces use one consistent header gutter instead of local 16px values. */

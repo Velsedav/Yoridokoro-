@@ -1,3 +1,6 @@
+import { persistActiveSession } from '../lib/activeSessionRecovery'
+import { PageHeading } from '../design/rework/Primitives'
+import { useRework } from '../design/rework/useRework'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play, AlignJustify, Columns2, Wand2, Undo2, Redo2, Bell, BellOff, Plus, Zap, MoreVertical, Check, X, CalendarDays, ArrowRight, BookOpenCheck, Clock3, SlidersHorizontal, Sparkles } from 'lucide-react'
@@ -77,6 +80,7 @@ function moveBlock(blocks: PlannerBlock[], id: string, dir: -1 | 1): PlannerBloc
 }
 
 export default function ObsidianPlanner() {
+  const rework = useRework()
   const navigate = useNavigate()
   const { t } = useTranslation()
 
@@ -239,7 +243,7 @@ export default function ObsidianPlanner() {
     }
     localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
     localStorage.removeItem(SESSION_RETURN_PATH_KEY)
-    localStorage.setItem('activeSession', JSON.stringify(session))
+    persistActiveSession(JSON.stringify(session))
     await recordBehaviorEvent({
       eventType: 'session_created',
       opportunityId: analytics.opportunityId,
@@ -291,6 +295,7 @@ export default function ObsidianPlanner() {
     const fresh = buildPlannerRecommendations(subjects, getAllChapters(), new Date(), { workSecondsBySubject })
     const recommendation = fresh.find(item => item.id === selectedRecommendation?.id) ?? fresh[0]
     if (!recommendation) return
+    if (recommendation.isReentry) return startFiveMinuteSession(inputMethod)
     await recordBehaviorEvent({
       eventType: 'recommendation_accepted',
       opportunityId: opportunityIdRef.current,
@@ -418,6 +423,7 @@ export default function ObsidianPlanner() {
   }
 
   function recommendationReason(recommendation: PlannerRecommendation) {
+    if (recommendation.isReentry) return t('planner.reentry_reason')
     if (recommendation.allocationInfluenced) return t('planner.reason_underallocated')
     if (recommendation.reason === 'overdue') {
       return t('planner.reason_overdue', { days: recommendation.daysOverdue })
@@ -431,7 +437,8 @@ export default function ObsidianPlanner() {
 
   return (
     <div className="op-root op-launchpad-root">
-      <header className="op-launchpad-page-header">
+      {rework && <PageHeading title="Planifier" />}
+      {!rework && <header className="op-launchpad-page-header">
         <div>
           <span className="op-launchpad-eyebrow"><Sparkles size={14} /> {t('planner.eyebrow')}</span>
           <h1>{t('planner.page_title')}</h1>
@@ -441,7 +448,7 @@ export default function ObsidianPlanner() {
           <kbd>↵</kbd>
           <span>{t('planner.keyboard_hint')}</span>
         </div>
-      </header>
+      </header>}
 
       <main className="op-launchpad-main">
         {hasActiveSession ? (
@@ -464,7 +471,7 @@ export default function ObsidianPlanner() {
               <header className="op-recommendation-header">
                 <span className={`op-recommendation-kicker is-${selectedRecommendation.kind}`}>
                   {selectedRecommendation.kind === 'progress' ? <ArrowRight size={14} /> : <BookOpenCheck size={14} />}
-                  {t(`planner.kind_${selectedRecommendation.kind}`)}
+                  {t(selectedRecommendation.isReentry ? 'planner.kind_reentry' : `planner.kind_${selectedRecommendation.kind}`)}
                 </span>
               </header>
 
@@ -474,7 +481,7 @@ export default function ObsidianPlanner() {
                 <div className="op-recommendation-meta">
                   <span>{t('planner.chapter_position', { current: selectedRecommendation.chapterPosition, total: selectedRecommendation.chapterCount })}</span>
                   <span aria-hidden="true">·</span>
-                  <span>{t('planner.focus_duration')}</span>
+                  <span>{t(selectedRecommendation.isReentry ? 'planner.reentry_duration' : 'planner.focus_duration')}</span>
                 </div>
               </div>
 
@@ -488,6 +495,7 @@ export default function ObsidianPlanner() {
                 <p>{selectedRecommendation.resumePoint}</p>
               </div>}
 
+              <details className="op-proposal-explanation"><summary>{t('planner.why_label')}</summary>
               <dl className="op-recommendation-details">
                 <div>
                   <dt>{t('planner.why_label')}</dt>
@@ -497,7 +505,7 @@ export default function ObsidianPlanner() {
                   <dt>{t('planner.technique_label')}</dt>
                   <dd>{selectedTechnique?.name ?? t('planner.technique_fallback')}</dd>
                 </div>
-              </dl>
+              </dl><p>{t('planner.decision_text')}</p></details>
 
               <div className="op-guided-actions">
                 <button
@@ -508,13 +516,13 @@ export default function ObsidianPlanner() {
                   aria-keyshortcuts="Enter"
                 >
                   <Play size={17} fill="currentColor" />
-                  <span>{t('planner.start_preparation')}<small>{t('planner.session_structure')}</small></span>
+                  <span>{t(selectedRecommendation.isReentry ? 'planner.start_reentry' : 'planner.start_preparation')}<small>{t(selectedRecommendation.isReentry ? 'planner.reentry_structure' : 'planner.session_structure')}</small></span>
                   <kbd aria-hidden="true">↵</kbd>
                 </button>
                 <div className="op-guided-secondary-actions">
-                  <button className="op-other-suggestion" onClick={() => void startFiveMinuteSession('pointer')} aria-keyshortcuts="5">
+                  {!selectedRecommendation.isReentry && <button className="op-other-suggestion" onClick={() => void startFiveMinuteSession('pointer')} aria-keyshortcuts="5">
                     {t('planner.just_five')} <kbd>5</kbd>
-                  </button>
+                  </button>}
                   {visibleRecommendations.length > 1 && (
                     <button className="op-other-suggestion" onClick={requestOtherSuggestion}>
                       {t('planner.other_suggestion')} <ArrowRight size={14} />

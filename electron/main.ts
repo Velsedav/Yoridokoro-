@@ -163,7 +163,7 @@ function applyMainSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS time_entries(
       id TEXT PRIMARY KEY, activity_id TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT NOT NULL,
       duration_seconds INTEGER NOT NULL, note TEXT NULL, source TEXT NOT NULL DEFAULT 'timer', source_ref TEXT NULL,
-      source_detail_ref TEXT NULL, source_detail_label TEXT NULL, created_at TEXT NOT NULL,
+      source_detail_ref TEXT NULL, source_detail_label TEXT NULL, exercise_tag INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
       FOREIGN KEY(activity_id) REFERENCES activities(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS time_entry_deletions(
@@ -237,6 +237,45 @@ function applyMainSchema(db: Database.Database) {
       payload_json TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS career_cvs(
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL UNIQUE,
+      default_header TEXT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS career_companies(
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      location_url TEXT NULL,
+      website_url TEXT NULL,
+      notes TEXT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS career_applications(
+      id TEXT PRIMARY KEY,
+      position_title TEXT NOT NULL,
+      company_name TEXT NOT NULL,
+      applied_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'en_cours',
+      contract_type TEXT NOT NULL DEFAULT 'CDI',
+      application_type TEXT NOT NULL DEFAULT 'Offre',
+      location_url TEXT NULL,
+      location_label TEXT NULL,
+      offer_url TEXT NULL,
+      cv_id TEXT NULL,
+      cv_label TEXT NULL,
+      cv_header TEXT NOT NULL DEFAULT '',
+      cover_letter TEXT NOT NULL DEFAULT '',
+      offer_content TEXT NOT NULL DEFAULT '',
+      my_questions TEXT NOT NULL DEFAULT '',
+      research_notes TEXT NOT NULL DEFAULT '',
+      my_advantages TEXT NOT NULL DEFAULT '',
+      follow_up_date TEXT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_career_applications_date ON career_applications(applied_date DESC, created_at DESC);
   `)
 
   const hasColumn = (table: string, column: string) =>
@@ -267,6 +306,7 @@ function applyMainSchema(db: Database.Database) {
     ensureColumn('time_entries', 'source_ref', 'TEXT NULL')
     ensureColumn('time_entries', 'source_detail_ref', 'TEXT NULL')
     ensureColumn('time_entries', 'source_detail_label', 'TEXT NULL')
+    ensureColumn('time_entries', 'exercise_tag', 'INTEGER NOT NULL DEFAULT 0')
     ensureColumn('sessions', 'actual_seconds', 'INTEGER NOT NULL DEFAULT 0')
     ensureColumn('sessions', 'status', "TEXT NOT NULL DEFAULT 'completed'")
     ensureColumn('sessions', 'evaluated_at', 'TEXT NULL')
@@ -638,6 +678,7 @@ function createWindow() {
   win.once('ready-to-show', () => {
     win.maximize()
     win.show()
+    win.focus()
   })
 
   win.on('close', (event) => {

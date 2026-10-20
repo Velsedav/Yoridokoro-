@@ -1,5 +1,5 @@
 export type TimeDistributionPeriod = 'rolling7' | 'week' | 'month' | 'quarter' | 'year'
-export type TimeDistributionCategory = 'gaming' | 'study' | 'goals' | 'art' | 'other'
+export type TimeDistributionCategory = 'gaming' | 'study' | 'goals' | 'art' | 'career' | 'other'
 
 export type DistributionHistoryEntry = {
   started_at: string
@@ -17,7 +17,7 @@ export type TimeDistributionSegment = {
 }
 
 export const TIME_DISTRIBUTION_PERIODS: TimeDistributionPeriod[] = ['rolling7', 'week', 'month', 'quarter', 'year']
-export const TIME_DISTRIBUTION_CATEGORIES: TimeDistributionCategory[] = ['gaming', 'study', 'goals', 'art', 'other']
+export const TIME_DISTRIBUTION_CATEGORIES: TimeDistributionCategory[] = ['gaming', 'study', 'goals', 'art', 'career', 'other']
 
 export function timeDistributionRange(period: TimeDistributionPeriod, now = new Date()) {
   const to = new Date(now)
@@ -46,6 +46,7 @@ export function classifyHistoryTime(entry: DistributionHistoryEntry): TimeDistri
   const domains = new Set((entry.activity_domains ?? '').split('|').map(value => value.trim().toLocaleLowerCase()).filter(Boolean))
 
   if (source === 'playnite' || domains.has('playnite-game')) return 'gaming'
+  if (kind === 'career' || source === 'career') return 'career'
   if (source === 'study' || kind === 'study' || domains.has('study-subject')) return 'study'
   if (['bingoals', 'bingo', 'objectifs', 'objectives'].includes(source) || kind === 'goal' || domains.has('bingo-objective') || domains.has('bingo-subobjective')) return 'goals'
   if (source === 'art' || kind === 'art' || domains.has('art')) return 'art'

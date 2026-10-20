@@ -8,6 +8,8 @@ import { SettingsProvider } from './lib/settings.tsx'
 import Layout from './components/Layout'
 import './styles/linux-perf.css'
 import './styles/yoridokoro-legacy.css'
+import './styles/rework-components.css'
+import './styles/rework.css'
 import AppErrorBoundary from './components/AppErrorBoundary.tsx'
 
 const TodayDashboard = lazy(() => import('./pages/TodayDashboard.tsx'))
@@ -26,6 +28,7 @@ const BingoDashboard = lazy(() => import('./pages/bingoals/BingoDashboard.tsx'))
 const BingoObjectivePage = lazy(() => import('./pages/bingoals/BingoObjectivePage.tsx'))
 const ArtModule = lazy(() => import('./pages/ArtModule.tsx'))
 const Relations = lazy(() => import('./pages/Relations.tsx'))
+const Career = lazy(() => import('./pages/Career.tsx'))
 
 // F11: toggle fullscreen via Electron
 document.addEventListener('keydown', (e) => {
@@ -45,6 +48,10 @@ lifecycle?.onBeforeClose(async () => {
   window.dispatchEvent(new Event('app-close-start'));
   try {
     const { autoExportToConfiguredPaths } = await import('./lib/export');
+    const { flushActiveSessionRecovery } = await import('./lib/activeSessionRecovery');
+    await flushActiveSessionRecovery().catch(error => console.warn('Session checkpoint could not complete', error));
+    const { synchronizeStudyDataDurability } = await import('./lib/chapters');
+    await synchronizeStudyDataDurability().catch(error => console.warn('Study checkpoint could not complete', error));
     await autoExportToConfiguredPaths((path, status, slot) => {
       window.dispatchEvent(new CustomEvent('app-close-path', { detail: { path, status, slot } }));
     });
@@ -66,6 +73,12 @@ new MutationObserver(clearNativeZoom).observe(document.documentElement, { attrib
 new MutationObserver(clearNativeZoom).observe(document.body, { attributes: true, attributeFilter: ['style'] });
 
 async function startRenderer() {
+  try {
+    const { recoverActiveSession } = await import('./lib/activeSessionRecovery')
+    await recoverActiveSession()
+  } catch (error) {
+    console.warn('Active session recovery check could not complete', error)
+  }
   try {
     const { synchronizeStudyDataDurability } = await import('./lib/chapters')
     await synchronizeStudyDataDurability()
@@ -96,6 +109,7 @@ async function startRenderer() {
               <Route path="bingoals" element={<BingoDashboard />} />
               <Route path="bingoals/objective/:id" element={<BingoObjectivePage />} />
               <Route path="art" element={<ArtModule />} />
+              <Route path="career" element={<Career />} />
               <Route path="relations" element={<Relations />} />
             </Route>
             </Routes>

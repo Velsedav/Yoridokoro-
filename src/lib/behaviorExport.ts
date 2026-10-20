@@ -293,7 +293,7 @@ function buildTimeEntriesCsv(source: BehaviorExportSource, options: BehaviorExpo
   const headers = [
     'time_entry','activity','activity_name','activity_kind','started_at_utc','ended_at_utc',
     'timezone_offset_minutes','local_started_at','duration_seconds','duration_minutes','source',
-    'origin','measurement_source','related_session','detail',
+    'origin','measurement_source','related_session','detail','exercise_tag',
   ]
   const rows = entries.map(entry => {
     const activity = activities.get(entry.activity_id)
@@ -310,6 +310,7 @@ function buildTimeEntriesCsv(source: BehaviorExportSource, options: BehaviorExpo
       (Math.max(0, entry.duration_seconds) / 60).toFixed(2), entry.source, timeEntryOrigin(entry),
       timeEntryMeasurementSource(entry, blockById), stablePseudonym('session', relatedSessionId, salt),
       options.pseudonymizeLabels ? '' : entry.source_detail_label ?? entry.note ?? '',
+      entry.exercise_tag ? 1 : 0,
     ].map(escapeCsv).join(',')
   })
   return {

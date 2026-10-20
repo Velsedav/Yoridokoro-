@@ -1,6 +1,9 @@
 export interface ArtArchive { items: unknown[]; matches: unknown[] }
 
-function openArtDb(): Promise<IDBDatabase> {
+async function openArtDb(): Promise<IDBDatabase> {
+  // A restore may run before Art has ever been opened on this profile.
+  const { db } = await import('../features/art/lib/db')
+  await db.open()
   return new Promise((resolve,reject)=>{const request=indexedDB.open('keystone');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})
 }
 

@@ -162,7 +162,7 @@ Attendre plusieurs reprises réelles avant de modifier l'interface.
 ======================================================================
 P2 — ANALYSES FUTURES, APRÈS P0
 ======================================================================
-
+[ ] P2.0 — Avoir une section Recherhe d'emploi, qui sera comme le template sur Notion, avec une meilleure gestion des templates.
 [ ] P2.1 — Décrire les horaires d'étude, sans chercher une « heure parfaite ».
 [ ] P2.2 — Comparer blocs longs et retours multiples dans une même journée.
 [ ] P2.3 — Étudier le premier démarrage après plusieurs jours sans activité.
@@ -180,6 +180,7 @@ P2 — ANALYSES FUTURES, APRÈS P0
 [x] P2.15 — Un calendrier de saisonalité/événements culturels. Du genre le Carnaval de Nice, le nouvel an chinois, l'Eïd, Noël, les journées du patrimoine etc. Et je pourrais mettre une image format bannière qu'on verrait en haut sur l'écran d'accueil. Parce que moi je fais attention qu'il y a les journées du patrimoine seulement après que ce soit passé et qu'il y a ait un article dans le journal.
 [x] P2.16 — Une alternative à RAWG si l'API est down, car ça fait plusieurs jours qu'ils sont offline.
 [x] P2.17 — Because playnite data is now imported, then we can have a clear vizualizer on the the main page about what percentage of time was spent on gaming, studying and the other stuff (objectives/art).
+[ ] P2.18 - Meilleur liaison des tous les systèmes de time tracking, je trouve qu'il n'est pas évident ni facile par exemple si je lis un livre dans Objectif, que ça s'intègre bien avec la Collection Art, la watchlist etc. Il faut repenser tout ça.
 
 Conditions avant analyse :
 - Export complet Étude + Objectifs.

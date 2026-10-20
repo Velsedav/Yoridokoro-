@@ -5,6 +5,7 @@ import type { SessionAnalyticsContext } from './behaviorAnalytics'
 export const GUIDED_SESSION_SHAPE = { prep: 9, work: 25, break: 5 } as const
 
 export function guidedObjectiveKey(recommendation: PlannerRecommendation) {
+  if (recommendation.isReentry) return recommendation.kind === 'review' ? 'planner.goal_reentry' : 'planner.goal_reentry_new'
   if (recommendation.kind === 'review') return 'planner.goal_review'
   if (recommendation.suggestedTechniqueId === 's6') return 'planner.goal_skill'
   return 'planner.goal_progress'

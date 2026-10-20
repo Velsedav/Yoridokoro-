@@ -1,3 +1,4 @@
+import { persistActiveSession } from '../lib/activeSessionRecovery'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Brain, Check, Heart, NotebookPen, Pause, Play, Plus, RefreshCcw, Sparkles, Target, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -5,6 +6,7 @@ import { getSessionEvidence, getSessions, getSubjects, type Session, type Sessio
 import NextStudyStep from '../components/NextStudyStep'
 import CulturalBanner from '../components/CulturalBanner'
 import TimeDistributionPanel from '../components/TimeDistributionPanel'
+import QuickLaunchPanel from '../components/QuickLaunchPanel'
 import { daysSinceContact, getPeople, type Person } from '../lib/relations'
 import { createEisenhowerTask, deleteEisenhowerTask, EISENHOWER_QUADRANTS, getEisenhowerTasks, moveEisenhowerTask, setEisenhowerTaskDone, type EisenhowerQuadrant, type EisenhowerTask } from '../lib/eisenhower'
 import { getAllChapters } from '../lib/chapters'
@@ -15,6 +17,9 @@ import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sess
 import { useTranslation } from '../lib/i18n'
 import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
 import './TodayDashboard.css'
+import { useRework } from '../design/rework/useRework'
+import { PageHeading, Orbit } from '../design/rework/Primitives'
+import { useTaskCompletionGrace } from '../hooks/useTaskCompletionGrace'
 
 type ActiveSession = {
   remainingSeconds?: number
@@ -79,6 +84,8 @@ const QUADRANT_COPY: Record<EisenhowerQuadrant, { title: string; hint: string; u
 }
 
 export default function TodayDashboard() {
+  const rework = useRework()
+  const [selectedQuadrant, setSelectedQuadrant] = useState<EisenhowerQuadrant>('do')
   const workSecondsBySubject = usePlannerAllocation()
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -87,6 +94,7 @@ export default function TodayDashboard() {
   const [studyEvidence, setStudyEvidence] = useState<SessionEvidence[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [eisenhowerTasks, setEisenhowerTasks] = useState<EisenhowerTask[]>([])
+  const { visibleCompletedIds, trackCompletion, cancelCompletion } = useTaskCompletionGrace()
   const [taskDrafts, setTaskDrafts] = useState<Record<EisenhowerQuadrant, string>>({ do: '', schedule: '', delegate: '', eliminate: '' })
   const [adhdSprint, setAdhdSprint] = useState<AdhdSprint | null>(readAdhdSprint)
   const [nextAction, setNextAction] = useState('')
@@ -190,7 +198,7 @@ export default function TodayDashboard() {
     const handleEnter = (event: KeyboardEvent) => {
       if (!['Enter', '5'].includes(event.key) || event.repeat || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return
       const target = event.target instanceof HTMLElement ? event.target : null
-      if (target?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], .modal-overlay, .oqs-overlay')) return
+      if (target?.closest('input, textarea, select, button, a, summary, [role="button"], [contenteditable="true"], [role="dialog"], .modal-overlay, .oqs-overlay')) return
       event.preventDefault()
       event.stopPropagation()
       void startRecommendation('keyboard', event.key === '5')
@@ -212,6 +220,8 @@ export default function TodayDashboard() {
   async function toggleMatrixTask(task: EisenhowerTask) {
     const done = !task.done
     await setEisenhowerTaskDone(task.id, done)
+    if (done) trackCompletion(task.id)
+    else cancelCompletion(task.id)
     setEisenhowerTasks(current => current.map(item => item.id === task.id ? { ...item, done: done ? 1 : 0 } : item))
   }
 
@@ -222,6 +232,7 @@ export default function TodayDashboard() {
 
   async function removeMatrixTask(task: EisenhowerTask) {
     await deleteEisenhowerTask(task.id)
+    cancelCompletion(task.id)
     setEisenhowerTasks(current => current.filter(item => item.id !== task.id))
   }
 
@@ -246,6 +257,7 @@ export default function TodayDashboard() {
 
   async function startRecommendation(inputMethod: 'keyboard' | 'pointer' = 'pointer', justFive = false) {
     if (!recommendation) return
+    justFive = justFive || Boolean(recommendation.isReentry)
     const draft = buildGuidedDraft(recommendation, t(guidedObjectiveKey(recommendation)))
     const analytics = {
       opportunityId: opportunityIdRef.current,
@@ -280,7 +292,7 @@ export default function TodayDashboard() {
       : createActiveSession(draft, true, analytics)
     localStorage.removeItem(SESSION_REVIEW_REQUEST_KEY)
     localStorage.removeItem(SESSION_RETURN_PATH_KEY)
-    localStorage.setItem('activeSession', JSON.stringify(nextSession))
+    persistActiveSession(JSON.stringify(nextSession))
     await recordBehaviorEvent({
       eventType: 'session_created',
       opportunityId: analytics.opportunityId,
@@ -322,14 +334,10 @@ export default function TodayDashboard() {
     setSuggestionIndex(index => (index + 1) % recommendations.length)
   }
 
-  return (
-    <div className="yd-page">
-      <CulturalBanner />
-
-      {active ? (
+  const actionView = active ? (
         <section className="yd-active" aria-labelledby="active-session-title">
           <div className="yd-active-status"><span className="yd-pulse" aria-hidden="true" /><span>{active.paused ? 'En pause' : 'En cours'}</span></div>
-          <div><h2 id="active-session-title">{activeName}</h2><p>Votre session reste à portée de main.</p></div>
+          <div><h2 id="active-session-title">{activeName}</h2><p>{sessionStorage.getItem('yoridokoro-session-recovered') ? 'Séance récupérée et mise en pause.' : 'Votre session reste à portée de main.'}</p></div>
           <strong className="yd-timer" aria-label={`${active.remainingSeconds || 0} secondes restantes`}>{formatCountdown(active.remainingSeconds)}</strong>
           <button className="yd-primary-button" onClick={() => navigate('/session')}>{active.paused ? <Play size={17} /> : <Pause size={17} />} Reprendre</button>
         </section>
@@ -349,11 +357,8 @@ export default function TodayDashboard() {
             <button className="yd-primary-button" onClick={() => navigate('/study')}><Plus size={17} /> Ouvrir les sujets</button>
           </section>
         )
-      )}
-
-      <TimeDistributionPanel />
-
-      <section className="yd-continuity-row" aria-label="Continuité de l’étude">
+      )
+  const continuityView = (<section className="yd-continuity-row" aria-label="Continuité de l’étude">
         <article className="yd-continuity" aria-labelledby="continuity-title">
           <header><span className="yd-eyebrow"><NotebookPen size={14} /> Continuité</span><h2 id="continuity-title">Là où vous en étiez</h2></header>
           {latestEvidence ? <>
@@ -374,17 +379,13 @@ export default function TodayDashboard() {
             ? daysSinceLastReturn === 0 ? 'Vous êtes revenu aujourd’hui.' : 'Cinq minutes suffisent pour remettre le compteur à zéro.'
             : 'La première minute de travail lancera ce compteur.'}</p>
         </aside>
-      </section>
-
-      <p className="yd-today-summary">
+      </section>)
+  const summaryView = (<p className="yd-today-summary">
         <strong>Aujourd’hui</strong><span>{formatMinutes(todayMinutes)}</span><i aria-hidden="true" />
         <span>{todaySessions.length} session{todaySessions.length > 1 ? 's' : ''}</span><i aria-hidden="true" />
         <span>{todayEvidenceCount} preuve{todayEvidenceCount > 1 ? 's' : ''}</span>
-      </p>
-
-      <details className="yd-organize">
-        <summary><Target size={16} /><span><strong>Organiser ma journée</strong><small>Tâches, démarrage libre et aperçu</small></span><ArrowRight size={16} className="yd-organize-chevron" /></summary>
-      <section className="yd-section yd-eisenhower-section" aria-labelledby="eisenhower-title">
+      </p>)
+  const tasksView = (<section className="yd-section yd-eisenhower-section" aria-labelledby="eisenhower-title">
         <div className="yd-section-heading">
           <div><span className="yd-eyebrow"><Target size={14} /> Décider avant de remplir sa journée</span><h2 id="eisenhower-title">Matrice d’Eisenhower</h2><p className="yd-section-description">Déposez chaque tâche dans une case. Vous pourrez la déplacer sans glisser-déposer.</p></div>
         </div>
@@ -396,13 +397,13 @@ export default function TodayDashboard() {
           <div className="yd-matrix-axis yd-matrix-axis--less-important" aria-hidden="true"><strong>Moins important</strong><small>Impact limité</small></div>
           {EISENHOWER_QUADRANTS.map(quadrant => {
             const copy = QUADRANT_COPY[quadrant]
-            const tasks = eisenhowerTasks.filter(task => task.quadrant === quadrant)
+            const tasks = eisenhowerTasks.filter(task => task.quadrant === quadrant && (!task.done || visibleCompletedIds.has(task.id)))
             return (
               <article className={`yd-quadrant yd-quadrant--${quadrant}`} key={quadrant} aria-labelledby={`quadrant-${quadrant}`}>
-                <header>
+                {rework ? <h3 className="yd-sr-only" id={`quadrant-${quadrant}`}>{copy.title}</h3> : <header>
                   <div><p className="yd-quadrant-tags"><span>{copy.importance}</span><span>{copy.urgency}</span></p><h3 id={`quadrant-${quadrant}`}>{copy.title}</h3><p className="yd-quadrant-hint">{copy.hint}</p></div>
                   <strong aria-label={`${tasks.filter(task => !task.done).length} tâches non terminées`}>{tasks.filter(task => !task.done).length}</strong>
-                </header>
+                </header>}
                 <ul className="yd-matrix-list">
                   {tasks.map(task => (
                     <li key={task.id} className={task.done ? 'is-done' : ''}>
@@ -412,7 +413,7 @@ export default function TodayDashboard() {
                       <span>{task.title}</span>
                       <label className="yd-sr-only" htmlFor={`move-${task.id}`}>Déplacer {task.title}</label>
                       <select id={`move-${task.id}`} value="" onChange={event => moveMatrixItem(task, event.target.value as EisenhowerQuadrant)} aria-label={`Déplacer ${task.title}`}>
-                        <option value="" disabled>Déplacer…</option>
+                        <option value="" disabled>Déplacer</option>
                         {EISENHOWER_QUADRANTS.filter(value => value !== task.quadrant).map(value => <option key={value} value={value}>{QUADRANT_COPY[value].title}</option>)}
                       </select>
                       <button type="button" className="yd-task-delete" onClick={() => removeMatrixTask(task)} aria-label={`Supprimer ${task.title}`}><Trash2 size={14} aria-hidden="true" /></button>
@@ -429,10 +430,9 @@ export default function TodayDashboard() {
             )
           })}
         </div>
-      </section>
-
-      <section className={`yd-focus-lab${adhdSprint ? ' is-running' : ''}`} aria-labelledby="focus-lab-title">
-        <div className="yd-focus-intro"><span className="yd-eyebrow"><Brain size={14} /> Mode démarrage TDAH</span><h2 id="focus-lab-title">Une seule prochaine action</h2><p>Pas besoin de finir : choisissez une action visible, puis donnez-lui seulement quelques minutes.</p></div>
+      </section>)
+  const focusView = (<section className={`yd-focus-lab${adhdSprint ? ' is-running' : ''}`} aria-labelledby="focus-lab-title">
+        <div className="yd-focus-intro"><span className="yd-eyebrow"><Brain size={14} /> Mode démarrage TDAH</span><h2 id="focus-lab-title">Démarrage rapide</h2><p>Pas besoin de finir : choisissez une action visible, puis donnez-lui seulement quelques minutes.</p></div>
         {adhdSprint ? (
           <div className="yd-focus-running">
             <span>En ce moment</span>
@@ -442,17 +442,16 @@ export default function TodayDashboard() {
           </div>
         ) : (
           <div className="yd-focus-command">
-            <label htmlFor="yd-next-action">Quelle action physique et précise pouvez-vous commencer ?</label>
-            <input id="yd-next-action" value={nextAction} onChange={event => setNextAction(event.target.value)} placeholder="Ex. ouvrir le document et écrire le titre" />
+            <label htmlFor="yd-next-action">Action</label>
+            <input id="yd-next-action" value={nextAction} onChange={event => setNextAction(event.target.value)} placeholder="Votre prochaine action" />
             <fieldset><legend>Durée du démarrage</legend><div>{[5, 15, 25].map(minutes => <button type="button" key={minutes} aria-pressed={sprintMinutes === minutes} onClick={() => setSprintMinutes(minutes)}>{minutes} min</button>)}</div></fieldset>
-            <button type="button" className="yd-primary-button" onClick={startFocusSprint}><Play size={16} /> Démarrer sans négocier</button>
+            <button type="button" className="yd-primary-button" onClick={startFocusSprint}><Play size={16} /> Démarrer</button>
           </div>
         )}
         <p className="yd-focus-status" role="status" aria-live="polite">{focusStatus}</p>
         <ul className="yd-focus-principles" aria-label="Principes du mode démarrage"><li><b>1.</b> Externaliser</li><li><b>2.</b> Réduire</li><li><b>3.</b> Commencer</li></ul>
-      </section>
-
-      <section className="yd-section yd-overview-section" aria-labelledby="overview-title">
+      </section>)
+  const overviewView = (<section className="yd-section yd-overview-section" aria-labelledby="overview-title">
         <div className="yd-section-heading"><div><span className="yd-eyebrow"><Sparkles size={14} /> En dehors de l’étude</span><h2 id="overview-title">À garder en vue</h2><p className="yd-section-description">Les échéances et les relations restent disponibles sans concurrencer la prochaine étape d’étude.</p></div></div>
         <div className="yd-columns">
         <section className="yd-panel" aria-labelledby="deadlines-title">
@@ -472,8 +471,36 @@ export default function TodayDashboard() {
         </section>
 
         </div>
-      </section>
-      </details>
+      </section>)
+
+  if (rework) return <div className="rw-today yd-page">
+    <PageHeading title="Aujourd’hui" />
+    <div className="rw-today-composition">
+      <section className="rw-action-surface" aria-label="La prochaine action"><div className="rw-surface-label"><span>Étudier</span><span aria-hidden="true">↗</span></div>{actionView}<Orbit /></section>
+      <aside className="rw-culture-surface" aria-label="Votre horizon culturel"><div className="rw-surface-label"><span>Culture</span><span aria-hidden="true">↗</span></div><CulturalBanner /></aside>
+      <div className="rw-daily-footnote">{summaryView}<button className="yd-text-button" onClick={() => navigate('/calendar')}>Historique <ArrowRight size={15} /></button></div>
     </div>
-  )
+    <QuickLaunchPanel />
+    <div className="rw-dashboard-spread">
+      <div className="rw-journal-column">
+        <TimeDistributionPanel />
+        {latestEvidence && continuityView}
+      </div>
+      <div className="rw-work-column">
+        <section className="rw-task-board" aria-labelledby="rw-tasks-title">
+          <h2 id="rw-tasks-title" className="rw-module-title"><Target size={18} aria-hidden="true" /> Tâches</h2>
+          <div className="rw-task-tabs" role="group" aria-label="Priorité des tâches">
+            {EISENHOWER_QUADRANTS.map(quadrant => <button key={quadrant} aria-pressed={selectedQuadrant === quadrant} onClick={() => setSelectedQuadrant(quadrant)}>
+              {quadrant === 'delegate' ? 'Déléguer' : quadrant === 'eliminate' ? 'Laisser' : QUADRANT_COPY[quadrant].title}
+              <small>{eisenhowerTasks.filter(task => task.quadrant === quadrant && !task.done).length || ''}</small>
+            </button>)}
+          </div>
+          <div className="rw-task-pane" data-quadrant={selectedQuadrant}>{tasksView}</div>
+        </section>
+        {focusView}
+      </div>
+    </div>
+    {(deadlines.length > 0 || peopleToContact.length > 0) && overviewView}
+  </div>
+  return <div className="yd-page"><CulturalBanner />{actionView}<QuickLaunchPanel /><TimeDistributionPanel />{continuityView}{summaryView}<details className="yd-organize"><summary><Target size={16} /><span><strong>Organiser ma journée</strong><small>Tâches, démarrage libre et aperçu</small></span><ArrowRight size={16} className="yd-organize-chevron" /></summary>{tasksView}{focusView}{overviewView}</details></div>
 }

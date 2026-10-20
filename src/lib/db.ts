@@ -99,7 +99,7 @@ export async function getSubjectWorkSecondsSince(since: string): Promise<Subject
 }
 
 export interface StudyDataSnapshot {
-  kind: 'chapters' | 'mastery-ratings'
+  kind: 'chapters' | 'mastery-ratings' | 'active-session'
   version: number
   payload_json: string
   updated_at: string
@@ -668,6 +668,9 @@ export async function renameChapterInDb(subjectId: string, oldName: string, newN
 }
 
 export async function deleteAllData() {
+  const { clearActiveSession, flushActiveSessionRecovery } = await import('./activeSessionRecovery')
+  clearActiveSession()
+  await flushActiveSessionRecovery()
   const db = await getDb()
   await db.execute(`DELETE FROM analytics_events`)
   await db.execute(`DELETE FROM session_context`)
@@ -681,6 +684,11 @@ export async function deleteAllData() {
   await db.execute(`DELETE FROM person_interactions`)
   await db.execute(`DELETE FROM person_notes`)
   await db.execute(`DELETE FROM people`)
+  try {
+    await db.execute(`DELETE FROM career_applications`)
+    await db.execute(`DELETE FROM career_companies`)
+    await db.execute(`DELETE FROM career_cvs`)
+  } catch { /* career tables may not be initialized in older test schemas */ }
   await db.execute(`DELETE FROM sessions`)
   await db.execute(`DELETE FROM session_blocks`)
   await db.execute(`DELETE FROM subgoals`)

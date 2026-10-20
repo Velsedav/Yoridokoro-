@@ -34,6 +34,8 @@ import {
 import type { SRSState, ObservationsState } from './Learning';
 
 import './ObsidianLearning.css';
+import { PageHeading } from '../design/rework/Primitives';
+import { useRework } from '../design/rework/useRework';
 
 type QuizMap = Record<number, Record<string, boolean>>;
 
@@ -42,6 +44,7 @@ function sectionShortTitle(section: Section): string {
 }
 
 export default function ObsidianLearning() {
+    const rework = useRework();
     const { theme } = useSettings();
     const { t } = useTranslation();
 
@@ -209,6 +212,7 @@ export default function ObsidianLearning() {
 
     return (
         <div className="obs-learn-page">
+            {rework && <PageHeading title="Apprentissage" />}
             {showCelebration && (
                 <CelebrationOverlay onDone={() => setShowCelebration(false)} />
             )}

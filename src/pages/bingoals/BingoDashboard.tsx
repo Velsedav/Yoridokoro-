@@ -1,3 +1,5 @@
+import { PageHeading } from '../../design/rework/Primitives'
+import { useRework } from '../../design/rework/useRework'
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink, Target, LayoutGrid, Clock3, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -58,6 +60,7 @@ function lastStatus(days: number | null, freqDays: number | null) {
 }
 
 export default function BingoDashboard() {
+  const rework = useRework()
   const nav = useNavigate();
   const { t } = useTranslation();
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
@@ -290,6 +293,7 @@ export default function BingoDashboard() {
 
   return (
     <div className="bingoals-root bingo-dashboard-page fade-in">
+      {rework && <PageHeading title="Objectifs" />}
       <header className="bingo-page-header">
         <div className="bingo-page-identity">
           <span className="bingo-page-eyebrow">

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { Clock3, Square } from 'lucide-react'
 import KonomiApp from '../features/art/App'
 import artStyles from '../features/art/styles.css?raw'
+import { useRework } from '../design/rework/useRework'
+import reworkArtStyles from '../styles/rework-art.css?raw'
 import { ensureLinkedActivity, readActiveActivityTimer, startActivityTimer, stopActivityTimer } from '../lib/activityTime'
 import './ArtModule.css'
 
@@ -17,11 +19,13 @@ const embeddedOverrides = `
 `
 
 const shadowArtStyles=artStyles
+  .replaceAll(":root[data-color-scheme='dark']",":host([data-color-scheme='dark'])")
   .replaceAll(":root:not([data-theme='keystone'])",":host(:not([data-theme='keystone']))")
   .replaceAll(":root[data-theme='keystone']",":host([data-theme='keystone'])")
   .replaceAll(':root',':host')
 
 export default function ArtModule() {
+  const rework = useRework()
   const hostRef=useRef<HTMLDivElement>(null)
   const [artMount,setArtMount]=useState<HTMLDivElement|null>(null)
   const [activityId,setActivityId]=useState(''),[timing,setTiming]=useState(false)
@@ -32,10 +36,22 @@ export default function ArtModule() {
     const shadow=host.shadowRoot||host.attachShadow({mode:'open'}),style=document.createElement('style'),mount=document.createElement('div')
     // Konomi's standalone stylesheet targets :root. Inside Yoridokoro's shadow
     // boundary the equivalent root is :host, so keep every palette override active.
-    style.textContent=shadowArtStyles+embeddedOverrides;mount.className='art-native-root';shadow.append(style,mount)
+    style.textContent=shadowArtStyles+embeddedOverrides+reworkArtStyles;mount.className='art-native-root';shadow.append(style,mount)
     setArtMount(mount)
     return()=>{setArtMount(null);shadow.replaceChildren()}
   },[])
+
+  useEffect(() => {
+    const syncTheme = () => {
+      if (!hostRef.current) return
+      hostRef.current.dataset.theme = document.documentElement.dataset.theme
+      hostRef.current.dataset.colorScheme = document.documentElement.dataset.colorScheme
+    }
+    syncTheme()
+    const observer = new MutationObserver(syncTheme)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-color-scheme'] })
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(()=>{void ensureLinkedActivity('art','collection',{name:'Collection Art',kind:'art',color:'#b45b68'}).then(id=>{setActivityId(id);setTiming(readActiveActivityTimer()?.activityId===id)})},[])
   async function toggleTimer(){if(timing){await stopActivityTimer('Exploration de la collection Art');setTiming(false)}else if(activityId&&!readActiveActivityTimer()){startActivityTimer(activityId);setTiming(true)}}
@@ -44,6 +60,6 @@ export default function ArtModule() {
 
   return <section className="art-module" aria-label="Art — collections et classements">
     <div ref={hostRef} className="art-native-host" />
-    {artMount&&createPortal(<KonomiApp headerAction={timerAction}/>,artMount)}
+    {artMount&&createPortal(<KonomiApp headerAction={timerAction} design={rework ? 'rework' : undefined}/>,artMount)}
   </section>
 }

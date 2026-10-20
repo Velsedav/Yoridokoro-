@@ -19,6 +19,8 @@ export interface PlannerRecommendation {
   allocationInfluenced: boolean
   allocationDeficit: number
   resumePoint?: string
+  /** Gentle default after at least two weeks without recorded study. */
+  isReentry?: boolean
 }
 
 type RecommendationSubject = Pick<
@@ -101,6 +103,10 @@ export function buildPlannerRecommendations(
   allocation: PlannerAllocationContext = {},
 ): PlannerRecommendation[] {
   const activeSubjects = subjects.filter(subject => !subject.archived)
+  const lastStudy = Math.max(0, ...activeSubjects.map(subject => validTime(subject.last_studied_at, 0)),
+    ...chapters.filter(chapter => !chapter.archived && activeSubjects.some(subject => subject.id === chapter.subjectId))
+      .map(chapter => validTime(chapter.lastStudiedAt, 0)))
+  const isReentry = lastStudy > 0 && at.getTime() - lastStudy >= 14 * 86400000
   const subjectMap = new Map(activeSubjects.map(subject => [subject.id, subject]))
   const chaptersBySubject = new Map<string, Chapter[]>()
 
@@ -146,6 +152,7 @@ export function buildPlannerRecommendations(
         allocationInfluenced: false,
         allocationDeficit: allocationDeficits.get(subject.id) ?? 0,
         resumePoint: chapter.resumePoint,
+        isReentry,
         subject,
       })
     }
@@ -169,6 +176,7 @@ export function buildPlannerRecommendations(
         allocationInfluenced: false,
         allocationDeficit: allocationDeficits.get(subject.id) ?? 0,
         resumePoint: chapter.resumePoint,
+        isReentry,
         subject,
         critical: daysOverdue >= Math.max(2, status.currentIntervalDays),
       })
@@ -221,5 +229,6 @@ export function buildPlannerRecommendations(
     allocationInfluenced: item.allocationInfluenced,
     allocationDeficit: item.allocationDeficit,
     resumePoint: item.resumePoint,
+    isReentry: item.isReentry,
   }))
 }

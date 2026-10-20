@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFiveMinuteDraft, buildGuidedDraft, createFiveMinuteSession } from '../guidedSession'
+import { buildFiveMinuteDraft, buildGuidedDraft, createFiveMinuteSession, guidedObjectiveKey } from '../guidedSession'
 import type { PlannerRecommendation } from '../plannerRecommendations'
 
 const recommendation: PlannerRecommendation = {
@@ -10,6 +10,10 @@ const recommendation: PlannerRecommendation = {
 }
 
 describe('five-minute guided start', () => {
+  it('gives a factual restart goal without changing the recorded mastery', () => {
+    expect(guidedObjectiveKey({ ...recommendation, kind: 'review', isReentry: true })).toBe('planner.goal_reentry')
+    expect(guidedObjectiveKey({ ...recommendation, isReentry: true })).toBe('planner.goal_reentry_new')
+  })
   it('starts directly with one five-minute WORK block on the recommendation', () => {
     const draft = buildFiveMinuteDraft(recommendation, 'Move forward gently')
 

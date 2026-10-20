@@ -13,6 +13,12 @@ function contrast(first: string, second: string): number {
 }
 
 describe('themes', () => {
+  it('offers Rework beside the renamed original without changing its stored id', () => {
+    expect(themes.slice(0, 2).map(({ id, label }) => ({ id, label }))).toEqual([
+      { id: 'keystone', label: 'Yoridokoro' },
+      { id: 'rework', label: 'Rework' }
+    ]);
+  });
   it('has stable, unique identifiers and populated families', () => {
     expect(new Set(themes.map((theme) => theme.id)).size).toBe(themes.length);
     for (const family of themeFamilies) {

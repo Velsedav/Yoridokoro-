@@ -1,3 +1,4 @@
+import { persistActiveSession } from '../lib/activeSessionRecovery'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Zap } from 'lucide-react'
@@ -11,6 +12,7 @@ import TechniquePickerModal from './TechniquePickerModal'
 import { useDialogFocus } from '../hooks/useDialogFocus'
 import { recordBehaviorEvent } from '../lib/behaviorAnalytics'
 import './ObsidianQuickStart.css'
+import { useTranslation } from '../lib/i18n'
 
 const DURATION_PRESETS = [25, 50, 90]
 const LS_DURATION_KEY = 'obsidian-qs-duration'
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export default function ObsidianQuickStart({ subject, initialChapterName = '', onClose }: Props) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [duration, setDuration] = useState<number>(() => {
     const saved = localStorage.getItem(LS_DURATION_KEY)
@@ -81,7 +84,7 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
       selectedChapter?.studyCount ?? null,
       Boolean(selectedChapter?.resumePoint?.trim()),
     )
-    localStorage.setItem('activeSession', JSON.stringify(session))
+    persistActiveSession(JSON.stringify(session))
     await recordBehaviorEvent({
       eventType: 'session_created',
       sessionId: session.sessionId,
@@ -108,12 +111,12 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
     <div className="oqs-overlay" onClick={handleClose}>
       <div ref={dialogRef} className="oqs-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="oqs-title" tabIndex={-1}>
         <div className="oqs-header">
-          <span className="oqs-title" id="oqs-title">Start: {subject.name}</span>
-          <button className="oqs-close" onClick={handleClose} aria-label="Close modal"><X size={16} /></button>
+          <span className="oqs-title" id="oqs-title">{t('quick_start.title', { name: subject.name })}</span>
+          <button className="oqs-close" onClick={handleClose} aria-label={t('plan.close')}><X size={16} /></button>
         </div>
 
         <div className="oqs-field">
-          <label className="oqs-label">Duration</label>
+          <label className="oqs-label" htmlFor="oqs-duration">{t('quick_start.duration')}</label>
           <div className="oqs-duration-row">
             {DURATION_PRESETS.map(p => (
               <button
@@ -125,11 +128,13 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
               </button>
             ))}
             <input
+              id="oqs-duration"
+              aria-label={t('quick_start.custom')}
               className="oqs-custom-input"
               type="number"
               min={1}
               max={480}
-              placeholder="custom"
+              placeholder={t('quick_start.custom')}
               value={customDuration}
               onChange={e => handleCustomDuration(e.target.value)}
             />
@@ -137,14 +142,14 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
         </div>
 
         <div className="oqs-field">
-          <label className="oqs-label" htmlFor="oqs-chapter">Chapter <span className="oqs-optional">(optional)</span></label>
+          <label className="oqs-label" htmlFor="oqs-chapter">{t('quick_start.chapter')} <span className="oqs-optional">({t('quick_start.optional')})</span></label>
           <select
             id="oqs-chapter"
             className="oqs-select"
             value={chapterName}
             onChange={e => setChapterName(e.target.value)}
           >
-            <option value="">— none —</option>
+            <option value="">{t('quick_start.none')}</option>
             {chapters.map(c => (
               <option key={c.id} value={c.name}>{c.name}</option>
             ))}
@@ -156,12 +161,12 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
           {(() => {
             const tech = TECHNIQUES.find(t => t.id === techniqueId)
             return (
-              <button className="oqs-technique-card" onClick={() => setPickerOpen(true)} aria-label="Open technique picker">
+              <button className="oqs-technique-card" onClick={() => setPickerOpen(true)} aria-label={t('quick_start.choose')}>
                 {tech ? (
                   <div className="oqs-tech-info">
                     <span className="oqs-tech-name">{tech.name}</span>
                     <div className="oqs-tech-meta">
-                      <span className="oqs-tech-tier" style={{ color: getTierColor(tech.tier) }}>Tier {tech.tier}</span>
+                      <span className="oqs-tech-tier" style={{ color: getTierColor(tech.tier) }}>{t('quick_start.tier', { tier: tech.tier })}</span>
                       {tech.category && (
                         <span className="oqs-tech-cat" style={{ color: CATEGORY_COLORS[tech.category] }}>
                           {CATEGORY_LABELS[tech.category]}
@@ -170,16 +175,16 @@ export default function ObsidianQuickStart({ subject, initialChapterName = '', o
                     </div>
                   </div>
                 ) : (
-                  <span className="oqs-tech-none">No technique selected</span>
+                  <span className="oqs-tech-none">{t('quick_start.no_technique')}</span>
                 )}
-                <span className="oqs-tech-change"><Zap size={12} /> Browse</span>
+                <span className="oqs-tech-change"><Zap size={12} /> {t('quick_start.browse')}</span>
               </button>
             )
           })()}
         </div>
 
         <button className="oqs-launch" onClick={() => void launch()}>
-          Launch Session
+          {t('quick_start.launch')}
         </button>
       </div>
 

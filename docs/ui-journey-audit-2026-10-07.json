@@ -1,0 +1,1526 @@
+{
+  "date": "2026-10-07",
+  "profile": ".cache/rework-audit/profile",
+  "themes": [
+    "rework",
+    "kokedera"
+  ],
+  "windowWidths": [
+    1440,
+    700
+  ],
+  "scope": {
+    "routeStates": 56,
+    "uniqueRoutes": [
+      "#/",
+      "#/study",
+      "#/subject/theme-subject",
+      "#/plan",
+      "#/calendar",
+      "#/bingoals",
+      "#/bingoals/objective/theme-objective",
+      "#/relations",
+      "#/art",
+      "#/learning",
+      "#/analytics",
+      "#/metacognition-logs",
+      "#/metacognition",
+      "#/settings"
+    ],
+    "dialogCases": 12,
+    "sessionStates": 8
+  },
+  "routeResults": [
+    {
+      "route": "#/",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 47,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/study",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 42,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/subject/theme-subject",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 17,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/plan",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 40,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": [
+        {
+          "tag": "SPAN",
+          "cls": "op-block-type-label",
+          "label": "Prep",
+          "text": "Prep",
+          "ratio": 3.02,
+          "fg": "rgb(125, 133, 144)",
+          "bg": [
+            234,
+            231,
+            223
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SPAN",
+          "cls": "op-block-type-label",
+          "label": "Work",
+          "text": "Work",
+          "ratio": 2.04,
+          "fg": "rgb(88, 166, 255)",
+          "bg": [
+            234,
+            231,
+            223
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SPAN",
+          "cls": "op-block-type-label",
+          "label": "Break",
+          "text": "Break",
+          "ratio": 2.06,
+          "fg": "rgb(63, 185, 80)",
+          "bg": [
+            234,
+            231,
+            223
+          ],
+          "size": 11
+        }
+      ]
+    },
+    {
+      "route": "#/calendar",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 637,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": [
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Sujets",
+          "text": "Sujets",
+          "ratio": 3.86,
+          "fg": "rgb(86, 125, 156)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Art",
+          "text": "Art",
+          "ratio": 4.01,
+          "fg": "rgb(180, 91, 104)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Objectif",
+          "text": "Objectif",
+          "ratio": 4.05,
+          "fg": "rgb(167, 101, 69)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 11
+        }
+      ]
+    },
+    {
+      "route": "#/bingoals",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 37,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/bingoals/objective/theme-objective",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 46,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/relations",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 32,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/art",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 58,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": [
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "Kakuzō Okakura",
+          "text": "Kakuzō Okakura",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "livres classés",
+          "text": "livres  classés",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "choix en face-à-face",
+          "text": "choix en face-à-face",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "cherchent encore leur place",
+          "text": "cherchent encore leur place",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        }
+      ]
+    },
+    {
+      "route": "#/learning",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 30,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/analytics",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 16,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition-logs",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 21,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 19,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/settings",
+      "theme": "yoridokoro-rework",
+      "width": 1426,
+      "controls": 53,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 47,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/study",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 42,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/subject/theme-subject",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 17,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/plan",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 40,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/calendar",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 637,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": [
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Carrière",
+          "text": "Carrière",
+          "ratio": 3.28,
+          "fg": "rgb(124, 103, 64)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Sujets",
+          "text": "Sujets",
+          "ratio": 4.07,
+          "fg": "rgb(86, 125, 156)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Loisir",
+          "text": "Loisir",
+          "ratio": 3.17,
+          "fg": "rgb(118, 91, 155)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Art",
+          "text": "Art",
+          "ratio": 3.92,
+          "fg": "rgb(180, 91, 104)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Objectif",
+          "text": "Objectif",
+          "ratio": 3.89,
+          "fg": "rgb(167, 101, 69)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        }
+      ]
+    },
+    {
+      "route": "#/bingoals",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 37,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/bingoals/objective/theme-objective",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 46,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/relations",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 32,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/art",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 58,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/learning",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 30,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/analytics",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 16,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition-logs",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 21,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 19,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/settings",
+      "theme": "yoridokoro-kokedera",
+      "width": 1426,
+      "controls": 53,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 47,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/study",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 42,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-sort-button",
+          "label": "Rappel estimé"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Algorithms & Data Structures"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Anatomy — Cardiovascular"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Japonais — ouvrir de nouveaux horizons"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Linear Algebra"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Organic Chemistry"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Piano — Bach Invention 4"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Spanish — B2"
+        }
+      ],
+      "contrast": []
+    },
+    {
+      "route": "#/subject/theme-subject",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 17,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/plan",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 40,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": [
+        {
+          "tag": "SPAN",
+          "cls": "op-block-type-label",
+          "label": "Prep",
+          "text": "Prep",
+          "ratio": 3.02,
+          "fg": "rgb(125, 133, 144)",
+          "bg": [
+            234,
+            231,
+            223
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SPAN",
+          "cls": "op-block-type-label",
+          "label": "Work",
+          "text": "Work",
+          "ratio": 2.04,
+          "fg": "rgb(88, 166, 255)",
+          "bg": [
+            234,
+            231,
+            223
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SPAN",
+          "cls": "op-block-type-label",
+          "label": "Break",
+          "text": "Break",
+          "ratio": 2.06,
+          "fg": "rgb(63, 185, 80)",
+          "bg": [
+            234,
+            231,
+            223
+          ],
+          "size": 11
+        }
+      ]
+    },
+    {
+      "route": "#/calendar",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 637,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": [
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Sujets",
+          "text": "Sujets",
+          "ratio": 3.86,
+          "fg": "rgb(86, 125, 156)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Art",
+          "text": "Art",
+          "ratio": 4.01,
+          "fg": "rgb(180, 91, 104)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Objectif",
+          "text": "Objectif",
+          "ratio": 4.05,
+          "fg": "rgb(167, 101, 69)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 11
+        }
+      ]
+    },
+    {
+      "route": "#/bingoals",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 37,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/bingoals/objective/theme-objective",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 47,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/relations",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 32,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/art",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 57,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [
+        {
+          "tag": "BUTTON",
+          "cls": "period-card-head",
+          "label": "19331 classés"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "label": "#1LL’Éloge de l’ombreJunichirō Tanizaki#3"
+        }
+      ],
+      "contrast": [
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "Kakuzō Okakura",
+          "text": "Kakuzō Okakura",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "livres classés",
+          "text": "livres  classés",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "choix en face-à-face",
+          "text": "choix en face-à-face",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "label": "cherchent encore leur place",
+          "text": "cherchent encore leur place",
+          "ratio": 2.64,
+          "fg": "rgb(153, 149, 140)",
+          "bg": [
+            243,
+            241,
+            234
+          ],
+          "size": 9
+        }
+      ]
+    },
+    {
+      "route": "#/learning",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 30,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/analytics",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 16,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition-logs",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 21,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 19,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/settings",
+      "theme": "yoridokoro-rework",
+      "width": 686,
+      "controls": 53,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 47,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/study",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 42,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-sort-button",
+          "label": "Rappel estimé"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Algorithms & Data Structures"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Anatomy — Cardiovascular"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Japonais — ouvrir de nouveaux horizons"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Linear Algebra"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Organic Chemistry"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Piano — Bach Invention 4"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "ohi-start-btn",
+          "label": "Démarrer Spanish — B2"
+        }
+      ],
+      "contrast": []
+    },
+    {
+      "route": "#/subject/theme-subject",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 17,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/plan",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 40,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/calendar",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 637,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": [
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Carrière",
+          "text": "Carrière",
+          "ratio": 3.28,
+          "fg": "rgb(124, 103, 64)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Sujets",
+          "text": "Sujets",
+          "ratio": 4.07,
+          "fg": "rgb(86, 125, 156)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Loisir",
+          "text": "Loisir",
+          "ratio": 3.17,
+          "fg": "rgb(118, 91, 155)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Art",
+          "text": "Art",
+          "ratio": 3.92,
+          "fg": "rgb(180, 91, 104)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        },
+        {
+          "tag": "SMALL",
+          "cls": "",
+          "label": "Objectif",
+          "text": "Objectif",
+          "ratio": 3.89,
+          "fg": "rgb(167, 101, 69)",
+          "bg": [
+            18,
+            26,
+            17
+          ],
+          "size": 11
+        }
+      ]
+    },
+    {
+      "route": "#/bingoals",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 37,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/bingoals/objective/theme-objective",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 47,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/relations",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 32,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/art",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 57,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [
+        {
+          "tag": "BUTTON",
+          "cls": "period-card-head",
+          "label": "19331 classés"
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "",
+          "label": "#1LL’Éloge de l’ombreJunichirō Tanizaki#3"
+        }
+      ],
+      "contrast": []
+    },
+    {
+      "route": "#/learning",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 30,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/analytics",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 16,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition-logs",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 21,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/metacognition",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 19,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    },
+    {
+      "route": "#/settings",
+      "theme": "yoridokoro-kokedera",
+      "width": 686,
+      "controls": 53,
+      "horizontalOverflow": false,
+      "unnamed": [],
+      "unlabeled": [],
+      "small": [],
+      "outside": [],
+      "contrast": []
+    }
+  ],
+  "dialogResults": [
+    {
+      "name": "subject-create",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Nouvelle matière",
+      "width": 1119,
+      "height": 364,
+      "scrollHeight": 364,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": false
+    },
+    {
+      "name": "quick-start",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Start: Algorithms & Data Structures",
+      "width": 359,
+      "height": 460,
+      "scrollHeight": 460,
+      "forward": true,
+      "backward": true,
+      "closed": null,
+      "returned": null
+    },
+    {
+      "name": "nested-technique",
+      "dialogs": 2,
+      "initialInside": true,
+      "label": "Choisir une technique",
+      "width": 959,
+      "height": 749,
+      "scrollHeight": 749,
+      "forward": false,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "nested-parent-still-open",
+      "ok": true
+    },
+    {
+      "name": "select-escape",
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "person-create",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Ajouter une personne",
+      "width": 519,
+      "height": 474,
+      "scrollHeight": 474,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "interaction-create",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Échange avec Patrice",
+      "width": 519,
+      "height": 396,
+      "scrollHeight": 396,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "activity-resources",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Ressources · Recherche de mon prochain poste",
+      "width": 619,
+      "height": 287,
+      "scrollHeight": 287,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "history-edit",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Modifier l’entrée",
+      "width": 619,
+      "height": 290,
+      "scrollHeight": 290,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "objective-grid",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Composer la grille",
+      "width": 499,
+      "height": 411,
+      "scrollHeight": 411,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "objective-create",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Créer un objectif",
+      "width": 499,
+      "height": 328,
+      "scrollHeight": 328,
+      "forward": false,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "culture-browser",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Calendrier culturel",
+      "width": 819,
+      "height": 511,
+      "scrollHeight": 511,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": false
+    },
+    {
+      "name": "culture-create",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Ajouter un événement culturel",
+      "width": 919,
+      "height": 904,
+      "scrollHeight": 904,
+      "forward": false,
+      "backward": true,
+      "closed": true,
+      "returned": false
+    },
+    {
+      "name": "art-create",
+      "dialogs": 1,
+      "initialInside": true,
+      "label": "Trouver livre",
+      "width": 719,
+      "height": 515,
+      "scrollHeight": 515,
+      "forward": true,
+      "backward": true,
+      "closed": true,
+      "returned": true
+    },
+    {
+      "name": "relation-save",
+      "closed": true,
+      "notice": "Audit UI — personne de test a été ajouté·e.",
+      "visible": "Audit UI — personne de test"
+    },
+    {
+      "name": "today-enter-on-period",
+      "route": "#/session",
+      "sessionCreated": true
+    }
+  ],
+  "validationResults": [
+    {
+      "name": "empty-subject",
+      "error": "Veuillez saisir un nom de matière.",
+      "field": {
+        "labels": 0,
+        "ariaLabel": null,
+        "invalid": null
+      }
+    },
+    {
+      "name": "subject-save",
+      "closed": true,
+      "listed": true
+    },
+    {
+      "name": "invalid-time-range",
+      "closed": true,
+      "notice": "Entrée mise à jour.",
+      "persisted": {
+        "id": "9f2e3e99-af51-41f9-b0e8-95f7d5e1c3eb",
+        "started_at": "2026-10-07T13:00:00.000Z",
+        "ended_at": "2026-10-07T12:00:00.000Z",
+        "duration_seconds": 0
+      }
+    },
+    {
+      "name": "relation-archive",
+      "notice": "Audit UI — archive a été archivé·e.",
+      "recoveryControls": []
+    },
+    {
+      "name": "compact-settings-labels",
+      "labelsVisible": 0
+    },
+    {
+      "name": "session-rework-1440-0",
+      "overflow": false
+    },
+    {
+      "name": "session-rework-1440-1",
+      "overflow": false
+    },
+    {
+      "name": "session-kokedera-1440-0",
+      "overflow": false
+    },
+    {
+      "name": "session-kokedera-1440-1",
+      "overflow": false
+    },
+    {
+      "name": "session-rework-700-0",
+      "overflow": false
+    },
+    {
+      "name": "session-rework-700-1",
+      "overflow": false
+    },
+    {
+      "name": "session-kokedera-700-0",
+      "overflow": false
+    },
+    {
+      "name": "session-kokedera-700-1",
+      "overflow": false
+    }
+  ],
+  "limits": [
+    "Only two palettes in this audit",
+    "External catalogues and native file dialogs not exercised",
+    "No live exports or system settings changes",
+    "Session preparation and work only; no complete timed session",
+    "Animations neutralized for screenshots; no performance benchmark"
+  ],
+  "correctionStatus": {
+    "date": "2026-10-07",
+    "corrected": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10"
+    ],
+    "excludedByUser": [
+      "05"
+    ],
+    "validation": {
+      "testsPassed": 408,
+      "typecheck": true,
+      "build": true,
+      "keyboardDialogs": 12,
+      "invalidTimeRejectedWithoutWrite": true,
+      "relationUndoAndRestore": true,
+      "compactSettingsLabels": 7,
+      "timerStatesWithoutHorizontalOverflow": 8,
+      "cultureExpandedActionsVisible": true,
+      "plannerStartVisibleAt1440x1000": true
+    },
+    "profile": ".cache/rework-audit/profile",
+    "evidence": [
+      ".cache/rework-audit/journey-interaction-results.json",
+      ".cache/rework-audit/journey-validation-results.json"
+    ]
+  }
+}

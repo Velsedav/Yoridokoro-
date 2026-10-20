@@ -40,6 +40,26 @@ function chapter(id: string, subjectId: string, overrides: Partial<Chapter> = {}
 }
 
 describe('buildPlannerRecommendations', () => {
+  it('offers gentle reentry after 66 days without study while preserving the chapter and resume point', () => {
+    const old = new Date(now.getTime() - 66 * 86400000).toISOString()
+    const chapters = [chapter('python-1', 'python', { studyCount: 2, lastStudiedAt: old, resumePoint: 'Try the next exercise' })]
+    const result = buildPlannerRecommendations([subject('python', { last_studied_at: old })], chapters, now)
+    expect(result[0]).toMatchObject({ isReentry: true, chapterId: 'python-1', resumePoint: 'Try the next exercise' })
+    expect(chapters[0].studyCount).toBe(2)
+    expect(chapters[0].lastStudiedAt).toBe(old)
+  })
+
+  it('does not treat an old subject as a global break when another subject was studied recently', () => {
+    const result = buildPlannerRecommendations([
+      subject('old', { last_studied_at: '2026-01-01T12:00:00Z' }),
+      subject('recent', { last_studied_at: '2026-07-19T12:00:00Z' }),
+    ], [chapter('old-1', 'old'), chapter('recent-1', 'recent')], now)
+    expect(result.every(item => !item.isReentry)).toBe(true)
+  })
+
+  it('does not invent a past break for someone who has never studied', () => {
+    expect(buildPlannerRecommendations([subject('new')], [chapter('new-1', 'new')], now)[0].isReentry).toBe(false)
+  })
   it('uses importance weights as the initial allocation when there is no recent work', () => {
     const result = buildPlannerRecommendations(
       [subject('python', { importance_weight: 2 }), subject('linux', { importance_weight: 8 })],

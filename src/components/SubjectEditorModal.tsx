@@ -412,8 +412,11 @@ export default function SubjectEditorModal({ onClose, onSaved, onCreatedAndStart
                     <div className="subject-editor-details-col">
                     {/* ── Subject Details ── */}
                     <div className="form-group">
-                        <label>{t('subject_editor.name')}</label>
+                        <label htmlFor="subject-editor-name">{t('subject_editor.name')}</label>
                         <input
+                            id="subject-editor-name"
+                            aria-invalid={nameError || undefined}
+                            aria-describedby={nameError ? 'subject-editor-name-error' : undefined}
                             value={name}
                             onChange={e => { setName(e.target.value); if (nameError) setNameError(false); if (saveError) setSaveError(null); }}
                             onKeyDown={e => {
@@ -426,7 +429,7 @@ export default function SubjectEditorModal({ onClose, onSaved, onCreatedAndStart
                             className={nameError ? 'input-error' : undefined}
                             autoFocus
                         />
-                        {nameError && <p className="subject-editor-name-error">{t('subject_editor.name_required')}</p>}
+                        {nameError && <p id="subject-editor-name-error" role="alert" className="subject-editor-name-error">{t('subject_editor.name_required')}</p>}
                     </div>
 
                     <details className="subject-editor-enrichment" open={detailsExpanded} onToggle={event => setDetailsExpanded(event.currentTarget.open)}>

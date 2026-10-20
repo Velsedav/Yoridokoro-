@@ -82,3 +82,18 @@ describe('deleteTimeEntry', () => {
     )
   })
 })
+
+describe('time entry validation', () => {
+  beforeEach(() => { db.select.mockReset(); db.execute.mockReset() })
+
+  it.each([
+    ['2026-10-07T15:00:00Z', '2026-10-07T14:00:00Z'],
+    ['2026-10-07T15:00:00Z', '2026-10-07T15:00:00Z'],
+    ['invalid', '2026-10-07T15:00:00Z'],
+    ['2026-10-07T15:00:00Z', 'invalid'],
+  ])('rejects %s to %s before touching an entry or its synchronization identity', async (startedAt, endedAt) => {
+    await expect(updateTimeEntry('synced-entry', { startedAt, endedAt })).rejects.toThrow()
+    expect(db.select).not.toHaveBeenCalled()
+    expect(db.execute).not.toHaveBeenCalled()
+  })
+})

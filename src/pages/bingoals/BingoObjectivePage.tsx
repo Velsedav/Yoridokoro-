@@ -32,6 +32,7 @@ import {
   startOfCurrentYear,
   type ObjectiveTimePeriod,
 } from "../../lib/bingoals/timeAverages";
+import { ART_CATEGORY_LABELS_FR, inferArtCategoriesForObjective, loadArtQuickItems, type ArtQuickItem } from "../../lib/quickLaunch";
 import { titleToHue } from "../../lib/bingoals/color";
 import { sortStripsForMemoriesView } from "../../lib/bingoals/sortStrips";
 import { useTranslation } from "../../lib/i18n";
@@ -713,6 +714,37 @@ function ObjectiveInlineEditor(props: {
   )
 }
 
+function ArtStepPicker({ objectiveTitle, onPick }: { objectiveTitle: string; onPick: (title: string) => void }) {
+  const [items, setItems] = useState<ArtQuickItem[]>([])
+  useEffect(() => {
+    void loadArtQuickItems().then(setItems)
+  }, [])
+  const matching = useMemo(() => {
+    const cats = inferArtCategoriesForObjective(objectiveTitle)
+    return cats.length > 0 ? items.filter(i => cats.includes(i.category)) : items.slice(0, 40)
+  }, [items, objectiveTitle])
+  if (matching.length === 0) return null
+  return (
+    <div style={{ display: 'grid', gap: '4px', margin: '4px 0' }}>
+      <label htmlFor="bingo-art-picker" style={{ fontSize: '11px', opacity: 0.85 }}>
+        Ou choisir depuis votre Collection / Watchlist Art :
+      </label>
+      <select
+        id="bingo-art-picker"
+        defaultValue=""
+        onChange={e => { if (e.target.value) onPick(e.target.value) }}
+      >
+        <option value="">— Sélectionner un livre, film, album, jeu… —</option>
+        {matching.map(item => (
+          <option key={item.id} value={item.title}>
+            [{item.shelf === 'watchlist' ? 'Watchlist' : ART_CATEGORY_LABELS_FR[item.category]}] {item.title}{item.creator ? ` — ${item.creator}` : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 function AddSubobjectiveModal(props: {
   open: boolean;
   onClose: () => void;
@@ -736,6 +768,8 @@ function AddSubobjectiveModal(props: {
         <input id="bingo-sub-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Book: The Stranger" />
 
         <p className="bingo-step-default-hint">{t('bingoals.simple_step_helper')}</p>
+
+        <ArtStepPicker objectiveTitle={props.objective.title} onPick={(pickedTitle) => setTitle(pickedTitle)} />
 
         <details className="bingo-form-options">
           <summary>{t('bingoals.measured_step_optional')}</summary>
@@ -2223,7 +2257,8 @@ function TimeEditModal(props: { open: boolean; initialMs: number; onSave: (ms: n
     const hh = parseInt(h || "0", 10);
     const mm = parseInt(m || "0", 10);
     const ss = parseInt(s || "0", 10);
-    if (isNaN(hh) || isNaN(mm) || isNaN(ss) || mm > 59 || ss > 59) return;
+    if (isNaN(hh) || isNaN(mm) || isNaN(ss)) return;
+    // Keep this consistent with quick add: 90 min is a valid 1 h 30 edit.
     props.onSave(((hh * 60 + mm) * 60 + ss) * 1000);
   }
 
@@ -2261,27 +2296,41 @@ function TimeEditModal(props: { open: boolean; initialMs: number; onSave: (ms: n
   );
 }
 
-function QuickAddTimeModal(props: { open: boolean; onSave: (deltaMs: number) => void; onClose: () => void }) {
+function QuickAddTimeModal(props: { open: boolean; onSave: (deltaMs: number) => void | Promise<void>; onClose: () => void }) {
   const { t } = useTranslation();
-  const [h, setH] = useState("");
-  const [m, setM] = useState("");
-  const [s, setS] = useState("");
+  const [h, setH] = useState("0");
+  const [m, setM] = useState("0");
+  const [s, setS] = useState("0");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const hRef = useRef<HTMLInputElement>(null);
   const mRef = useRef<HTMLInputElement>(null);
   const sRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!props.open) return;
-    setH(""); setM(""); setS("");
+    setH("0"); setM("0"); setS("0"); setError(""); setSaving(false);
     setTimeout(() => mRef.current?.focus(), 50);
   }, [props.open]);
 
-  function save() {
+  async function save() {
     const hh = parseInt(h || "0", 10);
     const mm = parseInt(m || "0", 10);
     const ss = parseInt(s || "0", 10);
-    if (isNaN(hh) || isNaN(mm) || isNaN(ss) || mm > 59 || ss > 59) return;
-    props.onSave(((hh * 60 + mm) * 60 + ss) * 1000);
+    const deltaMs = ((hh * 60 + mm) * 60 + ss) * 1000;
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+      setError(t('bingoals.quick_add_required'));
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      // Minutes and seconds deliberately carry over: entering 90 minutes adds 1 h 30.
+      await props.onSave(deltaMs);
+    } catch {
+      setError(t('bingoals.quick_add_error'));
+      setSaving(false);
+    }
   }
 
   return (
@@ -2289,29 +2338,30 @@ function QuickAddTimeModal(props: { open: boolean; onSave: (deltaMs: number) => 
       <div className="bingo-time-edit-body">
         <div className="bingo-time-edit-fields">
           <div className="bingo-time-edit-col">
-            <input ref={hRef} type="text" inputMode="numeric" value={h} className="bingo-time-field" placeholder="0" onFocus={(e) => e.target.select()}
+            <input ref={hRef} type="text" inputMode="numeric" value={h} className="bingo-time-field" onFocus={(e) => e.target.select()} onMouseUp={(e) => e.preventDefault()}
               onChange={(e) => { const val = e.target.value.replace(/\D/g, "").slice(0, 3); setH(val); if (val.length === 3) mRef.current?.select(); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") props.onClose(); }} />
             <span className="muted">HH</span>
           </div>
           <span className="bingo-time-sep">:</span>
           <div className="bingo-time-edit-col">
-            <input ref={mRef} type="text" inputMode="numeric" value={m} className="bingo-time-field" placeholder="0" onFocus={(e) => e.target.select()}
+            <input ref={mRef} type="text" inputMode="numeric" value={m} className="bingo-time-field" onFocus={(e) => e.target.select()} onMouseUp={(e) => e.preventDefault()}
               onChange={(e) => { const val = e.target.value.replace(/\D/g, "").slice(0, 2); setM(val); if (val.length === 2) sRef.current?.select(); }}
               onKeyDown={(e) => { if (e.key === "Backspace" && m === "") hRef.current?.select(); if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") props.onClose(); }} />
             <span className="muted">MM</span>
           </div>
           <span className="bingo-time-sep">:</span>
           <div className="bingo-time-edit-col">
-            <input ref={sRef} type="text" inputMode="numeric" value={s} className="bingo-time-field" placeholder="0" onFocus={(e) => e.target.select()}
+            <input ref={sRef} type="text" inputMode="numeric" value={s} className="bingo-time-field" onFocus={(e) => e.target.select()} onMouseUp={(e) => e.preventDefault()}
               onChange={(e) => { const val = e.target.value.replace(/\D/g, "").slice(0, 2); setS(val); }}
               onKeyDown={(e) => { if (e.key === "Backspace" && s === "") mRef.current?.select(); if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") props.onClose(); }} />
             <span className="muted">SS</span>
           </div>
         </div>
+        {error && <p className="bingo-time-edit-error" role="alert">{error}</p>}
         <div className="row bingo-row-end">
           <button className="btn" onClick={props.onClose}>{t('bingoals.cancel')}</button>
-          <button className="btn btn-primary" onClick={save}>{t('bingoals.quick_add_confirm')}</button>
+          <button className="btn btn-primary" disabled={saving} onClick={() => void save()}>{t('bingoals.quick_add_confirm')}</button>
         </div>
       </div>
     </BingoModal>

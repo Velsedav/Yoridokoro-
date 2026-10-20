@@ -10,10 +10,13 @@ import { playSFX, SFX } from '../lib/sounds';
 import { generateAIReport } from '../lib/aiExport';
 import { formatForNotebookLM, formatMonthLabel, getMonthKey } from './MetacognitionLogs';
 import './ObsidianMetacognitionLogs.css';
+import { PageHeading } from '../design/rework/Primitives';
+import { useRework } from '../design/rework/useRework';
 
 const NOTEBOOK_LM_URL = 'https://notebooklm.google.com/notebook/33dc2ca6-a3da-4218-b679-bd91ce99d7e7';
 
 export default function ObsidianMetacognitionLogs() {
+    const rework = useRework();
     const { t } = useTranslation();
     const [logs, setLogs] = useState<MetacognitionLog[]>([]);
     const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
@@ -51,6 +54,7 @@ export default function ObsidianMetacognitionLogs() {
     if (totalEntries === 0) {
         return (
             <div className="obs-meta-page obs-meta-page--empty">
+                {rework && <PageHeading title="Journal des réflexions" />}
                 <header className="obs-meta-empty-header">
                     <span className="obs-meta-empty-eyebrow">
                         <Wrench size={14} aria-hidden="true" />
@@ -94,6 +98,7 @@ export default function ObsidianMetacognitionLogs() {
 
     return (
         <div className="obs-meta-page">
+            {rework && <PageHeading title="Journal des réflexions" />}
             <div className="obs-meta-shell">
                 <aside className="obs-meta-rail">
                     <header className="obs-meta-rail-header">

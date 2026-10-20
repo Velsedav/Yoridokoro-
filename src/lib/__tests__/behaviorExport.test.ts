@@ -48,6 +48,21 @@ function timeEntry(id: string, activityId: string, overrides: Partial<TimeEntry>
 }
 
 describe('behaviour analysis export', () => {
+  it('exports the optional exercise label without counting a gaming session twice', () => {
+    const bundle = buildBehaviorExportBundle({
+      events: [], subjectNames: {}, chapterNames: {}, preferences: {},
+      generatedAt: '2026-08-03T12:00:00.000Z', appVersion: '0.2.10',
+      activities: [activity('game', 'hobby', 'Hades')],
+      timeEntries: [timeEntry('walking-game', 'game', { source: 'playnite', exercise_tag: 1 }), timeEntry('seated-game', 'game', { source: 'playnite' })],
+    }, { period: 'all', pseudonymizeLabels: false })
+    const rows = bundle.timeEntriesCsv.split('\r\n').map(row => row.split(','))
+    const tagColumn = rows[0].indexOf('exercise_tag')
+    expect(tagColumn).toBeGreaterThan(-1)
+    expect(rows.slice(1).map(row => row[tagColumn]).sort()).toEqual(['0', '1'])
+    expect(bundle.timeEntryCount).toBe(2)
+    expect(bundle.timedSeconds).toBe(120)
+  })
+
   it('pseudonymises internal identifiers and excludes unapproved payload text', () => {
     const bundle = buildBehaviorExportBundle({
       events: [BASE_EVENT],
@@ -126,7 +141,7 @@ describe('behaviour analysis export', () => {
   })
 
   it('exports every chronometrable activity kind from the History time register', () => {
-    const kinds: ActivityKind[] = ['study', 'goal', 'project', 'hobby', 'exercise', 'art', 'general']
+    const kinds: ActivityKind[] = ['study', 'goal', 'project', 'hobby', 'exercise', 'art', 'career', 'general']
     const activities = kinds.map((kind, index) => activity(`activity-${index}`, kind, `Activity ${kind}`))
     const timeEntries = activities.map((item, index) => timeEntry(`entry-${index}`, item.id, {
       started_at: `2026-08-02T1${index}:00:00.000Z`,
@@ -142,17 +157,17 @@ describe('behaviour analysis export', () => {
       generatedAt: '2026-08-03T12:00:00.000Z', appVersion: '0.2.6',
     }, { period: 30, pseudonymizeLabels: false })
 
-    expect(bundle.timeEntryCount).toBe(7)
-    expect(bundle.timedSeconds).toBe(420)
-    expect(bundle.timeEntriesCsv.split('\r\n')).toHaveLength(8)
+    expect(bundle.timeEntryCount).toBe(kinds.length)
+    expect(bundle.timedSeconds).toBe(kinds.length * 60)
+    expect(bundle.timeEntriesCsv.split('\r\n')).toHaveLength(kinds.length + 1)
     for (const kind of kinds) {
       expect(bundle.timeEntriesCsv).toContain(`Activity ${kind}`)
       expect(bundle.timeEntriesCsv).toContain(`,${kind},`)
     }
     expect(bundle.timeEntriesCsv).toContain('objective_time_record')
     expect(bundle.timeEntriesCsv).toContain('Read chapter 4')
-    expect(bundle.markdown).toContain('Entrées chronométrées dans l’Historique : 7')
-    expect(bundle.markdown).toContain('Temps total chronométré, toutes activités : 7 min 0 s')
+    expect(bundle.markdown).toContain(`Entrées chronométrées dans l’Historique : ${kinds.length}`)
+    expect(bundle.markdown).toContain(`Temps total chronométré, toutes activités : ${kinds.length} min 0 s`)
   })
 
   it('pseudonymises activity labels and time-entry details when requested', () => {

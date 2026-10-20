@@ -21,10 +21,20 @@ export function applyYoridokoroTheme(id:YoridokoroThemeId){
     '--bg-color':c.surface,'--bg-gradient':c.surface,'--card-bg':c.surfaceRaised,'--surface-raised':c.surfaceRaised,
     '--surface-subtle':c.surfaceSubtle,'--surface-overlay':c.surfaceOverlay,'--border-color':c.line,'--glass-border':c.line,
     '--primary':c.accent,'--primary-rgb':rgb(c.accent),'--primary-hover':c.accent,'--secondary':c.accent,'--accent':c.accent,
-    '--text-dark':c.text,'--text-muted':c.textMuted,'--text-light':c.accentText,'--sidebar-bg':c.sidebarBg,'--sidebar-text':c.sidebarText,
+    '--text-dark':c.text,'--text-muted':c.textMuted,'--text-light':c.text,'--sidebar-bg':c.sidebarBg,'--sidebar-text':c.sidebarText,
     '--input-border':c.line,'--input-bg-focus':c.surfaceSubtle,'--input-focus-ring':`rgba(${rgb(c.accent)},.22)`,'--bubble-bg':c.surfaceRaised,
     '--paper':c.surface,'--ink':c.text,'--muted':c.textMuted,'--line':c.line,'--dark':c.dark,'--surface':c.surface,
-    '--text':c.text,'--theme-accent':c.accent,'--accent-text':c.accentText
+    '--text':c.text,'--theme-accent':c.accent,'--accent-text':c.accentText,
+    '--palette-surface':c.surface,'--palette-panel':c.surfaceRaised,'--palette-subtle':c.surfaceSubtle,
+    '--palette-text':c.text,'--palette-muted':c.textMuted,'--palette-line':c.line,
+    '--palette-accent':c.accent,'--palette-accent-text':c.accentText,'--palette-dark':c.dark,
+    '--palette-timer-bg':c.dark,'--palette-timer-text':theme.dark?c.text:'#ffffff',
+    '--palette-field-line':c.line,
+    '--palette-hover':`color-mix(in srgb, ${c.text} 10%, ${c.surfaceSubtle})`,
+    '--palette-accent-hover':`color-mix(in srgb, ${c.accent} 85%, ${c.text})`,
+    '--palette-success':theme.dark?'#8bd4a5':'#267049',
+    '--palette-danger':theme.dark?'#ff9b99':'#b13c3c',
+    '--palette-warning':theme.dark?'#e6bd76':'#8a581b'
   }
   Object.entries(properties).forEach(([property,value])=>root.style.setProperty(property,value))
 }

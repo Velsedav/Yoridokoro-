@@ -46,7 +46,7 @@ export default function ImageImportModal({ open, onClose, onAdd, multiple = true
   }
 
   return (
-    <BingoModal open={open} title={t('bingoals.image_import_title')} onClose={onClose}>
+    <BingoModal open={open} title={t('bingoals.image_import_title')} onClose={onClose} className="bingo-image-import-modal">
       <div className="form bingo-image-import">
         <div className="bingo-image-import-section">
           <span className="bingo-image-import-label"><Link2 size={15} /> {t('bingoals.image_from_web')}</span>

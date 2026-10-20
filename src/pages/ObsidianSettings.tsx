@@ -37,10 +37,13 @@ import {
 import { getTimeEntrySummary } from '../lib/activityTime';
 import { syncLegacyTime } from '../lib/timeSync';
 import './ObsidianSettings.css';
+import { PageHeading } from '../design/rework/Primitives';
+import { useRework } from '../design/rework/useRework';
 
 type Category = 'look-and-feel' | 'sessions' | 'learning' | 'art' | 'audio' | 'data' | 'system';
 
 export default function ObsidianSettings() {
+    const rework = useRework();
     const { t } = useTranslation();
     const [category, setCategory] = useState<Category>('look-and-feel');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -73,6 +76,7 @@ export default function ObsidianSettings() {
 
     return (
         <div className="obs-settings-root">
+            {rework && <PageHeading title="Paramètres" />}
             {showDeleteModal && (
                 <div className="modal-overlay">
                     <div className="modal-content danger-modal">
@@ -459,8 +463,8 @@ function LookAndFeelPanel() {
                 <h2 className="obs-settings-section-label">{t('settings.theme') || 'Theme'}</h2>
                 <p className="obs-settings-hint">
                     {previewThemeId
-                        ? `${t('settings.preview_theme') || 'Previewing'}: ${activeThemeName} — ${t('settings.click_to_apply') || 'click to apply'}`
-                        : `${t('settings.select_theme') || 'Active'}: ${activeThemeName}`}
+                        ? `${t('settings.preview_theme') || 'Previewing:'} ${activeThemeName} — ${t('settings.click_to_apply') || 'click to apply'}`
+                        : `${t('settings.select_theme') || 'Active:'} ${activeThemeName}`}
                 </p>
                 <div className="obs-settings-theme-groups" onMouseLeave={handleThemeLeave} role="radiogroup" aria-label="Thème de l’interface">
                     {THEME_GROUPS.map((group) => (

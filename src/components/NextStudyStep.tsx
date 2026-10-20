@@ -28,26 +28,26 @@ export default function NextStudyStep({ recommendation, onStart, onJustFive, onO
       <div className="next-study-step-main">
         <span className={`next-study-step-kicker is-${recommendation.kind}`}>
           {recommendation.kind === 'progress' ? <ArrowRight size={14} /> : <BookOpenCheck size={14} />}
-          {t(`planner.kind_${recommendation.kind}`)}
+          {t(recommendation.isReentry ? 'planner.kind_reentry' : `planner.kind_${recommendation.kind}`)}
         </span>
         <p className="next-study-step-subject">{recommendation.subjectName}</p>
         <h2 id="next-study-step-title">{recommendation.chapterName}</h2>
         <p className="next-study-step-meta">
           {t('planner.chapter_position', { current: recommendation.chapterPosition, total: recommendation.chapterCount })}
-          <span aria-hidden="true"> · </span>{t('planner.focus_duration')}
+          <span aria-hidden="true"> · </span>{t(recommendation.isReentry ? 'planner.reentry_duration' : 'planner.focus_duration')}
         </p>
-        <p className="next-study-step-reason"><strong>{t('planner.why_label')}</strong> {reason}</p>
+        <details className="next-study-step-explanation"><summary>{t('planner.why_label')}</summary><p className="next-study-step-reason">{recommendation.isReentry ? t('planner.reentry_reason') : reason}</p>
+        {!compact && <p className="next-study-step-technique"><strong>{t('planner.technique_label')}</strong> {technique?.name ?? t('planner.technique_fallback')}</p>}</details>
         {recommendation.resumePoint && <p className="next-study-step-resume"><strong>{t('planner.resume_point')}</strong> {recommendation.resumePoint}</p>}
-        {!compact && <p className="next-study-step-goal"><strong>{t('planner.goal_label')}</strong> {t(guidedObjectiveKey(recommendation))}</p>}
-        {!compact && <p className="next-study-step-technique"><strong>{t('planner.technique_label')}</strong> {technique?.name ?? t('planner.technique_fallback')}</p>}
+        {(!compact || recommendation.isReentry) && <p className="next-study-step-goal">{t(guidedObjectiveKey(recommendation))}</p>}
       </div>
       <div className="next-study-step-actions">
         <button autoFocus={autoFocus} type="button" className="next-study-step-start" onClick={onStart} aria-keyshortcuts="Enter">
           <Play size={17} fill="currentColor" />
-          <span>{t('planner.start_preparation')}<small>{t('planner.session_structure')}</small></span>
+          <span>{t(recommendation.isReentry ? 'planner.start_reentry' : 'planner.start_preparation')}<small>{t(recommendation.isReentry ? 'planner.reentry_structure' : 'planner.session_structure')}</small></span>
           <kbd aria-hidden="true">↵</kbd>
         </button>
-        {onJustFive && <button type="button" className="next-study-step-five" onClick={onJustFive} aria-keyshortcuts="5">
+        {onJustFive && !recommendation.isReentry && <button type="button" className="next-study-step-five" onClick={onJustFive} aria-keyshortcuts="5">
           <Zap size={16} fill="currentColor" />
           <span>{t('planner.just_five')}<small>{t('planner.just_five_hint')}</small></span>
           <kbd aria-hidden="true">5</kbd>

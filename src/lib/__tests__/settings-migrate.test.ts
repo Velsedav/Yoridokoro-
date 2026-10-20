@@ -10,6 +10,7 @@ describe('migrateTheme', () => {
   });
   it('passes through ids that are already obsidian', () => {
     expect(migrateTheme('keystone')).toBe('keystone');
+    expect(migrateTheme('rework')).toBe('rework');
     expect(migrateTheme('rose-pine')).toBe('rose-pine');
     expect(migrateTheme('catppuccin-latte')).toBe('catppuccin-latte');
   });

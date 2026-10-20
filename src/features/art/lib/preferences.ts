@@ -38,7 +38,8 @@ const palette = (
 ): ThemeColors => ({ surface, surfaceRaised, surfaceSubtle, surfaceOverlay, text, textMuted, line, dark, sidebarBg, sidebarText, accent, accentText });
 
 export const themes = [
-  { id: 'keystone', family: 'Original', label: 'Konomi', description: 'Warm paper and gallery ink', dark: false, colors: palette('#f8f6f0', '#ffffff', '#f1eee6', '#e9e6de', '#24231f', '#706d65', '#8f8a80', '#1d1d1a', '#1a1a17', '#e7e4db', '#a64d35', '#ffffff') },
+  { id: 'keystone', family: 'Original', label: 'Yoridokoro', description: 'Warm paper and gallery ink', dark: false, colors: palette('#f8f6f0', '#ffffff', '#f1eee6', '#e9e6de', '#24231f', '#706d65', '#8f8a80', '#1d1d1a', '#1a1a17', '#e7e4db', '#a64d35', '#ffffff') },
+  { id: 'rework', family: 'Original', label: 'Rework', description: 'Editorial atelier · ivory, ink & cobalt · a new workspace', dark: false, colors: palette('#f3f1ea', '#fffdf8', '#eae7df', '#ffffff', '#182629', '#5d6765', '#7b827b', '#182629', '#f3f1ea', '#182629', '#284fe5', '#ffffff') },
 
   { id: 'catppuccin-latte', family: 'Catppuccin', label: 'Latte', description: 'Light and gently pastel', dark: false, colors: palette('#eff1f5', '#ffffff', '#e6e9ef', '#dce0e8', '#4c4f69', '#66697f', '#7c7f93', '#dce0e8', '#dce0e8', '#4c4f69', '#8839ef', '#ffffff') },
   { id: 'catppuccin-frappe', family: 'Catppuccin', label: 'Frappé', description: 'Muted blue-grey pastels', dark: true, colors: palette('#303446', '#414559', '#292c3c', '#232634', '#c6d0f5', '#a5adce', '#838ba7', '#232634', '#232634', '#c6d0f5', '#ca9ee6', '#232634') },

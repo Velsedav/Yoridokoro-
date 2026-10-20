@@ -44,9 +44,9 @@ const personSelect = `
     (SELECT COUNT(*) FROM person_interactions i WHERE i.person_id = p.id) AS interaction_count
   FROM people p`
 
-export async function getPeople(): Promise<Person[]> {
+export async function getPeople(includeArchived = false): Promise<Person[]> {
   const db = await getDb()
-  return db.select<Person[]>(`${personSelect} WHERE p.archived = 0 ORDER BY COALESCE(last_contact_at, p.created_at) ASC, p.display_name COLLATE NOCASE`)
+  return db.select<Person[]>(`${personSelect}${includeArchived ? '' : ' WHERE p.archived = 0'} ORDER BY COALESCE(last_contact_at, p.created_at) ASC, p.display_name COLLATE NOCASE`)
 }
 
 export async function getPerson(id: string): Promise<Person | null> {

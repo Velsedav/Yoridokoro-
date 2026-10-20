@@ -76,7 +76,8 @@ function base64ToBytes(dataUrl: string): Uint8Array {
 async function dumpStudyBuddyDb() {
   const db = await getDb();
   const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
-    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events] = await Promise.all([
+    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events,
+    career_cvs, career_companies, career_applications] = await Promise.all([
     db.select<any[]>('SELECT * FROM subjects'),
     db.select('SELECT * FROM tags'),
     db.select('SELECT * FROM subject_tags'),
@@ -101,6 +102,9 @@ async function dumpStudyBuddyDb() {
     db.select('SELECT * FROM eisenhower_tasks ORDER BY done, created_at'),
     db.select('SELECT * FROM analytics_events ORDER BY occurred_at'),
     db.select('SELECT * FROM cultural_events ORDER BY start_date'),
+    db.select('SELECT * FROM career_cvs ORDER BY sort_order, label').catch(() => []),
+    db.select('SELECT * FROM career_companies ORDER BY name').catch(() => []),
+    db.select('SELECT * FROM career_applications ORDER BY applied_date DESC, created_at DESC').catch(() => []),
   ]);
 
   const userData = await fsAPI().getUserDataPath() as string;
@@ -117,7 +121,8 @@ async function dumpStudyBuddyDb() {
   }
 
   return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
-    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events, subject_covers };
+    people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events,
+    career_cvs, career_companies, career_applications, subject_covers };
 }
 
 async function dumpBingoDb() {
@@ -171,6 +176,7 @@ export const PORTABLE_LOCAL_STORAGE_KEYS = [
 const PORTABLE_LOCAL_STORAGE_PREFIXES = ['study-buddy-', 'yoridokoro-', 'obsidian-', 'bingoals.'];
 
 export function isPortableLocalStorageKey(key: string): boolean {
+  if (key === 'yoridokoro-active-session-checkpoint-v1' || key === 'study-buddy-invalid-active-session') return false;
   if (key === 'yoridokoro-observation-pseudonym-salt-v1') return false;
   return PORTABLE_LOCAL_STORAGE_KEYS.includes(key)
     || PORTABLE_LOCAL_STORAGE_PREFIXES.some(prefix => key.startsWith(prefix));
@@ -457,7 +463,7 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
     try { await db.execute(`INSERT OR IGNORE INTO activity_resources (id,activity_id,label,url,enabled,created_at) VALUES ($1,$2,$3,$4,$5,$6)`, [resource.id,resource.activity_id,resource.label,resource.url,resource.enabled??1,resource.created_at]); } catch {}
   }
   for (const entry of data.time_entries ?? []) {
-    try { await db.execute(`INSERT OR IGNORE INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,source_detail_ref,source_detail_label,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [entry.id,entry.activity_id,entry.started_at,entry.ended_at,entry.duration_seconds,entry.note??null,entry.source??'import',entry.source_ref??null,entry.source_detail_ref??null,entry.source_detail_label??null,entry.created_at]); } catch {}
+    try { await db.execute(`INSERT OR IGNORE INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,source_detail_ref,source_detail_label,created_at,exercise_tag) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [entry.id,entry.activity_id,entry.started_at,entry.ended_at,entry.duration_seconds,entry.note??null,entry.source??'import',entry.source_ref??null,entry.source_detail_ref??null,entry.source_detail_label??null,entry.created_at,entry.exercise_tag?1:0]); } catch {}
   }
   for (const deletion of data.time_entry_deletions ?? []) {
     try {
@@ -492,6 +498,42 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
           event.recurrence_type??'specific',event.show_before_days??14,event.show_after_days??3,event.image_data??null,
           event.image_position_x??50,event.image_position_y??50,event.image_zoom??1,event.status??'active',
           event.retired_at??null,event.created_at??new Date().toISOString(),event.updated_at??event.created_at??new Date().toISOString()]
+      )
+    } catch {}
+  }
+  for (const cv of data.career_cvs ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR IGNORE INTO career_cvs(id,label,default_header,sort_order,created_at) VALUES ($1,$2,$3,$4,$5)`,
+        [cv.id, cv.label, cv.default_header ?? null, cv.sort_order ?? 0, cv.created_at ?? new Date().toISOString()]
+      )
+    } catch {}
+  }
+  for (const company of data.career_companies ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR IGNORE INTO career_companies(id,name,location_url,website_url,notes,created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [company.id, company.name, company.location_url ?? null, company.website_url ?? null, company.notes ?? null, company.created_at ?? new Date().toISOString()]
+      )
+    } catch {}
+  }
+  for (const appRow of data.career_applications ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR REPLACE INTO career_applications(
+          id,position_title,company_name,applied_date,status,contract_type,application_type,
+          location_url,location_label,offer_url,cv_id,cv_label,cv_header,cover_letter,offer_content,
+          my_questions,research_notes,my_advantages,follow_up_date,created_at,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+        [
+          appRow.id, appRow.position_title, appRow.company_name, appRow.applied_date,
+          appRow.status ?? 'en_cours', appRow.contract_type ?? 'CDI', appRow.application_type ?? 'Offre',
+          appRow.location_url ?? null, appRow.location_label ?? null, appRow.offer_url ?? null,
+          appRow.cv_id ?? null, appRow.cv_label ?? null, appRow.cv_header ?? '',
+          appRow.cover_letter ?? '', appRow.offer_content ?? '', appRow.my_questions ?? '',
+          appRow.research_notes ?? '', appRow.my_advantages ?? '', appRow.follow_up_date ?? null,
+          appRow.created_at ?? new Date().toISOString(), appRow.updated_at ?? appRow.created_at ?? new Date().toISOString(),
+        ]
       )
     } catch {}
   }
@@ -615,6 +657,8 @@ export async function importBackup(filePath: string): Promise<ImportBackupResult
   await mergeBingoDb(backup.bingoals);
   await mergeArtArchive(backup.art);
   if (backup.local_storage) mergeLocalStorage(backup.local_storage);
+  const { synchronizeStudyDataDurability } = await import('./chapters');
+  await synchronizeStudyDataDurability();
   return { kind: 'yoridokoro' };
 }
 

@@ -5,6 +5,8 @@ import { getBehaviorEvents, type BehaviorEventRow } from '../lib/behaviorAnalyti
 import { computeObservationMetrics, displayCount, displayEntrySourceSuccess, type CountRow, type EntrySourceSuccessRow } from '../lib/observationMetrics'
 import { TECHNIQUES } from '../lib/techniques'
 import './ObsidianAnalytics.css'
+import { PageHeading } from '../design/rework/Primitives'
+import { useRework } from '../design/rework/useRework'
 
 type Data = {
   sessions: Session[]; blocks: SessionBlock[]; contexts: SessionContext[]; events: BehaviorEventRow[]
@@ -47,6 +49,7 @@ function EntrySourceSuccessRows({ rows }: { rows: EntrySourceSuccessRow[] }) {
 }
 
 export default function ObsidianAnalytics() {
+  const rework = useRework()
   const [data, setData] = useState<Data | null>(null)
   useEffect(() => {
     let mounted = true
@@ -64,6 +67,7 @@ export default function ObsidianAnalytics() {
 
   const techniqueLabels = new Map(TECHNIQUES.map(technique => [technique.id, technique.name]))
   return <main className="ov2-root">
+    {rework && <PageHeading title="Analyses" />}
     <header className="ov2-hero">
       <span><BarChart3 size={15} /> OBSERVATION V2</span>
       <h1>Analyses</h1>

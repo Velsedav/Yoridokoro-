@@ -1,0 +1,44 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/blob_storage"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/Cache"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/Code Cache"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/DawnGraphiteCache"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/DawnWebGPUCache"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/GPUCache"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/IndexedDB"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/Local Storage"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/Network"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/Session Storage"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/Shared Dictionary"
+		},
+		{
+			"path": "C:/Users/Sebastien/AppData/Roaming/yoridokoro/WebStorage"
+		}
+	],
+	"settings": {}
+}

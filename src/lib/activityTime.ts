@@ -1,7 +1,7 @@
 import { getDb } from './db'
 import { normalizeWebUrl } from './sessionResources'
 
-export type ActivityKind = 'study' | 'goal' | 'project' | 'hobby' | 'exercise' | 'art' | 'general'
+export type ActivityKind = 'study' | 'goal' | 'project' | 'hobby' | 'exercise' | 'art' | 'career' | 'general'
 
 export interface Activity {
   id: string
@@ -16,6 +16,8 @@ export interface Activity {
   last_entry_at: string | null
   last_event_at: string | null
   progress_count: number
+  domains?: string
+  linked_entity_id?: string | null
 }
 
 export interface TimeEntry {
@@ -29,6 +31,7 @@ export interface TimeEntry {
   source_ref?: string | null
   source_detail_ref?: string | null
   source_detail_label?: string | null
+  exercise_tag?: number
   created_at: string
 }
 
@@ -60,15 +63,31 @@ export interface ActivityEvent {
 
 export interface ActivityResource { id: string; activity_id: string; label: string; url: string; enabled: number; created_at: string }
 
-export interface ActiveActivityTimer { activityId: string; startedAt: string; pausedAt?: string; pausedSeconds?: number }
+export interface ActiveActivityTimer {
+  activityId: string
+  startedAt: string
+  pausedAt?: string
+  pausedSeconds?: number
+  subobjectiveId?: string
+  subobjectiveTitle?: string
+  objectiveId?: string
+  detailLabel?: string
+}
 
 export const ACTIVE_ACTIVITY_TIMER_KEY = 'yoridokoro-active-activity-v1'
+
+export function isPlayniteActivity(activity: Pick<Activity, 'domains'>): boolean {
+  const domains = (activity.domains ?? '').split('|').map(d => d.trim()).filter(Boolean)
+  return domains.includes('playnite-game')
+}
 
 const activitySelect = `SELECT a.*,
   COALESCE((SELECT SUM(t.duration_seconds) FROM time_entries t WHERE t.activity_id=a.id), 0) AS total_seconds,
   (SELECT MAX(t.started_at) FROM time_entries t WHERE t.activity_id=a.id) AS last_entry_at,
   (SELECT MAX(e.occurred_at) FROM activity_events e WHERE e.activity_id=a.id) AS last_event_at,
-  (SELECT COUNT(*) FROM activity_events e WHERE e.activity_id=a.id) AS progress_count
+  (SELECT COUNT(*) FROM activity_events e WHERE e.activity_id=a.id) AS progress_count,
+  COALESCE((SELECT GROUP_CONCAT(l.domain, '|') FROM activity_links l WHERE l.activity_id=a.id), '') AS domains,
+  (SELECT l.entity_id FROM activity_links l WHERE l.activity_id=a.id LIMIT 1) AS linked_entity_id
   FROM activities a`
 
 export async function getActivities(): Promise<Activity[]> {
@@ -78,7 +97,7 @@ export async function getActivities(): Promise<Activity[]> {
 
 export async function getAllActivities(): Promise<Activity[]> {
   const db = await getDb()
-  return db.select<Activity[]>(`${activitySelect} ORDER BY a.created_at, a.name COLLATE NOCASE`)
+  return db.select<Activity[]>(`${activitySelect} ORDER BY a.pinned DESC, a.created_at, a.name COLLATE NOCASE`)
 }
 
 export async function createActivity(input: { name: string; kind: ActivityKind; color?: string }): Promise<string> {
@@ -102,18 +121,114 @@ export async function linkActivity(activityId: string, domain: string, entityId:
   await db.execute(`INSERT OR IGNORE INTO activity_links (activity_id,domain,entity_id) VALUES ($1,$2,$3)`, [activityId, domain, entityId])
 }
 
+const linkedActivityLocks = new Map<string, Promise<string>>()
+
 export async function ensureLinkedActivity(domain: string, entityId: string, defaults: {name:string;kind:ActivityKind;color?:string}): Promise<string> {
-  const db=await getDb()
-  const existing=await db.select<{activity_id:string}[]>(`SELECT activity_id FROM activity_links WHERE domain=$1 AND entity_id=$2 LIMIT 1`,[domain,entityId])
-  if(existing[0])return existing[0].activity_id
-  const id=await createActivity(defaults)
-  await linkActivity(id,domain,entityId)
-  return id
+  const key = `${domain}::${entityId}`
+  const pending = linkedActivityLocks.get(key)
+  if (pending) return pending
+
+  const promise = (async () => {
+    const db = await getDb()
+    const existing = await db.select<{ activity_id: string }[]>(
+      `SELECT activity_id FROM activity_links WHERE domain=$1 AND entity_id=$2 ORDER BY rowid ASC`,
+      [domain, entityId],
+    )
+    if (existing.length > 0) {
+      const primaryId = existing[0].activity_id
+      // Clean up any accidental duplicates created by past race conditions
+      if (existing.length > 1) {
+        for (let i = 1; i < existing.length; i++) {
+          const dupId = existing[i].activity_id
+          if (dupId === primaryId) continue
+          await db.execute(`UPDATE time_entries SET activity_id=$1 WHERE activity_id=$2`, [primaryId, dupId])
+          await db.execute(`UPDATE activity_events SET activity_id=$1 WHERE activity_id=$2`, [primaryId, dupId])
+          await db.execute(`DELETE FROM activity_links WHERE activity_id=$1`, [dupId])
+          await db.execute(`DELETE FROM activities WHERE id=$1`, [dupId])
+        }
+      }
+      return primaryId
+    }
+    const byName = await db.select<{ id: string }[]>(
+      `SELECT id FROM activities WHERE LOWER(name)=LOWER($1) AND kind=$2 AND archived=0 ORDER BY created_at ASC`,
+      [defaults.name.trim(), defaults.kind],
+    )
+    if (byName && byName.length > 0) {
+      const primaryId = byName[0].id
+      await linkActivity(primaryId, domain, entityId)
+      if (byName.length > 1) {
+        for (let i = 1; i < byName.length; i++) {
+          const dupId = byName[i].id
+          await db.execute(`UPDATE time_entries SET activity_id=$1 WHERE activity_id=$2`, [primaryId, dupId])
+          await db.execute(`UPDATE activity_events SET activity_id=$1 WHERE activity_id=$2`, [primaryId, dupId])
+          await db.execute(`DELETE FROM activity_links WHERE activity_id=$1`, [dupId])
+          await db.execute(`DELETE FROM activities WHERE id=$1`, [dupId])
+        }
+      }
+      return primaryId
+    }
+    const id = await createActivity(defaults)
+    await linkActivity(id, domain, entityId)
+    return id
+  })().finally(() => {
+    linkedActivityLocks.delete(key)
+  })
+
+  linkedActivityLocks.set(key, promise)
+  return promise
+}
+
+export async function deduplicateSingletonActivities(): Promise<void> {
+  try {
+    const db = await getDb()
+    for (const [domain, entityId, name, kind, color] of [
+      ['art', 'collection', 'Collection Art', 'art', '#b45b68'],
+      ['career', 'job-search', "Recherche d'emploi", 'career', '#3a8a87'],
+    ] as const) {
+      const rows = await db.select<{ id: string }[]>(
+        `SELECT id FROM activities WHERE LOWER(name)=LOWER($1) AND kind=$2 AND archived=0 ORDER BY created_at ASC`,
+        [name, kind],
+      )
+      if (rows && rows.length > 1) {
+        const primaryId = rows[0].id
+        await linkActivity(primaryId, domain, entityId)
+        for (let i = 1; i < rows.length; i++) {
+          const dupId = rows[i].id
+          await db.execute(`UPDATE time_entries SET activity_id=$1 WHERE activity_id=$2`, [primaryId, dupId])
+          await db.execute(`UPDATE activity_events SET activity_id=$1 WHERE activity_id=$2`, [primaryId, dupId])
+          await db.execute(`DELETE FROM activity_links WHERE activity_id=$1`, [dupId])
+          await db.execute(`DELETE FROM activities WHERE id=$1`, [dupId])
+        }
+      } else if (!rows || rows.length === 0) {
+        await ensureLinkedActivity(domain, entityId, { name, kind, color })
+      } else {
+        await linkActivity(rows[0].id, domain, entityId)
+      }
+    }
+  } catch {
+    // Ignore in minimal test environments
+  }
 }
 
 export async function saveTimeEntry(input: Omit<TimeEntry, 'id' | 'created_at'>) {
   const db = await getDb()
-  await db.execute(`INSERT OR IGNORE INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [crypto.randomUUID(), input.activity_id, input.started_at, input.ended_at, Math.max(0, Math.round(input.duration_seconds)), input.note?.trim() || null, input.source, input.source_ref || null, new Date().toISOString()])
+  await db.execute(
+    `INSERT OR IGNORE INTO time_entries (id,activity_id,started_at,ended_at,duration_seconds,note,source,source_ref,source_detail_ref,source_detail_label,exercise_tag,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [
+      crypto.randomUUID(),
+      input.activity_id,
+      input.started_at,
+      input.ended_at,
+      Math.max(0, Math.round(input.duration_seconds)),
+      input.note?.trim() || null,
+      input.source,
+      input.source_ref || null,
+      input.source_detail_ref || null,
+      input.source_detail_label?.trim() || null,
+      input.exercise_tag ? 1 : 0,
+      new Date().toISOString(),
+    ],
+  )
 }
 
 export async function getTimeEntries(from?: Date, to?: Date): Promise<TimeEntry[]> {
@@ -154,8 +269,11 @@ export async function getActivityEvents(from?: Date, to?: Date): Promise<Activit
 }
 
 export async function updateTimeEntry(id: string, input: { startedAt: string; endedAt: string; note?: string }) {
-  const db = await getDb(), started = new Date(input.startedAt), ended = new Date(input.endedAt)
-  const duration = Math.max(0, Math.round((ended.getTime() - started.getTime()) / 1000))
+  const started = new Date(input.startedAt), ended = new Date(input.endedAt)
+  if (!Number.isFinite(started.getTime()) || !Number.isFinite(ended.getTime())) throw new Error('Veuillez saisir des dates valides.')
+  if (ended <= started) throw new Error('La fin doit être après le début.')
+  const db = await getDb()
+  const duration = Math.round((ended.getTime() - started.getTime()) / 1000)
   const [entry] = await db.select<Array<{ source_ref: string | null }>>(`SELECT source_ref FROM time_entries WHERE id=$1 LIMIT 1`, [id])
   if (entry?.source_ref) {
     await db.execute(
@@ -164,6 +282,12 @@ export async function updateTimeEntry(id: string, input: { startedAt: string; en
     )
   }
   await db.execute(`UPDATE time_entries SET started_at=$1,ended_at=$2,duration_seconds=$3,note=$4,source='manual',source_ref=NULL WHERE id=$5`, [started.toISOString(), ended.toISOString(), duration, input.note?.trim() || null, id])
+}
+
+/** A secondary label: never changes the original classification, duration, or import identity. */
+export async function setTimeEntryExerciseTag(id: string, enabled: boolean) {
+  const db = await getDb()
+  await db.execute('UPDATE time_entries SET exercise_tag=$1 WHERE id=$2', [enabled ? 1 : 0, id])
 }
 
 export async function deleteTimeEntry(id: string) {
@@ -214,8 +338,12 @@ export function readActiveActivityTimer(): ActiveActivityTimer | null {
   } catch { return null }
 }
 
-export function startActivityTimer(activityId: string, now = new Date()): ActiveActivityTimer {
-  const timer = { activityId, startedAt: now.toISOString() }
+export function startActivityTimer(
+  activityId: string,
+  now = new Date(),
+  meta?: Omit<ActiveActivityTimer, 'activityId' | 'startedAt'>,
+): ActiveActivityTimer {
+  const timer: ActiveActivityTimer = { activityId, startedAt: now.toISOString(), ...meta }
   localStorage.setItem(ACTIVE_ACTIVITY_TIMER_KEY, JSON.stringify(timer))
   window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
   void openActivityResources(activityId)
@@ -234,7 +362,8 @@ export function resumeActivityTimer(now = new Date()) {
   const active = readActiveActivityTimer()
   if (!active?.pausedAt) return active
   const pausedFor = Math.max(0, Math.floor((now.getTime() - new Date(active.pausedAt).getTime()) / 1000))
-  const next = { activityId: active.activityId, startedAt: active.startedAt, pausedSeconds: (active.pausedSeconds || 0) + pausedFor }
+  const { pausedAt: _removed, ...rest } = active
+  const next: ActiveActivityTimer = { ...rest, pausedSeconds: (active.pausedSeconds || 0) + pausedFor }
   localStorage.setItem(ACTIVE_ACTIVITY_TIMER_KEY, JSON.stringify(next)); window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
   return next
 }
@@ -243,7 +372,47 @@ export async function stopActivityTimer(note?: string, now = new Date()): Promis
   const active = readActiveActivityTimer()
   if (!active) return null
   const duration = elapsedActivitySeconds(active, now)
-  const entry: TimeEntry = { id: crypto.randomUUID(), activity_id: active.activityId, started_at: active.startedAt, ended_at: now.toISOString(), duration_seconds: duration, note: note?.trim() || null, source: 'timer', created_at: now.toISOString() }
+  const effectiveDetail = active.subobjectiveTitle?.trim() || active.detailLabel?.trim() || null
+  const effectiveNote = note?.trim() || effectiveDetail || null
+
+  if (active.subobjectiveId && duration > 0) {
+    try {
+      const { addTimeSession } = await import('./bingoals/db')
+      const { syncBingoTime } = await import('./timeSync')
+      const startedMs = new Date(active.startedAt).getTime()
+      const endedMs = startedMs + duration * 1000
+      await addTimeSession(active.subobjectiveId, startedMs, endedMs)
+      await syncBingoTime()
+      localStorage.removeItem(ACTIVE_ACTIVITY_TIMER_KEY)
+      window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
+      return {
+        id: crypto.randomUUID(),
+        activity_id: active.activityId,
+        started_at: active.startedAt,
+        ended_at: new Date(endedMs).toISOString(),
+        duration_seconds: duration,
+        note: effectiveNote,
+        source: 'bingoals',
+        source_detail_ref: `bingo-subobjective:${active.subobjectiveId}`,
+        source_detail_label: active.subobjectiveTitle || null,
+        created_at: now.toISOString(),
+      }
+    } catch {
+      // Fallback to standard time_entries save below
+    }
+  }
+
+  const entry: TimeEntry = {
+    id: crypto.randomUUID(),
+    activity_id: active.activityId,
+    started_at: active.startedAt,
+    ended_at: now.toISOString(),
+    duration_seconds: duration,
+    note: effectiveNote,
+    source: 'timer',
+    source_detail_label: effectiveDetail,
+    created_at: now.toISOString(),
+  }
   await saveTimeEntry(entry)
   localStorage.removeItem(ACTIVE_ACTIVITY_TIMER_KEY)
   window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))

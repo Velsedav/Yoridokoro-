@@ -42,6 +42,8 @@ describe('History time classification', () => {
     expect(classifyHistoryTime(entry({ source: 'manual', activity_kind: 'study' }))).toBe('study')
     expect(classifyHistoryTime(entry({ source: 'manual', activity_domains: 'bingo-objective' }))).toBe('goals')
     expect(classifyHistoryTime(entry({ source: 'manual', activity_kind: 'art' }))).toBe('art')
+    expect(classifyHistoryTime(entry({ source: 'timer', activity_kind: 'career' }))).toBe('career')
+    expect(classifyHistoryTime(entry({ source: 'manual', activity_kind: 'career' }))).toBe('career')
     expect(classifyHistoryTime(entry())).toBe('other')
   })
 
@@ -64,8 +66,18 @@ describe('buildTimeDistribution', () => {
     ], from, to)
 
     expect(result.totalSeconds).toBe(10_000)
-    expect(result.segments.map(segment => segment.category)).toEqual(['gaming', 'study', 'goals', 'other', 'art'])
-    expect(result.segments.map(segment => segment.percent)).toEqual([38, 31, 21, 10, 0])
+    expect(result.segments.map(segment => segment.category)).toEqual(['gaming', 'study', 'goals', 'other', 'art', 'career'])
+    expect(result.segments.map(segment => segment.percent)).toEqual([38, 31, 21, 10, 0, 0])
     expect(result.segments.reduce((sum, segment) => sum + segment.percent, 0)).toBe(100)
+  })
+
+  it('gives job-hunting time its own segment while keeping percentages at 100', () => {
+    const result = buildTimeDistribution([
+      entry({ activity_kind: 'career', duration_seconds: 2700 }),
+      entry({ source: 'study', duration_seconds: 900 }),
+    ], new Date('2026-08-03T00:00:00Z'), new Date('2026-08-04T00:00:00Z'))
+    expect(result.totalSeconds).toBe(3600)
+    expect(result.segments.find(segment=>segment.category==='career')).toEqual({ category: 'career', seconds: 2700, percent: 75 })
+    expect(result.segments.reduce((sum,segment)=>sum+segment.percent,0)).toBe(100)
   })
 })

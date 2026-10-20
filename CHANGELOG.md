@@ -1,5 +1,42 @@
 # Journal des versions
 
+## 0.2.14 — 10 octobre 2026
+
+### Corrections
+
+- Suppression de la vue divisée de Subjects ; les préférences existantes basculent automatiquement vers la vue liste.
+- Ajout d'une languette au survol des sujets en vue liste et correction des espacements dans les révisions espacées.
+
+## 0.2.13 — 9 octobre 2026
+
+### Corrections
+
+- La vue liste de Subjects ajoute des marges autour du tableau et harmonise le padding des en-têtes, cellules et boutons de sujet.
+
+## 0.2.12 — 9 octobre 2026
+
+### Corrections
+
+- Subjects permet de parcourir tous les sujets en mode tableau : les longues collections ne sont plus coupées par le conteneur de contenu.
+- La vue divisée bénéficie de marges dans ses deux panneaux et d’une liste défilante. En fenêtre étroite, les panneaux passent l’un sous l’autre.
+
+## 0.2.11 — 8 octobre 2026
+
+### Nouveautés et améliorations
+
+- Nouveau design Rework, appliqué à l’ensemble des thèmes en conservant leurs palettes.
+- Ajout de l’activité Carrière et d’un marquage Sport manuel sur les sessions de l’Historique.
+- Navigation dans les événements culturels enregistrés.
+- Section Art revue : formulaires avec détails facultatifs, fiches compactes, statistiques réorganisées et duels au format stable.
+- Amélioration des espacements, champs, menus, navigation au clavier et affichages en fenêtre étroite.
+- Reprise d’étude courte après une longue interruption et récupération des sessions interrompues.
+
+### Corrections
+
+- Les tâches terminées disparaissent après dix secondes, avec possibilité d’annuler pendant ce délai.
+- Suppression des sous-titres, numérotations de pages et indications redondantes.
+- Harmonisation des noms de navigation, des arrondis et des commandes entre les sections.
+
 ## 0.2.3 — 22 juillet 2026
 
 ### Corrections
