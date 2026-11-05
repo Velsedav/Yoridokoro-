@@ -1,7 +1,7 @@
 import { clearActiveSession } from '../lib/activeSessionRecovery'
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, BookOpen, BrainCircuit, Calendar, CalendarDays, Palette, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle, Heart, MoreHorizontal, AlertTriangle, X, Briefcase } from 'lucide-react';
+import { Home, BookOpen, BrainCircuit, Calendar, CalendarDays, Timer, Palette, Pencil, Lightbulb, BarChart2, Settings as SettingsIcon, Wrench, FlaskConical, Target, Loader2, CheckCircle2, XCircle, Heart, MoreHorizontal, AlertTriangle, X, Briefcase } from 'lucide-react';
 import { getQuotes, addQuote } from '../lib/db';
 import type { Quote } from '../lib/db';
 import QuoteEditorModal from './QuoteEditorModal';
@@ -18,6 +18,7 @@ import { initialCloseOperations, updateCloseOperation, type CloseOperation } fro
 import './Layout.css';
 import { Navigation } from '../design/rework/Navigation';
 import { useRework } from '../design/rework/useRework';
+import { ArgonautenFloatingPod } from '../design/argonauten/ArgonautenDeck';
 
 const MASCOT_DEFAULT_QUOTE = "The exam is won at home, not on exam day 🏠";
 const DEV_NAV_CLICKS = 4;
@@ -199,7 +200,7 @@ export default function Layout() {
         { path: '/calendar', label: 'Historique', icon: CalendarDays },
         { path: '/career', label: 'Emploi', icon: Briefcase },
         { path: '/study', label: 'Sujets', icon: BookOpen },
-        { path: '/plan', label: 'Pomodoro', icon: Calendar },
+        { path: '/plan', label: 'Pomodoro', icon: Timer },
         { path: '/bingoals', label: 'Objectifs', icon: Target },
         { path: '/art', label: 'Art', icon: Palette },
     ];
@@ -476,6 +477,7 @@ export default function Layout() {
 
                 <CloseOverlay />
                 <MetacognitionGate />
+                <ArgonautenFloatingPod />
 
                 {playniteWarning && (
                     <aside className="playnite-import-warning" role="status" aria-live="polite">

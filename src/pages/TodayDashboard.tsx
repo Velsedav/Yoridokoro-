@@ -17,7 +17,7 @@ import { SESSION_REVIEW_REQUEST_KEY, SESSION_RETURN_PATH_KEY } from '../lib/sess
 import { useTranslation } from '../lib/i18n'
 import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } from '../lib/behaviorAnalytics'
 import './TodayDashboard.css'
-import { useRework } from '../design/rework/useRework'
+import { useArgonauten, useRework } from '../design/rework/useRework'
 import { PageHeading, Orbit } from '../design/rework/Primitives'
 import { useTaskCompletionGrace } from '../hooks/useTaskCompletionGrace'
 
@@ -85,6 +85,7 @@ const QUADRANT_COPY: Record<EisenhowerQuadrant, { title: string; hint: string; u
 
 export default function TodayDashboard() {
   const rework = useRework()
+  const argonauten = useArgonauten()
   const [selectedQuadrant, setSelectedQuadrant] = useState<EisenhowerQuadrant>('do')
   const workSecondsBySubject = usePlannerAllocation()
   const navigate = useNavigate()
@@ -472,6 +473,119 @@ export default function TodayDashboard() {
 
         </div>
       </section>)
+
+  if (argonauten) {
+    const urgentCount = eisenhowerTasks.filter(task => task.quadrant === 'do' && !task.done).length
+    const totalPendingTasks = eisenhowerTasks.filter(task => !task.done).length
+    return (
+      <div className="argo-command-center rw-today yd-page">
+        <header className="argo-cc-hero-bar">
+          <div className="argo-cc-identity">
+            <span className="argo-cc-kicker">✦ ARGONAUTE // PONT DE COMMANDEMENT SPATIAL</span>
+            <h1>Pont d’Expédition <em>Aujourd’hui</em></h1>
+            <p className="argo-cc-sub">
+              {activityNow.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+          <div className="argo-cc-kpis">
+            <button type="button" className="argo-cc-kpi" onClick={() => navigate('/calendar')}>
+              <small>01 // ÉTUDE DU JOUR</small>
+              <strong>{todayMinutes > 0 ? formatMinutes(todayMinutes) : '0 min'}</strong>
+              <span>{todaySessions.length} session{todaySessions.length > 1 ? 's' : ''} validée{todaySessions.length > 1 ? 's' : ''}</span>
+            </button>
+            <button type="button" className="argo-cc-kpi argo-cc-kpi--cyan" onClick={() => navigate('/career')}>
+              <small>02 // CARRIÈRE & EMPLOI</small>
+              <strong>Cockpit ↗</strong>
+              <span>Candidatures, CV & suivi</span>
+            </button>
+            <button type="button" className="argo-cc-kpi" onClick={() => setSelectedQuadrant('do')}>
+              <small>03 // TÂCHES PRIORITAIRES</small>
+              <strong>{urgentCount} urgente{urgentCount > 1 ? 's' : ''}</strong>
+              <span>{totalPendingTasks} au total dans la matrice</span>
+            </button>
+            <button type="button" className="argo-cc-kpi" onClick={() => navigate('/relations')}>
+              <small>04 // ÉCHÉANCES & LIENS</small>
+              <strong>{deadlines.length + peopleToContact.length}</strong>
+              <span>{deadlines.length} échéance(s) · {peopleToContact.length} contact(s)</span>
+            </button>
+          </div>
+        </header>
+
+        <div className="argo-bento-grid">
+          {/* ZONE A: Mission Core & Study Ignition */}
+          <section className="argo-bento-tile argo-bento-mission rw-action-surface" aria-label="La prochaine action">
+            <div className="argo-tile-header">
+              <span className="argo-tile-index">SYS.01 // TRAJECTOIRE D’ÉTUDE</span>
+              <button type="button" className="argo-tile-link" onClick={() => navigate('/study')}>
+                Tous les sujets <ArrowRight size={13} />
+              </button>
+            </div>
+            {actionView}
+            {latestEvidence && <div className="argo-inline-continuity">{continuityView}</div>}
+            <Orbit />
+          </section>
+
+          {/* ZONE B: Multi-System Zero-Friction Reactor (Career, Objectives & Art) */}
+          <section className="argo-bento-tile argo-bento-reactor" aria-label="Réacteur multi-systèmes">
+            <div className="argo-tile-header">
+              <span className="argo-tile-index">SYS.02 // LANCEUR DIRECT · EMPLOI, OBJECTIFS & COLLECTION</span>
+              <button type="button" className="argo-tile-link" onClick={() => navigate('/bingoals')}>
+                Grille Bingoals <ArrowRight size={13} />
+              </button>
+            </div>
+            <QuickLaunchPanel />
+          </section>
+
+          {/* ZONE C: Tactical Eisenhower Matrix & Micro-Sprint */}
+          <section className="argo-bento-tile argo-bento-tactical rw-task-board" aria-labelledby="rw-tasks-title">
+            <div className="argo-tile-header">
+              <span className="argo-tile-index" id="rw-tasks-title">SYS.03 // MATRICE TACTIQUE EISENHOWER</span>
+              <div className="rw-task-tabs" role="group" aria-label="Priorité des tâches">
+                {EISENHOWER_QUADRANTS.map(quadrant => (
+                  <button key={quadrant} aria-pressed={selectedQuadrant === quadrant} onClick={() => setSelectedQuadrant(quadrant)}>
+                    {quadrant === 'delegate' ? 'Déléguer' : quadrant === 'eliminate' ? 'Laisser' : QUADRANT_COPY[quadrant].title}
+                    <small>{eisenhowerTasks.filter(task => task.quadrant === quadrant && !task.done).length || ''}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rw-task-pane" data-quadrant={selectedQuadrant}>{tasksView}</div>
+            <div className="argo-tactical-sprint">{focusView}</div>
+          </section>
+
+          {/* ZONE D: Cultural Horizon Viewport */}
+          <aside className="argo-bento-tile argo-bento-culture rw-culture-surface" aria-label="Votre horizon culturel">
+            <div className="argo-tile-header">
+              <span className="argo-tile-index">SYS.04 // HORIZON CULTUREL</span>
+              <button type="button" className="argo-tile-link" onClick={() => navigate('/art')}>
+                Collection Art <ArrowRight size={13} />
+              </button>
+            </div>
+            <CulturalBanner />
+          </aside>
+
+          {/* ZONE E: Temporal Spectrum */}
+          <section className="argo-bento-tile argo-bento-spectrum">
+            <div className="argo-tile-header">
+              <span className="argo-tile-index">SYS.05 // SPECTRE TEMPOREL</span>
+              <button type="button" className="argo-tile-link" onClick={() => navigate('/calendar')}>
+                Chronologie <ArrowRight size={13} />
+              </button>
+            </div>
+            <TimeDistributionPanel />
+          </section>
+
+          {/* ZONE F: Deadlines & Relations Radar */}
+          <section className="argo-bento-tile argo-bento-radar">
+            <div className="argo-tile-header">
+              <span className="argo-tile-index">SYS.06 // VEILLE STRATÉGIQUE · ÉCHÉANCES & RELATIONS</span>
+            </div>
+            {overviewView}
+          </section>
+        </div>
+      </div>
+    )
+  }
 
   if (rework) return <div className="rw-today yd-page">
     <PageHeading title="Aujourd’hui" />

@@ -3,7 +3,7 @@ import { PageHeading } from '../design/rework/Primitives'
 import { useRework } from '../design/rework/useRework'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, AlignJustify, Columns2, Wand2, Undo2, Redo2, Bell, BellOff, Plus, Zap, MoreVertical, Check, X, CalendarDays, ArrowRight, BookOpenCheck, Clock3, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Play, AlignJustify, Columns2, Wand2, Undo2, Redo2, Bell, BellOff, Plus, Zap, MoreVertical, Check, X, CalendarDays, Timer, ArrowRight, BookOpenCheck, Clock3, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { getSubjects, getAllTags, getAllSubjectTagsMap } from '../lib/db'
 import type { Subject, Tag } from '../lib/db'
 import { getAllChapters, getChaptersForSubject } from '../lib/chapters'
@@ -628,7 +628,7 @@ function TopBar({ view, onViewChange, canStart, onStart }: {
 }) {
   return (
     <div className="op-topbar">
-      <div className="op-topbar-identity"><span><CalendarDays size={13} /> Construire la session</span><strong>Pomodoro</strong></div>
+      <div className="op-topbar-identity"><span><Timer size={13} /> Construire la session</span><strong>Pomodoro</strong></div>
       <div className="op-topbar-controls">
         <div className="op-view-pills" aria-label="Mode de planification">
           <button className={`op-view-pill${view === 'timeline' ? ' op-view-pill-active' : ''}`} onClick={() => onViewChange('timeline')} aria-pressed={view === 'timeline'}><AlignJustify size={14} /> Chronologie</button>

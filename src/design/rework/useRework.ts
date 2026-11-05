@@ -20,3 +20,7 @@ export function useCurrentTheme() {
 export function useRework() {
   return useCurrentTheme().startsWith('yoridokoro-')
 }
+export function useArgonauten() {
+  const current = useCurrentTheme()
+  return current === 'yoridokoro-argonaute' || current === 'yoridokoro-argonauten'
+}

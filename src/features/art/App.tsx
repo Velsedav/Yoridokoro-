@@ -347,40 +347,68 @@ function DuelView({ pair, onChoose, onSkip, onUndo, onExit, shortcuts, canUndo, 
 }) {
   const { t } = useI18n();
   const viewRef = useRef<HTMLElement>(null);
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const pairKey = pair ? `${pair[0].id}:${pair[1].id}` : '';
   useLayoutEffect(() => { viewRef.current?.scrollIntoView({ block: 'start' }); }, []);
   useEffect(() => {
+    setChosenId(null);
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [pairKey]);
+  const triggerChoice = useCallback((winner: RankedItem, loser: RankedItem) => {
+    if (busy || chosenId) return;
+    if (import.meta.env.MODE === 'test') { onChoose(winner, loser); return; }
+    setChosenId(winner.id);
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      setChosenId(null);
+      onChoose(winner, loser);
+    }, 350);
+  }, [busy, chosenId, onChoose]);
+  const locked = busy || Boolean(chosenId);
+  useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (!pair || busy || event.repeat || isEditingText(event)) return;
+      if (!pair || locked || event.repeat || isEditingText(event)) return;
       const key = normalizeShortcut(event);
-      if (key === shortcuts.duelLeft) { event.preventDefault(); onChoose(pair[0], pair[1]); }
-      if (key === shortcuts.duelRight) { event.preventDefault(); onChoose(pair[1], pair[0]); }
+      if (key === shortcuts.duelLeft) { event.preventDefault(); triggerChoice(pair[0], pair[1]); }
+      if (key === shortcuts.duelRight) { event.preventDefault(); triggerChoice(pair[1], pair[0]); }
       if (key === shortcuts.duelSkip) { event.preventDefault(); onSkip(); }
       if (key === shortcuts.duelUndo && canUndo) { event.preventDefault(); onUndo(); }
       if (event.key === 'Escape') onExit();
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [pair, onChoose, onSkip, onUndo, onExit, shortcuts, canUndo, busy]);
+  }, [pair, triggerChoice, onSkip, onUndo, onExit, shortcuts, canUndo, locked]);
 
   if (!pair) return <section ref={viewRef} className="duel-view"><div className="statistics-empty"><Swords /><h2>{t('No pairing available')}</h2><button className="button button--outline" onClick={onExit}><ArrowLeft size={17} />{t('Back to ladder')}</button></div></section>;
   return (
-    <section ref={viewRef} className="duel-view duel-view--gallery" aria-labelledby="duel-title" aria-busy={busy}>
+    <section ref={viewRef} className={`duel-view duel-view--gallery${chosenId ? ' is-confirming' : ''}`} aria-labelledby="duel-title" aria-busy={locked}>
       <div className="duel-toolbar">
         <button className="back-button" onClick={onExit}><ArrowLeft size={17} />{t('Back to ladder')}</button>
         {headerAction}
       </div>
       <div className="duel-heading"><h1 id="duel-title">{t('Which stays with you?')}</h1></div>
       <div className="duel-grid">
-        {pair.map((item, index) => (
-          <button key={item.id} className={`duel-card duel-card--${item.category}`} aria-label={`${t('Choose this one')} : ${item.title}`} disabled={busy} onClick={() => onChoose(item, pair[index === 0 ? 1 : 0])}>
-            <Artwork item={item} size="large" />
-            <span className="duel-key">{shortcutLabel(index === 0 ? shortcuts.duelLeft : shortcuts.duelRight)}</span>
-            <span className="duel-copy"><small>{item.year ?? t('Year unknown')} · {item.genres[0] ?? categoryCopy(item.category, t).label}</small><strong title={item.title}>{item.title}</strong><span title={item.creator}>{item.creator}</span></span>
-          </button>
-        ))}
-        <span className="versus" aria-hidden="true">VS</span>
+        {pair.map((item, index) => {
+          const isWinner = chosenId === item.id;
+          const isLoser = Boolean(chosenId && chosenId !== item.id);
+          return (
+            <button key={item.id} className={`duel-card duel-card--${item.category}${isWinner ? ' is-winner' : ''}${isLoser ? ' is-loser' : ''}`} aria-label={`${t('Choose this one')} : ${item.title}`} disabled={locked} onClick={() => triggerChoice(item, pair[index === 0 ? 1 : 0])}>
+              <Artwork item={item} size="large" />
+              <span className="duel-key">{shortcutLabel(index === 0 ? shortcuts.duelLeft : shortcuts.duelRight)}</span>
+              {isWinner && <span className="duel-victory-badge" aria-hidden="true"><Check size={16} strokeWidth={3} /><span>CHOISI</span></span>}
+              <span className="duel-copy"><small>{item.year ?? t('Year unknown')} · {item.genres[0] ?? categoryCopy(item.category, t).label}</small><strong title={item.title}>{item.title}</strong><span title={item.creator}>{item.creator}</span></span>
+            </button>
+          );
+        })}
+        <span className={`versus${chosenId ? ' is-decided' : ''}`} aria-hidden="true">VS</span>
       </div>
-      <div className="duel-footer"><div className="duel-footer-actions"><button className="text-button" onClick={onSkip} disabled={busy}>{t('Skip pairing')} <kbd>{shortcutLabel(shortcuts.duelSkip)}</kbd></button><button className="text-button undo-choice" onClick={onUndo} disabled={!canUndo || busy}><Undo2 size={13} />{t('Undo last choice')} <kbd>{shortcutLabel(shortcuts.duelUndo)}</kbd></button></div><span className="duel-save-state" role="status">{busy ? t('Saving choice…') : <><kbd>Esc</kbd> {t('exit')}</>}</span></div>
+      <div className="duel-footer"><div className="duel-footer-actions"><button className="text-button" onClick={onSkip} disabled={locked}>{t('Skip pairing')} <kbd>{shortcutLabel(shortcuts.duelSkip)}</kbd></button><button className="text-button undo-choice" onClick={onUndo} disabled={!canUndo || locked}><Undo2 size={13} />{t('Undo last choice')} <kbd>{shortcutLabel(shortcuts.duelUndo)}</kbd></button></div><span className="duel-save-state" role="status">{locked ? t('Saving choice…') : <><kbd>Esc</kbd> {t('exit')}</>}</span></div>
     </section>
   );
 }

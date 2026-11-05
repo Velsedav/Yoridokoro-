@@ -1026,6 +1026,430 @@
   gap: 6px;
 }
 
+/* ─── ROME / FRANCE TRAVAIL RADAR & CONSULTATION MATRIX ─── */
+.career-stats-bar--five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.career-stat-clickable {
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.career-stat-clickable:hover {
+  border-color: var(--career-accent);
+  transform: translateY(-1px);
+}
+
+.career-stat-clickable.is-selected-stat {
+  border-color: var(--career-accent);
+  background: color-mix(in srgb, var(--career-accent) 10%, var(--career-raised));
+}
+
+.career-stat-clickable small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.career-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.career-rome-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.career-rome-editor-card {
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--career-accent) 45%, var(--career-line));
+  border-radius: 12px;
+  background: var(--career-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+}
+
+.career-rome-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--career-line);
+}
+
+.career-rome-editor-header h3 {
+  margin: 2px 0 0;
+  font: 700 20px/1.15 var(--font-heading, Georgia, serif);
+}
+
+.career-rome-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.career-rome-editor-grid label {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--career-muted);
+}
+
+.career-rome-span-2 {
+  grid-column: span 2;
+}
+
+.career-rome-code-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.career-rome-editor-grid input,
+.career-rome-editor-grid select {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--career-line);
+  border-radius: 7px;
+  background: var(--career-surface);
+  color: var(--career-text);
+  font-size: 12.5px;
+  box-sizing: border-box;
+}
+
+.career-rome-table {
+  table-layout: auto;
+  width: 100%;
+}
+
+.career-rome-table th {
+  white-space: nowrap;
+}
+
+.career-rome-table th.career-th-rome-actions {
+  width: 1%;
+  min-width: 176px;
+  text-align: right;
+  padding-right: 16px;
+}
+
+.career-rome-sector-row td {
+  padding: 9px 14px !important;
+  background: color-mix(in srgb, var(--career-accent) 10%, var(--career-surface)) !important;
+  border-top: 1px solid color-mix(in srgb, var(--career-accent) 28%, var(--career-line));
+  border-bottom: 1px solid color-mix(in srgb, var(--career-accent) 28%, var(--career-line));
+  font: 800 10.5px/1.2 var(--font-mono, monospace);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--career-accent);
+}
+
+.career-rome-cell-asset {
+  min-width: 145px;
+  vertical-align: middle;
+}
+
+.career-rome-asset-card {
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--career-line);
+  background: var(--career-surface);
+  color: var(--career-text);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.career-rome-asset-card:hover,
+.career-rome-asset-card:focus-visible {
+  border-color: var(--career-accent);
+  background: color-mix(in srgb, var(--career-accent) 10%, var(--career-surface));
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22);
+  outline: none;
+}
+
+.career-rome-asset-card.is-cv {
+  border-color: color-mix(in srgb, var(--career-accent) 36%, var(--career-line));
+  background: color-mix(in srgb, var(--career-accent) 6%, var(--career-surface));
+}
+
+.career-rome-asset-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--career-text);
+}
+
+.career-rome-asset-card:hover .career-rome-asset-title {
+  color: var(--career-accent);
+}
+
+.career-rome-ext-icon {
+  opacity: 0.72;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.career-rome-asset-card:hover .career-rome-ext-icon,
+.career-rome-city-card:hover .career-rome-ext-icon {
+  opacity: 1;
+  transform: translate(1px, -1px);
+}
+
+.career-rome-cv-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.career-rome-cv-count {
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--career-line) 75%, transparent);
+  color: var(--career-text);
+  font: 700 10px/1.3 var(--font-mono, monospace);
+}
+
+.career-rome-add-link-btn {
+  min-height: 30px;
+  padding: 4px 11px;
+  border-radius: 7px;
+  border: 1px dashed var(--career-line);
+  background: transparent;
+  color: var(--career-muted);
+  font: 700 11px var(--font-mono, monospace);
+  cursor: pointer;
+}
+
+.career-rome-add-link-btn:hover {
+  border-color: var(--career-accent);
+  color: var(--career-accent);
+}
+
+.career-rome-cell-metier strong {
+  font-size: 13.5px;
+}
+
+.career-rome-cell-code {
+  white-space: nowrap;
+}
+
+.career-rome-badge {
+  min-height: 28px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--career-accent) 42%, var(--career-line));
+  background: color-mix(in srgb, var(--career-accent) 12%, var(--career-surface));
+  color: var(--career-accent);
+  font: 800 12px/1 var(--font-mono, monospace);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.career-rome-badge:hover {
+  background: var(--career-accent);
+  color: #0e1015;
+}
+
+.career-rome-cell-city {
+  min-width: 176px;
+  vertical-align: middle;
+}
+
+/* Full clickable city card with z+1 checkmark button */
+.career-rome-city-card {
+  position: relative;
+  z-index: 1;
+  padding: 10px 44px 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--career-line);
+  background: var(--career-surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.career-rome-city-card:hover,
+.career-rome-city-card:focus-visible {
+  border-color: var(--career-accent) !important;
+  background: color-mix(in srgb, var(--career-accent) 12%, var(--career-surface)) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24);
+  outline: none;
+}
+
+.career-rome-city-card.is-fresh {
+  border-color: color-mix(in srgb, #3fb950 45%, var(--career-line));
+  background: color-mix(in srgb, #3fb950 8%, var(--career-surface));
+}
+
+.career-rome-city-card.is-due {
+  border-color: color-mix(in srgb, #d29922 45%, var(--career-line));
+  background: color-mix(in srgb, #d29922 7%, var(--career-surface));
+}
+
+.career-rome-city-card.is-stale {
+  border-color: color-mix(in srgb, #f85149 48%, var(--career-line));
+  background: color-mix(in srgb, #f85149 8%, var(--career-surface));
+}
+
+.career-rome-city-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.career-rome-city-title-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--career-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.career-rome-city-card:hover .career-rome-city-name {
+  color: var(--career-accent);
+}
+
+.career-rome-rayon {
+  font: 700 10px/1 var(--font-mono, monospace);
+  font-style: normal;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--career-line) 80%, transparent);
+  color: var(--career-muted);
+}
+
+.career-page .career-rome-city-check {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border-radius: 7px !important;
+  border: 1px solid color-mix(in srgb, var(--career-line) 85%, transparent) !important;
+  background: color-mix(in srgb, var(--career-raised) 88%, #000) !important;
+  color: var(--career-muted) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease, background-color 0.14s ease, transform 0.14s ease;
+}
+
+.career-page .career-rome-city-check:hover,
+.career-page .career-rome-city-check:focus-visible {
+  border-color: #3fb950 !important;
+  color: #3fb950 !important;
+  background: rgba(63, 185, 80, 0.18) !important;
+  transform: translateY(-50%) scale(1.06);
+}
+
+.career-rome-city-bottom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 10.5px/1.2 var(--font-mono, monospace);
+  color: var(--career-muted);
+}
+
+.career-freshness-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--career-muted);
+}
+
+.career-freshness-dot.is-fresh {
+  background: #3fb950;
+  box-shadow: 0 0 6px rgba(63, 185, 80, 0.55);
+}
+
+.career-freshness-dot.is-due {
+  background: #d29922;
+}
+
+.career-freshness-dot.is-stale {
+  background: #f85149;
+}
+
+.career-freshness-dot.is-never {
+  background: color-mix(in srgb, var(--career-muted) 45%, transparent);
+}
+
+.career-freshness-tag {
+  font: 600 10px/1.2 var(--font-mono, monospace);
+  color: var(--career-muted);
+}
+
+.career-freshness-tag.is-fresh {
+  color: #3fb950;
+}
+
+.career-freshness-tag.is-due {
+  color: #d29922;
+}
+
+.career-freshness-tag.is-stale {
+  color: #f85149;
+}
+
+.career-rome-actions-cell {
+  width: 1%;
+  min-width: 176px;
+  white-space: nowrap;
+  text-align: right;
+  vertical-align: middle;
+  padding-left: 12px !important;
+  padding-right: 14px !important;
+}
+
+.career-rome-actions-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.career-rome-apply-btn {
+  min-height: 30px;
+  padding: 0 10px;
+  font-weight: 700;
+}
+
 @media (max-width: 1240px) {
   .career-detail-columns {
     grid-template-columns: 1fr;
@@ -1036,10 +1460,20 @@
   .career-cv-add-form {
     grid-template-columns: 1fr;
   }
+  .career-rome-editor-grid {
+    grid-template-columns: 1fr;
+  }
+  .career-rome-span-2 {
+    grid-column: span 1;
+  }
+  .career-stats-bar--five {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
-  .career-stats-bar {
+  .career-stats-bar,
+  .career-stats-bar--five {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .career-props-grid,

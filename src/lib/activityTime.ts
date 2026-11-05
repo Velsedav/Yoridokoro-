@@ -338,40 +338,52 @@ export function readActiveActivityTimer(): ActiveActivityTimer | null {
   } catch { return null }
 }
 
+function toDate(value: Date | number | string = new Date()): Date {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value : new Date()
+  }
+  const parsed = new Date(value)
+  return Number.isFinite(parsed.getTime()) ? parsed : new Date()
+}
+
 export function startActivityTimer(
   activityId: string,
-  now = new Date(),
+  now: Date | number | string = new Date(),
   meta?: Omit<ActiveActivityTimer, 'activityId' | 'startedAt'>,
 ): ActiveActivityTimer {
-  const timer: ActiveActivityTimer = { activityId, startedAt: now.toISOString(), ...meta }
+  const safeNow = toDate(now)
+  const timer: ActiveActivityTimer = { activityId, startedAt: safeNow.toISOString(), ...meta }
   localStorage.setItem(ACTIVE_ACTIVITY_TIMER_KEY, JSON.stringify(timer))
   window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
   void openActivityResources(activityId)
   return timer
 }
 
-export function pauseActivityTimer(now = new Date()) {
+export function pauseActivityTimer(now: Date | number | string = new Date()) {
   const active = readActiveActivityTimer()
   if (!active || active.pausedAt) return active
-  const next = { ...active, pausedAt: now.toISOString() }
+  const safeNow = toDate(now)
+  const next = { ...active, pausedAt: safeNow.toISOString() }
   localStorage.setItem(ACTIVE_ACTIVITY_TIMER_KEY, JSON.stringify(next)); window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
   return next
 }
 
-export function resumeActivityTimer(now = new Date()) {
+export function resumeActivityTimer(now: Date | number | string = new Date()) {
   const active = readActiveActivityTimer()
   if (!active?.pausedAt) return active
-  const pausedFor = Math.max(0, Math.floor((now.getTime() - new Date(active.pausedAt).getTime()) / 1000))
+  const safeNow = toDate(now)
+  const pausedFor = Math.max(0, Math.floor((safeNow.getTime() - toDate(active.pausedAt).getTime()) / 1000))
   const { pausedAt: _removed, ...rest } = active
   const next: ActiveActivityTimer = { ...rest, pausedSeconds: (active.pausedSeconds || 0) + pausedFor }
   localStorage.setItem(ACTIVE_ACTIVITY_TIMER_KEY, JSON.stringify(next)); window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
   return next
 }
 
-export async function stopActivityTimer(note?: string, now = new Date()): Promise<TimeEntry | null> {
+export async function stopActivityTimer(note?: string, now: Date | number | string = new Date()): Promise<TimeEntry | null> {
   const active = readActiveActivityTimer()
   if (!active) return null
-  const duration = elapsedActivitySeconds(active, now)
+  const safeNow = toDate(now)
+  const duration = elapsedActivitySeconds(active, safeNow)
   const effectiveDetail = active.subobjectiveTitle?.trim() || active.detailLabel?.trim() || null
   const effectiveNote = note?.trim() || effectiveDetail || null
 
@@ -379,7 +391,7 @@ export async function stopActivityTimer(note?: string, now = new Date()): Promis
     try {
       const { addTimeSession } = await import('./bingoals/db')
       const { syncBingoTime } = await import('./timeSync')
-      const startedMs = new Date(active.startedAt).getTime()
+      const startedMs = toDate(active.startedAt).getTime()
       const endedMs = startedMs + duration * 1000
       await addTimeSession(active.subobjectiveId, startedMs, endedMs)
       await syncBingoTime()
@@ -395,7 +407,7 @@ export async function stopActivityTimer(note?: string, now = new Date()): Promis
         source: 'bingoals',
         source_detail_ref: `bingo-subobjective:${active.subobjectiveId}`,
         source_detail_label: active.subobjectiveTitle || null,
-        created_at: now.toISOString(),
+        created_at: safeNow.toISOString(),
       }
     } catch {
       // Fallback to standard time_entries save below
@@ -406,12 +418,12 @@ export async function stopActivityTimer(note?: string, now = new Date()): Promis
     id: crypto.randomUUID(),
     activity_id: active.activityId,
     started_at: active.startedAt,
-    ended_at: now.toISOString(),
+    ended_at: safeNow.toISOString(),
     duration_seconds: duration,
     note: effectiveNote,
     source: 'timer',
     source_detail_label: effectiveDetail,
-    created_at: now.toISOString(),
+    created_at: safeNow.toISOString(),
   }
   await saveTimeEntry(entry)
   localStorage.removeItem(ACTIVE_ACTIVITY_TIMER_KEY)
@@ -424,13 +436,15 @@ export function discardActivityTimer() {
   window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
 }
 
-export function elapsedActivitySeconds(timer: ActiveActivityTimer, now = new Date()) {
-  const effectiveNow = timer.pausedAt ? new Date(timer.pausedAt) : now
-  return Math.max(0, Math.floor((effectiveNow.getTime() - new Date(timer.startedAt).getTime()) / 1000) - (timer.pausedSeconds || 0))
+export function elapsedActivitySeconds(timer: ActiveActivityTimer | null | undefined, now: Date | number | string = new Date()) {
+  if (!timer || !timer.startedAt) return 0
+  const effectiveNow = timer.pausedAt ? toDate(timer.pausedAt) : toDate(now)
+  const startedMs = toDate(timer.startedAt).getTime()
+  return Math.max(0, Math.floor((effectiveNow.getTime() - startedMs) / 1000) - (Number(timer.pausedSeconds) || 0))
 }
 
-export function startOfWeek(date = new Date(), firstDay: 'monday' | 'sunday' = 'monday') {
-  const result = new Date(date); result.setHours(0, 0, 0, 0)
+export function startOfWeek(date: Date | number | string = new Date(), firstDay: 'monday' | 'sunday' = 'monday') {
+  const result = toDate(date); result.setHours(0, 0, 0, 0)
   const day = result.getDay(), offset = firstDay === 'monday' ? (day === 0 ? 6 : day - 1) : day
   result.setDate(result.getDate() - offset)
   return result

@@ -10,6 +10,7 @@ import './styles/linux-perf.css'
 import './styles/yoridokoro-legacy.css'
 import './styles/rework-components.css'
 import './styles/rework.css'
+import './styles/argonauten.css'
 import AppErrorBoundary from './components/AppErrorBoundary.tsx'
 
 const TodayDashboard = lazy(() => import('./pages/TodayDashboard.tsx'))

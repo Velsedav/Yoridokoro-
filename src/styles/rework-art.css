@@ -420,3 +420,865 @@
   & .drawer--notebook .drawer-management {grid-row:4}
  }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ARGONAUTE — CELESTIAL VAULT & AUREATE LITERARY CODEX (COLLECTION REWORK)
+   ═══════════════════════════════════════════════════════════════════════════ */
+:host(:is([data-theme="yoridokoro-argonaute"], [data-theme="yoridokoro-argonauten"])) {
+  --argo-gold: #e5b85c;
+  --argo-gold-bright: #f7d688;
+  --argo-cyan: #38d6c4;
+  --argo-void: #05080f;
+  --argo-obsidian: #080c14;
+  --argo-hull: rgba(14, 21, 36, 0.88);
+  --argo-glass: rgba(18, 27, 46, 0.92);
+  --argo-line: rgba(152, 166, 190, 0.2);
+  --argo-gold-line: rgba(229, 184, 92, 0.36);
+  font-family: 'Plus Jakarta Sans', 'Manrope', sans-serif !important;
+
+  & .app {
+    background-color: var(--argo-void) !important;
+    background-image:
+      radial-gradient(ellipse 75% 45% at 15% 0%, rgba(229, 184, 92, 0.12), transparent 60%),
+      radial-gradient(ellipse 65% 45% at 88% 8%, rgba(56, 214, 196, 0.09), transparent 58%),
+      linear-gradient(180deg, rgba(16, 24, 42, 0.45) 0%, transparent 240px) !important;
+    color: #f4f1ea !important;
+  }
+
+  & :is(h1, h2) {
+    font-family: 'Instrument Serif', 'Plus Jakarta Sans', Georgia, serif !important;
+    font-weight: 400 !important;
+    letter-spacing: -0.02em !important;
+  }
+
+  & :is(h3, .work-copy strong, .cover-card-copy strong, .duel-copy strong) {
+    font-family: 'Plus Jakarta Sans', 'Manrope', sans-serif !important;
+    letter-spacing: -0.02em !important;
+  }
+
+  & :is(.stat strong, .rank-number, .rating-cell strong) {
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    letter-spacing: -0.03em !important;
+    font-variant-numeric: tabular-nums !important;
+  }
+
+  /* 1. Floating Holo-Dock Category Tabs */
+  & .rw-art .art-category-tabs,
+  & .art-category-tabs {
+    position: sticky !important;
+    top: 84px !important;
+    margin: 84px clamp(20px, 3vw, 48px) 0 !important;
+    padding: 8px 12px !important;
+    background: linear-gradient(135deg, rgba(13, 20, 35, 0.92), rgba(8, 12, 22, 0.95)) !important;
+    backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(229, 184, 92, 0.25) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    gap: 6px !important;
+    transition: top 0.25s ease, margin-top 0.25s ease !important;
+  }
+
+  & .duel-view {
+    padding-top: 90px !important;
+    padding-bottom: 100px !important;
+    transition: padding-top 0.25s ease !important;
+  }
+
+  & .collection {
+    padding-bottom: 110px !important;
+  }
+
+  & .art-category-tabs button {
+    min-height: 38px !important;
+    padding: 0 14px !important;
+    border-radius: 11px !important;
+    border: 1px solid transparent !important;
+    color: #9fb0ca !important;
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    transition: all 0.18s ease !important;
+  }
+
+  & .art-category-tabs button:hover {
+    background: rgba(229, 184, 92, 0.1) !important;
+    border-color: rgba(229, 184, 92, 0.24) !important;
+    color: #f4f1ea !important;
+  }
+
+  & .art-category-tabs button.is-active {
+    background: linear-gradient(135deg, #f3cb72 0%, #d8a13b 100%) !important;
+    border-color: #f7d688 !important;
+    color: #060910 !important;
+    font-weight: 800 !important;
+    box-shadow: 0 6px 20px rgba(229, 184, 92, 0.32) !important;
+  }
+
+  & .art-category-tabs button.is-active small {
+    background: rgba(6, 9, 16, 0.22);
+    color: #060910 !important;
+    padding: 1px 6px;
+    border-radius: 999px;
+    opacity: 1 !important;
+    font-weight: 800;
+  }
+
+  /* 2. Topbar & Bento Overview Telemetry Cards */
+  & .rw-art .topbar,
+  & .topbar {
+    margin: 18px clamp(20px, 3vw, 48px) 0 !important;
+    padding: 24px 28px !important;
+    background: linear-gradient(135deg, rgba(16, 24, 42, 0.92) 0%, rgba(9, 14, 25, 0.96) 100%) !important;
+    border: 1px solid rgba(229, 184, 92, 0.26) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  }
+
+  & .rw-art .topbar > div:not(.rw-art-heading):not(.top-actions) {
+    display: block !important;
+  }
+  & .rw-art-heading {
+    display: none !important;
+  }
+  & .topbar .eyebrow {
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    color: var(--argo-gold) !important;
+    font-size: 11px !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase;
+  }
+  & .topbar h1 {
+    font-size: clamp(28px, 3.2vw, 42px) !important;
+    margin: 4px 0 0 !important;
+    color: #f4f1ea !important;
+  }
+
+  & .rw-art .overview,
+  & .overview {
+    display: grid !important;
+    grid-template-columns: 1.45fr repeat(3, 1fr) !important;
+    gap: 14px !important;
+    padding: 16px clamp(20px, 3vw, 48px) 8px !important;
+  }
+
+  & .rw-art .stat,
+  & .stat {
+    position: relative;
+    padding: 18px 20px !important;
+    background: linear-gradient(160deg, rgba(17, 26, 44, 0.92), rgba(10, 15, 27, 0.94)) !important;
+    border: 1px solid rgba(152, 166, 190, 0.2) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+    overflow: hidden;
+  }
+
+  & .rw-art .stat::before,
+  & .stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--argo-gold), var(--argo-cyan), transparent);
+    opacity: 0.75;
+  }
+
+  & .stat--leader {
+    border-color: rgba(229, 184, 92, 0.38) !important;
+    background: radial-gradient(circle at 100% 0%, rgba(229, 184, 92, 0.14), transparent 65%),
+      linear-gradient(160deg, rgba(20, 30, 50, 0.95), rgba(10, 15, 27, 0.96)) !important;
+  }
+
+  & .stat .stat-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: rgba(229, 184, 92, 0.12) !important;
+    border: 1px solid rgba(229, 184, 92, 0.28) !important;
+    color: var(--argo-gold) !important;
+  }
+
+  & .stat small {
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 10px !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase;
+    color: var(--argo-cyan) !important;
+  }
+
+  & .stat strong {
+    font-size: 24px !important;
+    color: #f4f1ea !important;
+  }
+
+  /* 3. Collection Command Bar & Search */
+  & .rw-art .collection,
+  & .collection {
+    padding: 16px clamp(20px, 3vw, 48px) 68px !important;
+  }
+
+  & .rw-art .toolbar,
+  & .toolbar {
+    padding: 12px 14px !important;
+    background: rgba(13, 20, 35, 0.88) !important;
+    border: 1px solid rgba(152, 166, 190, 0.22) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
+    margin-bottom: 22px !important;
+  }
+
+  & .search-box {
+    background: rgba(6, 10, 18, 0.85) !important;
+    border: 1px solid rgba(152, 166, 190, 0.24) !important;
+    border-radius: 11px !important;
+  }
+
+  /* 4. HOLO-ARTIFACT COLLECTION CARDS (.cover-card) */
+  & .cover-rank-heading {
+    margin: 26px 0 14px !important;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(229, 184, 92, 0.22);
+  }
+  & .cover-rank-heading h3 {
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 12px !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase;
+    color: var(--argo-gold) !important;
+  }
+
+  & .rw-art .cover-grid,
+  & .cover-grid {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
+    gap: 20px !important;
+  }
+
+  & .rw-art .cover-card,
+  & .cover-card {
+    position: relative !important;
+    background: linear-gradient(165deg, rgba(18, 28, 48, 0.95) 0%, rgba(9, 14, 25, 0.98) 100%) !important;
+    border: 1px solid rgba(152, 166, 190, 0.22) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    overflow: hidden !important;
+    transition:
+      transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.26s ease,
+      box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      background 0.3s ease !important;
+  }
+
+  & .rw-art .cover-card::before,
+  & .cover-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--argo-gold), var(--argo-cyan));
+    opacity: 0.65;
+    z-index: 3;
+    transition: height 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  & .rw-art .cover-card::after,
+  & .cover-card::after {
+    content: '';
+    position: absolute;
+    inset: -40% -120%;
+    background: linear-gradient(
+      115deg,
+      transparent 35%,
+      rgba(250, 224, 148, 0.16) 47%,
+      rgba(56, 214, 196, 0.14) 53%,
+      transparent 65%
+    );
+    transform: translateX(-45%) rotate(8deg);
+    transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within),
+  & .cover-card:is(:hover, :focus-within) {
+    transform: translateY(-10px) scale(1.038) !important;
+    border-color: #fae094 !important;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(229, 184, 92, 0.24), transparent 60%),
+      radial-gradient(circle at 85% 100%, rgba(56, 214, 196, 0.18), transparent 60%),
+      linear-gradient(165deg, rgba(26, 40, 68, 0.98) 0%, rgba(11, 18, 33, 0.99) 100%) !important;
+    box-shadow:
+      0 28px 64px rgba(0, 0, 0, 0.88),
+      0 0 0 1px rgba(250, 224, 148, 0.55),
+      0 0 38px rgba(229, 184, 92, 0.34),
+      0 0 70px rgba(56, 214, 196, 0.16) !important;
+    z-index: 4;
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within)::before,
+  & .cover-card:is(:hover, :focus-within)::before {
+    height: 3px;
+    opacity: 1;
+    box-shadow: 0 0 18px rgba(247, 214, 136, 0.85);
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within)::after,
+  & .cover-card:is(:hover, :focus-within)::after {
+    opacity: 1;
+    transform: translateX(45%) rotate(8deg);
+  }
+
+  & .rw-art .cover-card-art,
+  & .cover-card-art {
+    position: relative;
+    overflow: hidden !important;
+    background: radial-gradient(circle at 50% 35%, rgba(28, 42, 68, 0.65), rgba(6, 10, 18, 0.95)) !important;
+    border-bottom: 1px solid rgba(229, 184, 92, 0.18) !important;
+    transition: border-color 0.25s ease, background 0.3s ease !important;
+  }
+
+  & .rw-art .cover-card-art .artwork img,
+  & .cover-card-art .artwork img {
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), filter 0.35s ease !important;
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within) .cover-card-art,
+  & .cover-card:is(:hover, :focus-within) .cover-card-art {
+    border-bottom-color: rgba(250, 224, 148, 0.55) !important;
+    background: radial-gradient(circle at 50% 30%, rgba(229, 184, 92, 0.26), rgba(8, 13, 24, 0.96)) !important;
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within) .cover-card-art .artwork img,
+  & .cover-card:is(:hover, :focus-within) .cover-card-art .artwork img {
+    transform: scale(1.085) translateY(-2px) !important;
+    filter: contrast(1.06) brightness(1.07) drop-shadow(0 14px 24px rgba(0, 0, 0, 0.65)) !important;
+  }
+
+  & .rw-art .cover-card-copy,
+  & .cover-card-copy {
+    padding: 16px 16px 14px !important;
+    gap: 12px !important;
+    background: linear-gradient(180deg, rgba(14, 22, 38, 0.6), rgba(8, 13, 23, 0.95)) !important;
+    transition: background 0.3s ease !important;
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within) .cover-card-copy,
+  & .cover-card:is(:hover, :focus-within) .cover-card-copy {
+    background:
+      radial-gradient(circle at 15% 0%, rgba(229, 184, 92, 0.22), transparent 68%),
+      radial-gradient(circle at 90% 100%, rgba(56, 214, 196, 0.16), transparent 65%),
+      linear-gradient(180deg, rgba(22, 34, 58, 0.95), rgba(9, 15, 28, 0.99)) !important;
+  }
+
+  & .rw-art .cover-card-copy strong,
+  & .cover-card-copy strong {
+    font-size: 15.5px !important;
+    font-weight: 750 !important;
+    color: #f4f1ea !important;
+    line-height: 1.3 !important;
+    transition: color 0.22s ease, text-shadow 0.22s ease !important;
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within) .cover-card-copy strong,
+  & .cover-card:is(:hover, :focus-within) .cover-card-copy strong {
+    color: #fae094 !important;
+    text-shadow: 0 0 18px rgba(229, 184, 92, 0.32) !important;
+  }
+
+  & .rw-art .cover-card-copy small,
+  & .cover-card-copy small {
+    font-size: 12px !important;
+    color: #98a6be !important;
+    transition: color 0.22s ease !important;
+  }
+
+  & .rw-art .cover-card:is(:hover, :focus-within) .cover-card-copy small,
+  & .cover-card:is(:hover, :focus-within) .cover-card-copy small {
+    color: #d6e2f5 !important;
+  }
+
+  /* Telemetry Footer inside each Collection Card */
+  & .rw-art .cover-card-stats,
+  & .cover-card-stats {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding-top: 10px !important;
+    border-top: 1px solid rgba(152, 166, 190, 0.14) !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 10.5px !important;
+  }
+
+  /* Rank Badge #1 inside Card */
+  & .cover-card-stats b {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, rgba(229, 184, 92, 0.24), rgba(229, 184, 92, 0.1));
+    border: 1px solid rgba(229, 184, 92, 0.45);
+    color: var(--argo-gold-bright) !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-weight: 800 !important;
+    font-size: 11px !important;
+    transition: all 0.25s ease !important;
+  }
+
+  & .cover-card:is(:hover, :focus-within) .cover-card-stats b {
+    background: linear-gradient(135deg, #f7d688 0%, #d8a13b 100%) !important;
+    border-color: #fff !important;
+    color: #05080f !important;
+    box-shadow: 0 0 16px rgba(229, 184, 92, 0.55) !important;
+    transform: scale(1.06);
+  }
+
+  /* Elo Badge inside Card */
+  & .cover-card-stats span:last-child {
+    margin-left: auto;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(56, 214, 196, 0.12);
+    border: 1px solid rgba(56, 214, 196, 0.3);
+    color: var(--argo-cyan) !important;
+    font-weight: 700;
+    transition: all 0.25s ease !important;
+  }
+
+  & .cover-card:is(:hover, :focus-within) .cover-card-stats span:last-child {
+    background: rgba(56, 214, 196, 0.24) !important;
+    border-color: #5eead4 !important;
+    color: #a7f3d0 !important;
+    box-shadow: 0 0 14px rgba(56, 214, 196, 0.35) !important;
+  }
+
+  & .rw-art .cover-card-action,
+  & .cover-card-action {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 10px !important;
+    background: rgba(8, 12, 22, 0.9) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(229, 184, 92, 0.45) !important;
+    color: #f4f1ea !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6) !important;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease !important;
+  }
+
+  & .rw-art .cover-card-action:hover,
+  & .cover-card-action:hover {
+    background: linear-gradient(135deg, #f3cb72 0%, #d8a13b 100%) !important;
+    border-color: #fae094 !important;
+    color: #05080f !important;
+    transform: scale(1.1) !important;
+  }
+
+  /* 5. LADDER ROWS (Telemetry Console List View) */
+  & .rw-art .ladder-shell,
+  & .ladder-shell {
+    background: rgba(11, 17, 30, 0.85) !important;
+    border: 1px solid rgba(152, 166, 190, 0.22) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5) !important;
+    overflow: hidden !important;
+  }
+
+  & .table-head {
+    background: rgba(6, 10, 18, 0.92) !important;
+    border-bottom: 1px solid rgba(229, 184, 92, 0.25) !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase;
+    color: var(--argo-gold) !important;
+  }
+
+  & .ladder-row {
+    border-bottom: 1px solid rgba(152, 166, 190, 0.12) !important;
+    transition: background 0.2s ease, box-shadow 0.2s ease !important;
+  }
+
+  & .ladder-row:hover {
+    background: linear-gradient(90deg, rgba(229, 184, 92, 0.18) 0%, rgba(56, 214, 196, 0.09) 60%, rgba(14, 22, 38, 0.9) 100%) !important;
+    box-shadow: inset 4px 0 0 var(--argo-gold), 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+  }
+
+  & .rank-number {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 36px !important;
+    height: 28px !important;
+    padding: 0 8px !important;
+    border-radius: 8px !important;
+    background: rgba(152, 166, 190, 0.12) !important;
+    border: 1px solid rgba(152, 166, 190, 0.25) !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    letter-spacing: 0 !important;
+    font-variant-numeric: tabular-nums !important;
+    color: #dbe4f3 !important;
+  }
+
+  & .rank-number--top {
+    background: linear-gradient(135deg, rgba(229, 184, 92, 0.28), rgba(229, 184, 92, 0.1)) !important;
+    border-color: rgba(229, 184, 92, 0.55) !important;
+    color: var(--argo-gold-bright) !important;
+    box-shadow: 0 0 14px rgba(229, 184, 92, 0.22) !important;
+  }
+
+  /* 6. WORK DOSSIER DRAWER & AUREATE LITERARY CODEX FOR BOOK QUOTES */
+  & .overlay--drawer {
+    background: rgba(4, 7, 13, 0.84) !important;
+    backdrop-filter: blur(16px) saturate(140%) !important;
+  }
+
+  & .drawer.drawer--notebook {
+    width: min(1240px, 100%) !important;
+    border: 1px solid rgba(229, 184, 92, 0.38) !important;
+    border-radius: 22px !important;
+    background: linear-gradient(155deg, #0d1424 0%, #070b14 100%) !important;
+    box-shadow: 0 32px 90px rgba(0, 0, 0, 0.85), 0 0 40px rgba(229, 184, 92, 0.12) !important;
+  }
+
+  & .drawer--notebook > .artwork {
+    background: radial-gradient(circle at 50% 40%, rgba(229, 184, 92, 0.12), rgba(6, 10, 18, 0.96)) !important;
+    border-right: 1px solid rgba(229, 184, 92, 0.18);
+    border-bottom: 1px solid rgba(229, 184, 92, 0.18);
+  }
+
+  & .drawer--notebook .drawer-details-column {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(229, 184, 92, 0.18);
+  }
+
+  & .drawer--notebook .drawer-details-column .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(229, 184, 92, 0.14);
+    border: 1px solid rgba(229, 184, 92, 0.35);
+    color: var(--argo-gold-bright) !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 11px !important;
+    margin-bottom: 10px;
+  }
+
+  & .drawer--notebook .drawer-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: rgba(6, 10, 18, 0.82);
+    border: 1px solid rgba(56, 214, 196, 0.32);
+    margin: 14px 0;
+  }
+
+  & .drawer--notebook .drawer-rating strong:first-child {
+    color: var(--argo-cyan) !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 20px !important;
+  }
+
+  & .drawer--notebook .metadata {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+    gap: 10px !important;
+    margin-top: 16px !important;
+  }
+
+  & .drawer--notebook .metadata > div {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+    background: rgba(15, 23, 39, 0.72) !important;
+    border: 1px solid rgba(152, 166, 190, 0.16) !important;
+  }
+
+  & .drawer--notebook .metadata dt {
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 10px !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase;
+    color: #8fa0bc !important;
+  }
+
+  & .drawer--notebook .metadata dd {
+    margin: 4px 0 0 !important;
+    font-weight: 700 !important;
+    color: #f4f1ea !important;
+  }
+
+  /* BOOK QUOTES DISPLAY — AUREATE LITERARY CODEX */
+  & .drawer--notebook .drawer-content-column {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(229, 184, 92, 0.1), transparent 70%),
+      linear-gradient(180deg, rgba(10, 15, 27, 0.96) 0%, rgba(6, 10, 18, 0.99) 100%) !important;
+    padding: 28px 34px !important;
+  }
+
+  & .item-quotes {
+    background: transparent !important;
+  }
+
+  & .quote-section-head {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 10px 16px !important;
+    margin-bottom: 18px !important;
+    background: rgba(16, 25, 44, 0.85) !important;
+    border: 1px solid rgba(229, 184, 92, 0.3) !important;
+    border-radius: 12px !important;
+  }
+
+  & .quote-section-head > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  & .quote-section-head span {
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 11px !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase;
+    color: var(--argo-gold-bright) !important;
+  }
+
+  & .quote-section-head span::before {
+    content: '✦ CODEX LITTÉRAIRE // ';
+    color: var(--argo-cyan);
+  }
+
+  & .quote-section-head small {
+    margin-left: 0 !important;
+    padding: 3px 9px !important;
+    border-radius: 999px !important;
+    background: rgba(229, 184, 92, 0.16) !important;
+    border: 1px solid rgba(229, 184, 92, 0.32) !important;
+    color: var(--argo-gold-bright) !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 10.5px !important;
+  }
+
+  & .quote-stage {
+    background: transparent !important;
+    gap: 18px !important;
+  }
+
+  & .drawer--notebook .item-quote,
+  & .item-quote {
+    position: relative !important;
+    padding: 30px 42px 26px 36px !important;
+    border-radius: 18px !important;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(229, 184, 92, 0.14), transparent 55%),
+      linear-gradient(145deg, rgba(19, 29, 50, 0.94) 0%, rgba(10, 16, 29, 0.98) 100%) !important;
+    border: 1px solid rgba(229, 184, 92, 0.38) !important;
+    border-left: 4px solid var(--argo-gold) !important;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    overflow: hidden;
+  }
+
+  & .drawer--notebook .item-quote::before,
+  & .item-quote::before {
+    content: '”';
+    position: absolute !important;
+    top: 4px !important;
+    right: 20px !important;
+    left: auto !important;
+    font-family: 'Instrument Serif', 'Newsreader', Georgia, serif !important;
+    font-size: 86px !important;
+    line-height: 1 !important;
+    color: rgba(229, 184, 92, 0.14) !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+  }
+
+  & .drawer--notebook .item-quote blockquote,
+  & .item-quote blockquote {
+    position: relative;
+    z-index: 1;
+    margin: 0 !important;
+    font-family: 'Instrument Serif', 'Newsreader', Georgia, serif !important;
+    font-style: italic !important;
+    font-weight: 400 !important;
+    font-size: clamp(22px, 2.1vw, 29px) !important;
+    line-height: 1.45 !important;
+    letter-spacing: -0.01em !important;
+    color: #fbf8f1 !important;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+  }
+
+  & .drawer--notebook .item-quote figcaption,
+  & .item-quote figcaption {
+    position: relative;
+    z-index: 1;
+    margin-top: 18px !important;
+    padding: 12px 16px !important;
+    border-radius: 10px !important;
+    background: rgba(6, 10, 18, 0.72) !important;
+    border: 1px solid rgba(56, 214, 196, 0.26) !important;
+    color: #bfd0e8 !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 13.5px !important;
+    line-height: 1.5 !important;
+  }
+
+  & .drawer--notebook .item-quote figcaption::before,
+  & .item-quote figcaption::before {
+    content: 'ANNOTATION // ';
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--argo-cyan);
+    font-weight: 700;
+  }
+
+  & .drawer--notebook .drawer-note-footer {
+    margin-top: 22px !important;
+    padding: 16px 20px !important;
+    border-radius: 14px !important;
+    background: rgba(14, 22, 38, 0.78) !important;
+    border: 1px solid rgba(152, 166, 190, 0.2) !important;
+  }
+
+  & .drawer--notebook .drawer-note-footer h3 {
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: var(--argo-gold) !important;
+    margin: 0 0 8px !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+
+  & .drawer--notebook .drawer-note-footer p {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 14px !important;
+    line-height: 1.65 !important;
+    color: #dbe4f3 !important;
+    margin: 0 !important;
+  }
+
+  /* Quote Editor cards inside Add/Edit Modal */
+  & .quote-field-card {
+    background: linear-gradient(145deg, rgba(16, 25, 44, 0.92), rgba(9, 14, 26, 0.96)) !important;
+    border: 1px solid rgba(229, 184, 92, 0.32) !important;
+    border-left: 3px solid var(--argo-gold) !important;
+    border-radius: 14px !important;
+    padding: 18px !important;
+  }
+
+  /* 7. DUEL ARENA & 0.35s VICTORY CONFIRMATION IN ARGONAUTE */
+  & .duel-heading h1 {
+    font-family: 'Instrument Serif', 'Newsreader', Georgia, serif !important;
+    font-weight: 400 !important;
+    font-size: clamp(32px, 3.8vw, 48px) !important;
+    letter-spacing: -0.01em !important;
+    color: #fbf8f1 !important;
+  }
+
+  & .duel-view--gallery .duel-card {
+    background: linear-gradient(165deg, rgba(18, 28, 48, 0.95) 0%, rgba(9, 14, 25, 0.98) 100%) !important;
+    border: 1px solid rgba(229, 184, 92, 0.28) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 22px 54px rgba(0, 0, 0, 0.6) !important;
+    transition:
+      transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.2s ease,
+      box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.24s ease,
+      filter 0.24s ease !important;
+  }
+
+  & .duel-view--gallery .duel-card:hover:not(:disabled) {
+    transform: translateY(-7px) scale(1.015) !important;
+    border-color: var(--argo-gold-bright) !important;
+    box-shadow: 0 28px 66px rgba(0, 0, 0, 0.78), 0 0 32px rgba(229, 184, 92, 0.26) !important;
+  }
+
+  & .duel-view--gallery .duel-card.is-winner {
+    transform: translateY(-12px) scale(1.045) !important;
+    border-color: #fae094 !important;
+    background:
+      radial-gradient(circle at 50% 25%, rgba(229, 184, 92, 0.34), transparent 65%),
+      linear-gradient(165deg, rgba(28, 42, 70, 0.98) 0%, rgba(11, 18, 34, 0.99) 100%) !important;
+    box-shadow:
+      0 0 0 3px #f7d688,
+      0 0 48px rgba(229, 184, 92, 0.62),
+      0 0 92px rgba(56, 214, 196, 0.3),
+      0 32px 72px rgba(0, 0, 0, 0.88) !important;
+    z-index: 6 !important;
+  }
+
+  & .duel-view--gallery .duel-card.is-winner .duel-key {
+    background: linear-gradient(135deg, #f7d688 0%, #d8a13b 100%) !important;
+    color: #05080f !important;
+    border-color: #fff !important;
+    font-weight: 800 !important;
+    transform: scale(1.15);
+    box-shadow: 0 0 20px rgba(229, 184, 92, 0.8) !important;
+  }
+
+  & .duel-view--gallery .duel-card.is-loser {
+    opacity: 0.24 !important;
+    transform: scale(0.94) translateY(8px) !important;
+    filter: grayscale(0.8) brightness(0.55) blur(1px) !important;
+  }
+
+  & .duel-victory-badge {
+    top: 14px !important;
+    right: 14px !important;
+    height: 34px !important;
+    padding: 0 14px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(135deg, #f7d688 0%, #d8a13b 100%) !important;
+    border: 1px solid #fff !important;
+    color: #05080f !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-weight: 800 !important;
+    font-size: 11.5px !important;
+    letter-spacing: 0.14em !important;
+    box-shadow: 0 0 26px rgba(229, 184, 92, 0.8), 0 10px 24px rgba(0, 0, 0, 0.6) !important;
+  }
+
+  & .duel-view--gallery .versus {
+    background: linear-gradient(135deg, #f3cb72 0%, #d8a13b 100%) !important;
+    color: #060910 !important;
+    border-color: #05080f !important;
+    box-shadow: 0 0 26px rgba(229, 184, 92, 0.45) !important;
+  }
+
+  & :is(.statistics-panel, .statistics-summary, .period-card, .modal, .completion-modal) {
+    background: linear-gradient(160deg, rgba(16, 25, 44, 0.94), rgba(9, 14, 25, 0.97)) !important;
+    border: 1px solid rgba(152, 166, 190, 0.24) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55) !important;
+  }
+}
+
+:host([data-argo-immersion="true"]) {
+  & .rw-art .art-category-tabs,
+  & .art-category-tabs {
+    top: 14px !important;
+    margin-top: 14px !important;
+    margin-right: clamp(190px, 16vw, 230px) !important;
+  }
+  & .duel-view {
+    padding-top: 24px !important;
+    padding-bottom: 32px !important;
+  }
+  & .collection {
+    padding-bottom: 40px !important;
+  }
+}

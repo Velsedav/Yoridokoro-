@@ -136,9 +136,11 @@
  & .ov2-hero {margin:0 0 12px;padding:0 0 24px;border-bottom:1px solid var(--rw-line)}
  & .ov2-coverage {background:transparent;border:0;border-bottom:1px solid var(--rw-line);border-radius:0;padding:20px 0}
  & .ov2-grid {grid-template-columns:1fr}
- & .mc-layout {display:flex;flex-direction:column;gap:24px}
- & .mc-step-rail {display:flex;flex-wrap:wrap;gap:8px;flex-basis:auto;border:0;background:transparent;width:100%;padding:0 0 22px;border-bottom:1px solid var(--rw-line)}
+ & .metacognition-page {height:auto!important;min-height:100%;overflow:visible!important}
+ & .mc-layout {display:flex;flex-direction:column;gap:24px;flex:1 1 auto;min-height:0;overflow:visible!important}
+ & .mc-step-rail {display:flex;flex-direction:row!important;flex-wrap:wrap;gap:8px;flex:0 0 auto!important;min-height:0!important;height:auto!important;border:0;background:transparent;width:100%;padding:0 0 22px;border-bottom:1px solid var(--rw-line)}
  & .mc-step-button {width:auto;flex:1;min-width:140px;padding:16px;background:transparent;border:1px solid var(--rw-line)}
+ & .mc-main {flex:1 1 auto!important;min-height:420px!important;overflow:visible!important}
 }
 @media(max-width:900px) {:root[data-theme^="yoridokoro-"] {& .ov2-root {grid-template-columns:1fr} & .ov2-root>* {grid-column:1}}}
 

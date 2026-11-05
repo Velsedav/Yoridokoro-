@@ -38,12 +38,13 @@ import { getTimeEntrySummary } from '../lib/activityTime';
 import { syncLegacyTime } from '../lib/timeSync';
 import './ObsidianSettings.css';
 import { PageHeading } from '../design/rework/Primitives';
-import { useRework } from '../design/rework/useRework';
+import { useArgonauten, useRework } from '../design/rework/useRework';
 
 type Category = 'look-and-feel' | 'sessions' | 'learning' | 'art' | 'audio' | 'data' | 'system';
 
 export default function ObsidianSettings() {
     const rework = useRework();
+    const argonaute = useArgonauten();
     const { t } = useTranslation();
     const [category, setCategory] = useState<Category>('look-and-feel');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -165,8 +166,8 @@ export default function ObsidianSettings() {
 
             <div className="obs-settings-layout">
                 <nav className="obs-settings-rail" aria-label="Catégories des paramètres">
-                    <div className="obs-settings-rail-header">Settings</div>
-                    {railItems.map(({ id, icon: Icon, label }) => (
+                    <div className="obs-settings-rail-header">{argonaute ? '✦ ARGONAUTE // CORE OS' : 'Settings'}</div>
+                    {railItems.map(({ id, icon: Icon, label }, idx) => (
                         <button
                             key={id}
                             type="button"
@@ -174,6 +175,7 @@ export default function ObsidianSettings() {
                             onClick={() => setCategory(id)}
                             aria-current={category === id ? 'page' : undefined}
                         >
+                            {argonaute && <span className="argo-settings-rail-idx">{String(idx + 1).padStart(2, '0')}</span>}
                             <span className="obs-settings-rail-icon"><Icon size={16} /></span>
                             <span className="obs-settings-rail-label">{label}</span>
                             <span className="obs-settings-rail-tooltip">{label}</span>
@@ -359,15 +361,19 @@ function ArtSettingsPanel() {
         <section className="obs-settings-section">
             <h2 className="obs-settings-section-label"><ExternalLink size={14}/> Catalogues</h2>
             <p className="obs-settings-hint">Ces clés restent uniquement sur cet appareil et servent à compléter les fiches Art.</p>
-            <label className="obs-settings-field"><span>Jeton de lecture TMDB</span><input type="password" value={credentials.tmdbReadToken||''} onChange={event=>updateCredentials({tmdbReadToken:event.target.value})} autoComplete="off"/></label>
-            <label className="obs-settings-field"><span>Clé API RAWG</span><input type="password" value={credentials.rawgApiKey||''} onChange={event=>updateCredentials({rawgApiKey:event.target.value})} autoComplete="off"/></label>
-            <label className="obs-settings-field"><span>IGDB Client ID</span><input value={credentials.igdbClientId||''} onChange={event=>updateCredentials({igdbClientId:event.target.value})} autoComplete="off"/></label>
-            <label className="obs-settings-field"><span>IGDB Client Secret</span><input type="password" value={credentials.igdbClientSecret||''} onChange={event=>updateCredentials({igdbClientSecret:event.target.value})} autoComplete="off"/></label>
+            <div className="art-credentials-grid">
+                <label className="obs-settings-field"><span>Jeton de lecture TMDB</span><input type="password" value={credentials.tmdbReadToken||''} onChange={event=>updateCredentials({tmdbReadToken:event.target.value})} autoComplete="off"/></label>
+                <label className="obs-settings-field"><span>Clé API RAWG</span><input type="password" value={credentials.rawgApiKey||''} onChange={event=>updateCredentials({rawgApiKey:event.target.value})} autoComplete="off"/></label>
+                <label className="obs-settings-field"><span>IGDB Client ID</span><input value={credentials.igdbClientId||''} onChange={event=>updateCredentials({igdbClientId:event.target.value})} autoComplete="off"/></label>
+                <label className="obs-settings-field"><span>IGDB Client Secret</span><input type="password" value={credentials.igdbClientSecret||''} onChange={event=>updateCredentials({igdbClientSecret:event.target.value})} autoComplete="off"/></label>
+            </div>
         </section>
         <section className="obs-settings-section">
             <h2 className="obs-settings-section-label"><Keyboard size={14}/> Raccourcis Art</h2>
             <p className="obs-settings-hint">Un seul caractère par action. Le thème, la langue et les sauvegardes sont gérés globalement par Yoridokoro.</p>
-            {shortcutDefinitions.map(definition=><label className="obs-settings-field" key={definition.id}><span>{definition.label}</span><input className="art-shortcut-input" value={shortcutLabel(preferences.shortcuts[definition.id])} maxLength={1} onChange={event=>updateShortcut(definition.id,event.target.value)} aria-label={`Raccourci ${definition.label}`}/></label>)}
+            <div className="art-shortcuts-grid">
+                {shortcutDefinitions.map(definition=><label className="obs-settings-field art-shortcut-card" key={definition.id}><span className="art-shortcut-label">{definition.label}</span><input className="art-shortcut-input" value={shortcutLabel(preferences.shortcuts[definition.id])} maxLength={1} onChange={event=>updateShortcut(definition.id,event.target.value)} aria-label={`Raccourci ${definition.label}`}/></label>)}
+            </div>
         </section>
     </>
 }
@@ -460,6 +466,23 @@ function LookAndFeelPanel() {
             </header>
 
             <section className="obs-settings-section obs-settings-theme-section">
+                <div className={`argo-settings-showcase${theme === 'argonaute' ? ' is-active' : ''}`} onMouseEnter={() => { handleThemeHover('argonaute'); playSFX(SFX.HOVER); }} onMouseLeave={handleThemeLeave}>
+                    <div className="argo-showcase-orb" aria-hidden="true">
+                        <span>✦</span>
+                    </div>
+                    <div className="argo-showcase-copy">
+                        <span className="argo-showcase-kicker">ÉDITION VAISSEAU AMIRAL · EXPÉRIENCE TOTALE</span>
+                        <h3>Argonaute — Celestial Command OS</h3>
+                        <p>Refonte intégrale de l’interface et du workflow : obsidienne abyssale, or astrolabe & cyan pélagique, barre de télémétrie en direct, Pont Rapide flottant (<code>Alt+Espace</code>) et Mode Immersion 4K (<code>Alt+I</code>).</p>
+                    </div>
+                    <button
+                        type="button"
+                        className={`argo-showcase-btn${theme === 'argonaute' ? ' is-active' : ''}`}
+                        onClick={() => setTheme('argonaute')}
+                    >
+                        {theme === 'argonaute' ? <><Check size={15} /> Actif · Argonaute</> : 'Activer Argonaute ✦'}
+                    </button>
+                </div>
                 <h2 className="obs-settings-section-label">{t('settings.theme') || 'Theme'}</h2>
                 <p className="obs-settings-hint">
                     {previewThemeId
@@ -621,16 +644,19 @@ function ShortcutList() {
     const { t } = useTranslation();
     const shortcuts: { key: string; label: string }[] = [
         { key: 'Cmd/Ctrl + K', label: t('settings.shortcut_search') || 'Quick search' },
+        { key: 'Alt + Espace', label: 'Pont Rapide Argonaute (Chrono, Tâches, Emploi)' },
+        { key: 'Alt + I', label: 'Mode Immersion Plein Écran' },
+        { key: 'Q', label: 'Nouvelle candidature rapide (Section Emploi)' },
         { key: 'Cmd/Ctrl + Enter', label: t('settings.shortcut_save') || 'Save current form' },
-        { key: 'Esc', label: t('settings.shortcut_dismiss') || 'Dismiss modal / overlay' },
         { key: 'Space', label: t('settings.shortcut_play') || 'Toggle timer / slideshow' },
+        { key: 'Esc', label: t('settings.shortcut_dismiss') || 'Dismiss modal / overlay' },
     ];
     return (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <ul className="obs-shortcuts-grid">
             {shortcuts.map(s => (
-                <li key={s.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
-                    <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-dark)' }}>{s.key}</code>
+                <li key={s.key} className="obs-shortcut-card">
+                    <span className="obs-shortcut-label">{s.label}</span>
+                    <kbd className="obs-shortcut-kbd">{s.key}</kbd>
                 </li>
             ))}
         </ul>

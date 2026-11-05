@@ -40,6 +40,7 @@ const palette = (
 export const themes = [
   { id: 'keystone', family: 'Original', label: 'Yoridokoro', description: 'Warm paper and gallery ink', dark: false, colors: palette('#f8f6f0', '#ffffff', '#f1eee6', '#e9e6de', '#24231f', '#706d65', '#8f8a80', '#1d1d1a', '#1a1a17', '#e7e4db', '#a64d35', '#ffffff') },
   { id: 'rework', family: 'Original', label: 'Rework', description: 'Editorial atelier · ivory, ink & cobalt · a new workspace', dark: false, colors: palette('#f3f1ea', '#fffdf8', '#eae7df', '#ffffff', '#182629', '#5d6765', '#7b827b', '#182629', '#f3f1ea', '#182629', '#284fe5', '#ffffff') },
+  { id: 'argonaute', family: 'Original', label: 'Argonaute', description: 'Vaisseau amiral · obsidienne abyssale, or astrolabe & cyan pélagique', dark: true, colors: palette('#080c14', '#101726', '#0b101b', '#151f33', '#f4f1ea', '#98a6be', '#52627c', '#05070c', '#060910', '#f4f1ea', '#e5b85c', '#080c14') },
 
   { id: 'catppuccin-latte', family: 'Catppuccin', label: 'Latte', description: 'Light and gently pastel', dark: false, colors: palette('#eff1f5', '#ffffff', '#e6e9ef', '#dce0e8', '#4c4f69', '#66697f', '#7c7f93', '#dce0e8', '#dce0e8', '#4c4f69', '#8839ef', '#ffffff') },
   { id: 'catppuccin-frappe', family: 'Catppuccin', label: 'Frappé', description: 'Muted blue-grey pastels', dark: true, colors: palette('#303446', '#414559', '#292c3c', '#232634', '#c6d0f5', '#a5adce', '#838ba7', '#232634', '#232634', '#c6d0f5', '#ca9ee6', '#232634') },

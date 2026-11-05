@@ -9,12 +9,14 @@ export type Theme = YoridokoroThemeId;
 /** Map a possibly-legacy stored theme id to a valid current Theme. */
 export function migrateTheme(theme: string): Theme {
   if (theme === 'obsidian-kokedera') return 'kokedera';
+  if (theme === 'argonauten') return 'argonaute';
   return getYoridokoroTheme(theme).id;
 }
 
 export type WeekStart = 'monday' | 'sunday';
 export type MetacognitionDay = 'friday' | 'saturday' | 'sunday';
 const METACOGNITION_FRIDAY_MIGRATION_KEY = 'study-buddy-metacognition-friday-default-v1';
+const ARGONAUTE_V3_LAUNCH_KEY = 'yoridokoro-argonaute-v3-default-1';
 
 export function migrateMetacognitionDay(day: MetacognitionDay | undefined, migrationDone: boolean): MetacognitionDay {
   if (migrationDone) return day ?? 'friday';
@@ -68,6 +70,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                     metacognitionDay: migrateMetacognitionDay(parsed.metacognitionDay, migrationDone),
                 };
                 if (!migrationDone) localStorage.setItem(METACOGNITION_FRIDAY_MIGRATION_KEY, '1');
+                const argoLaunchDone = localStorage.getItem(ARGONAUTE_V3_LAUNCH_KEY) === '1';
+                if (!argoLaunchDone) {
+                    localStorage.setItem(ARGONAUTE_V3_LAUNCH_KEY, '1');
+                    return { ...merged, theme: 'argonaute' };
+                }
                 return { ...merged, theme: migrateTheme(merged.theme) };
             } catch (e) {
                 console.error("Failed to parse settings", e);

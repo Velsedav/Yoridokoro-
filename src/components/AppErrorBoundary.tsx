@@ -24,7 +24,21 @@ export default class AppErrorBoundary extends Component<Props, State> {
         <p>Votre session en cours reste enregistrée localement. Rechargez l’interface pour la reprendre.</p>
         <div>
           <button type="button" onClick={() => window.location.reload()}>Recharger Yoridokoro</button>
-          <button type="button" className="is-secondary" onClick={() => { window.location.hash = '#/'; window.location.reload() }}>Revenir à Aujourd’hui</button>
+          <button
+            type="button"
+            className="is-secondary"
+            onClick={() => {
+              try {
+                localStorage.removeItem('yoridokoro-active-activity-v1')
+              } catch {
+                // ignore
+              }
+              window.location.hash = '#/'
+              window.location.reload()
+            }}
+          >
+            Revenir à Aujourd’hui (Purger chrono)
+          </button>
         </div>
         <details><summary>Détail technique</summary><pre>{this.state.error.message}</pre></details>
       </main>

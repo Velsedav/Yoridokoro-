@@ -46,10 +46,15 @@ export default function ArtModule() {
       if (!hostRef.current) return
       hostRef.current.dataset.theme = document.documentElement.dataset.theme
       hostRef.current.dataset.colorScheme = document.documentElement.dataset.colorScheme
+      if (document.documentElement.dataset.argoImmersion) {
+        hostRef.current.dataset.argoImmersion = document.documentElement.dataset.argoImmersion
+      } else {
+        delete hostRef.current.dataset.argoImmersion
+      }
     }
     syncTheme()
     const observer = new MutationObserver(syncTheme)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-color-scheme'] })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-color-scheme', 'data-argo-immersion'] })
     return () => observer.disconnect()
   }, [])
 
