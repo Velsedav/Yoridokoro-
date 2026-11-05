@@ -9,6 +9,14 @@ import {
     pickExportFolder, pickImportFilePath,
     importBackup, pickHtmlExportFilePath, exportReadableHtml,
 } from '../lib/export';
+import {
+    loadGoogleDriveSyncConfig,
+    saveGoogleDriveSyncConfig,
+    pushBackupToGoogleDrive,
+    pullBackupFromGoogleDrive,
+    shareOrDownloadBackupForDrive,
+    pickAndImportBackupFromDevice,
+} from '../lib/googleDriveSync';
 import { useTranslation } from '../lib/i18n';
 import { useSettings } from '../lib/settings';
 import type { Theme, WeekStart, MetacognitionDay } from '../lib/settings';
@@ -932,6 +940,38 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
         }
     }
 
+    const [driveConfig, setDriveConfig] = useState(() => loadGoogleDriveSyncConfig());
+    const [driveBusy, setDriveBusy] = useState(false);
+
+    async function handleDrivePush() {
+        setDriveBusy(true);
+        try {
+            saveGoogleDriveSyncConfig(driveConfig);
+            await pushBackupToGoogleDrive();
+            setDriveConfig(loadGoogleDriveSyncConfig());
+            flashStatus('success', 'Sauvegarde envoyée sur Google Drive.');
+        } catch (err) {
+            flashStatus('error', err instanceof Error ? err.message : String(err));
+        } finally {
+            setDriveBusy(false);
+        }
+    }
+
+    async function handleDrivePull() {
+        setDriveBusy(true);
+        try {
+            saveGoogleDriveSyncConfig(driveConfig);
+            await pullBackupFromGoogleDrive();
+            setDriveConfig(loadGoogleDriveSyncConfig());
+            flashStatus('success', 'Sauvegarde Google Drive récupérée ! Rechargement…');
+            setTimeout(() => window.location.reload(), 900);
+        } catch (err) {
+            flashStatus('error', err instanceof Error ? err.message : String(err));
+        } finally {
+            setDriveBusy(false);
+        }
+    }
+
     return (
         <>
             <h1 className="obs-settings-panel-title">{t('settings.system') || 'System'}</h1>
@@ -970,6 +1010,56 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
                     <button type="button" className="btn btn-secondary" onClick={handleImport} onMouseEnter={() => playSFX(SFX.HOVER)}>
                         Importer Yoridokoro / Konomi
                     </button>
+                </div>
+
+                <div className="obs-settings-html-export" style={{ marginTop: 16 }}>
+                    <div className="obs-settings-html-export__head">
+                        <div>
+                            <strong>☁️ Synchronisation Google Drive (PC ⇄ Samsung S23 Ultra)</strong>
+                            <p>Synchronisez toute votre base (Radar ROME / France Travail, candidatures, Art, Bingoals, sessions) entre votre PC et votre APK Android en 1 clic.</p>
+                        </div>
+                    </div>
+                    <div className="obs-settings-html-auto">
+                        <label htmlFor="gdrive-script-url">URL Web App Google Drive (Apps Script)</label>
+                        <div className="obs-settings-row">
+                            <input
+                                id="gdrive-script-url"
+                                type="url"
+                                value={driveConfig.appsScriptUrl}
+                                onChange={(e) => {
+                                    const next = { ...driveConfig, appsScriptUrl: e.target.value };
+                                    setDriveConfig(next);
+                                    saveGoogleDriveSyncConfig(next);
+                                }}
+                                placeholder="https://script.google.com/macros/s/.../exec"
+                                style={{ flex: 1 }}
+                            />
+                        </div>
+                        <div className="obs-settings-row" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+                            <button type="button" className="btn btn-primary" onClick={handleDrivePush} disabled={driveBusy}>
+                                Envoyer vers Google Drive (Push)
+                            </button>
+                            <button type="button" className="btn btn-secondary" onClick={handleDrivePull} disabled={driveBusy}>
+                                Récupérer depuis Google Drive (Pull)
+                            </button>
+                            <button type="button" className="btn btn-secondary" onClick={() => void shareOrDownloadBackupForDrive()}>
+                                Exporter / Partager .json
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={async () => {
+                                    const imported = await pickAndImportBackupFromDevice();
+                                    if (imported) {
+                                        flashStatus('success', 'Sauvegarde importée ! Rechargement…');
+                                        setTimeout(() => window.location.reload(), 900);
+                                    }
+                                }}
+                            >
+                                Importer depuis fichier Drive
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div className="obs-settings-html-export">
                     <div className="obs-settings-html-export__head">

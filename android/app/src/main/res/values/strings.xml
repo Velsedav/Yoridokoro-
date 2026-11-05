@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Yoridokoro</string>
+    <string name="title_activity_main">Yoridokoro</string>
+    <string name="package_name">com.velsedav.yoridokoro</string>
+    <string name="custom_url_scheme">com.velsedav.yoridokoro</string>
+</resources>

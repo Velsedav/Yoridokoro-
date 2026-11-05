@@ -1,6 +1,6 @@
 {
   "name": "yoridokoro",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "description": "Yoridokoro — espace personnel pour étudier, agir, créer et entretenir ses relations.",
   "private": true,
   "author": {
@@ -72,6 +72,8 @@
     }
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "@tanstack/react-virtual": "^3.14.3",
     "better-sqlite3": "^12.10.0",
     "date-fns": "^4.1.0",
@@ -82,9 +84,11 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
+    "sql.js": "^1.15.2",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@electron/rebuild": "^3.6.0",
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^24.0.0",

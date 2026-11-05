@@ -11,7 +11,9 @@ import './styles/yoridokoro-legacy.css'
 import './styles/rework-components.css'
 import './styles/rework.css'
 import './styles/argonauten.css'
+import './styles/mobile-s23.css'
 import AppErrorBoundary from './components/AppErrorBoundary.tsx'
+import { ensureMobileElectronShim } from './lib/webSqliteBridge.ts'
 
 const TodayDashboard = lazy(() => import('./pages/TodayDashboard.tsx'))
 const Home = lazy(() => import('./pages/Home.tsx'))
@@ -74,6 +76,11 @@ new MutationObserver(clearNativeZoom).observe(document.documentElement, { attrib
 new MutationObserver(clearNativeZoom).observe(document.body, { attributes: true, attributeFilter: ['style'] });
 
 async function startRenderer() {
+  try {
+    await ensureMobileElectronShim()
+  } catch (error) {
+    console.warn('Mobile SQLite shim could not initialize', error)
+  }
   try {
     const { recoverActiveSession } = await import('./lib/activeSessionRecovery')
     await recoverActiveSession()

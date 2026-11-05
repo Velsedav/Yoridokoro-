@@ -1,0 +1,248 @@
+/* ─── GOOGLE DRIVE CLOUD SYNC MODAL & SAMSUNG S23 ULTRA MOBILE ADAPTATION ─── */
+
+.argo-drive-sync-btn {
+  border-color: rgba(45, 226, 207, 0.42) !important;
+  background: rgba(45, 226, 207, 0.1) !important;
+  color: #7bf5e6 !important;
+}
+
+.argo-drive-sync-btn:hover {
+  background: rgba(45, 226, 207, 0.22) !important;
+  border-color: #2de2cf !important;
+}
+
+.argo-drive-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(4, 7, 14, 0.78);
+  backdrop-filter: blur(12px);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.argo-drive-modal {
+  width: min(620px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(235, 192, 109, 0.38);
+  background: linear-gradient(155deg, #0d1526 0%, #090e1a 100%);
+  color: #f4f1ea;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.72);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.argo-drive-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 168, 204, 0.18);
+}
+
+.argo-drive-modal-header h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #f6d379;
+}
+
+.argo-drive-status-banner {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 226, 207, 0.4);
+  background: rgba(45, 226, 207, 0.12);
+  color: #e9fbf8;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.argo-drive-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.argo-drive-action-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 168, 204, 0.24);
+  background: rgba(17, 26, 46, 0.85);
+  color: #f4f1ea;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.argo-drive-action-card:hover {
+  transform: translateY(-2px);
+  border-color: #f6d379;
+}
+
+.argo-drive-action-card.is-primary {
+  border-color: rgba(246, 211, 121, 0.48);
+  background: linear-gradient(145deg, rgba(246, 211, 121, 0.18), rgba(17, 26, 46, 0.9));
+}
+
+.argo-drive-action-card.is-accent {
+  border-color: rgba(45, 226, 207, 0.48);
+  background: linear-gradient(145deg, rgba(45, 226, 207, 0.16), rgba(17, 26, 46, 0.9));
+}
+
+.argo-drive-action-card strong {
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.argo-drive-action-card small {
+  font-size: 11px;
+  color: #9fb0ce;
+}
+
+.argo-drive-config-box {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 168, 204, 0.2);
+  background: rgba(10, 15, 28, 0.82);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.argo-drive-config-box label {
+  display: grid;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #b8c5de;
+}
+
+.argo-drive-config-box input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 168, 204, 0.3);
+  background: #070b14;
+  color: #f4f1ea;
+  font-size: 12.5px;
+  box-sizing: border-box;
+}
+
+.argo-drive-help summary {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f6d379;
+  cursor: pointer;
+}
+
+.argo-drive-help-body {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #c7d2e8;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.argo-drive-help-body p {
+  margin: 0;
+}
+
+.argo-drive-help-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ─── SAMSUNG GALAXY S23 ULTRA / ANDROID RESPONSIVE OPTIMIZATIONS ─── */
+@media (max-width: 920px) {
+  .rw-window-controls,
+  .argo-immersion-btn {
+    display: none !important;
+  }
+
+  .rw-topbar {
+    height: auto !important;
+    min-height: 54px !important;
+    padding: 8px 10px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .rw-nav {
+    order: 2;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    display: flex !important;
+    gap: 6px !important;
+  }
+
+  .rw-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rw-nav a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 6px 11px !important;
+    font-size: 12px !important;
+  }
+
+  .argo-telemetry-bar {
+    gap: 6px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .argo-bento-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .argo-bento-mission,
+  .argo-bento-reactor,
+  .argo-bento-tactical,
+  .argo-bento-culture,
+  .argo-bento-spectrum,
+  .argo-bento-radar {
+    grid-column: span 1 !important;
+  }
+
+  .career-page {
+    padding: 14px 12px 84px !important;
+  }
+
+  .career-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .career-stats-bar,
+  .career-stats-bar--five {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .argo-drive-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .argo-floating-pod {
+    right: 12px !important;
+    bottom: 14px !important;
+  }
+}

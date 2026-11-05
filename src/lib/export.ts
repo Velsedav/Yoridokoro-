@@ -77,7 +77,7 @@ async function dumpStudyBuddyDb() {
   const db = await getDb();
   const [subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events,
-    career_cvs, career_companies, career_applications] = await Promise.all([
+    career_cvs, career_companies, career_applications, career_rome_searches] = await Promise.all([
     db.select<any[]>('SELECT * FROM subjects'),
     db.select('SELECT * FROM tags'),
     db.select('SELECT * FROM subject_tags'),
@@ -102,9 +102,10 @@ async function dumpStudyBuddyDb() {
     db.select('SELECT * FROM eisenhower_tasks ORDER BY done, created_at'),
     db.select('SELECT * FROM analytics_events ORDER BY occurred_at'),
     db.select('SELECT * FROM cultural_events ORDER BY start_date'),
-    db.select('SELECT * FROM career_cvs ORDER BY sort_order, label').catch(() => []),
+    db.select('SELECT * FROM career_cvs ORDER BY idx ASC, created_at ASC').catch(() => []),
     db.select('SELECT * FROM career_companies ORDER BY name').catch(() => []),
     db.select('SELECT * FROM career_applications ORDER BY applied_date DESC, created_at DESC').catch(() => []),
+    db.select('SELECT * FROM career_rome_searches ORDER BY idx ASC, created_at ASC').catch(() => []),
   ]);
 
   const userData = await fsAPI().getUserDataPath() as string;
@@ -122,7 +123,7 @@ async function dumpStudyBuddyDb() {
 
   return { subjects, tags, subject_tags, subgoals, sessions, session_blocks, session_effects, session_evidence, session_context, quotes, metacognition_logs, error_log,
     people, person_interactions, person_notes, activities, activity_links, activity_resources, time_entries, time_entry_deletions, activity_events, eisenhower_tasks, analytics_events, cultural_events,
-    career_cvs, career_companies, career_applications, subject_covers };
+    career_cvs, career_companies, career_applications, career_rome_searches, subject_covers };
 }
 
 async function dumpBingoDb() {
@@ -501,19 +502,23 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
       )
     } catch {}
   }
+  try {
+    const { ensureCareerSchema } = await import('./career');
+    await ensureCareerSchema();
+  } catch {}
   for (const cv of data.career_cvs ?? []) {
     try {
       await db.execute(
-        `INSERT OR IGNORE INTO career_cvs(id,label,default_header,sort_order,created_at) VALUES ($1,$2,$3,$4,$5)`,
-        [cv.id, cv.label, cv.default_header ?? null, cv.sort_order ?? 0, cv.created_at ?? new Date().toISOString()]
+        `INSERT OR REPLACE INTO career_cvs(id,name,default_header,idx,created_at) VALUES ($1,$2,$3,$4,$5)`,
+        [cv.id, cv.name ?? cv.label ?? 'CV', cv.default_header ?? null, cv.idx ?? cv.sort_order ?? 0, cv.created_at ?? new Date().toISOString()]
       )
     } catch {}
   }
   for (const company of data.career_companies ?? []) {
     try {
       await db.execute(
-        `INSERT OR IGNORE INTO career_companies(id,name,location_url,website_url,notes,created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [company.id, company.name, company.location_url ?? null, company.website_url ?? null, company.notes ?? null, company.created_at ?? new Date().toISOString()]
+        `INSERT OR REPLACE INTO career_companies(id,name,location_url,email,phone,created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [company.id, company.name, company.location_url ?? null, company.email ?? null, company.phone ?? null, company.created_at ?? new Date().toISOString()]
       )
     } catch {}
   }
@@ -521,18 +526,62 @@ async function mergeStudyBuddyDb(data: Record<string, any[]>) {
     try {
       await db.execute(
         `INSERT OR REPLACE INTO career_applications(
-          id,position_title,company_name,applied_date,status,contract_type,application_type,
-          location_url,location_label,offer_url,cv_id,cv_label,cv_header,cover_letter,offer_content,
-          my_questions,research_notes,my_advantages,follow_up_date,created_at,updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+          id,job_title,company_name,applied_date,status,contract_type,application_type,
+          location,offer_url,contact_email,contact_phone,follow_up_date,
+          cv_id,cv_name,offer_content,cv_header,cover_letter,
+          questions_notes,research_notes,advantages_notes,created_at,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
         [
-          appRow.id, appRow.position_title, appRow.company_name, appRow.applied_date,
-          appRow.status ?? 'en_cours', appRow.contract_type ?? 'CDI', appRow.application_type ?? 'Offre',
-          appRow.location_url ?? null, appRow.location_label ?? null, appRow.offer_url ?? null,
-          appRow.cv_id ?? null, appRow.cv_label ?? null, appRow.cv_header ?? '',
-          appRow.cover_letter ?? '', appRow.offer_content ?? '', appRow.my_questions ?? '',
-          appRow.research_notes ?? '', appRow.my_advantages ?? '', appRow.follow_up_date ?? null,
-          appRow.created_at ?? new Date().toISOString(), appRow.updated_at ?? appRow.created_at ?? new Date().toISOString(),
+          appRow.id,
+          appRow.job_title ?? appRow.position_title ?? 'Candidature',
+          appRow.company_name ?? 'Entreprise',
+          appRow.applied_date,
+          appRow.status ?? 'en_cours',
+          appRow.contract_type ?? 'CDI',
+          appRow.application_type ?? 'Offre',
+          appRow.location ?? appRow.location_url ?? null,
+          appRow.offer_url ?? null,
+          appRow.contact_email ?? null,
+          appRow.contact_phone ?? null,
+          appRow.follow_up_date ?? null,
+          appRow.cv_id ?? null,
+          appRow.cv_name ?? appRow.cv_label ?? null,
+          appRow.offer_content ?? null,
+          appRow.cv_header ?? null,
+          appRow.cover_letter ?? null,
+          appRow.questions_notes ?? appRow.my_questions ?? null,
+          appRow.research_notes ?? null,
+          appRow.advantages_notes ?? appRow.my_advantages ?? null,
+          appRow.created_at ?? new Date().toISOString(),
+          appRow.updated_at ?? appRow.created_at ?? new Date().toISOString(),
+        ]
+      )
+    } catch {}
+  }
+  for (const romeRow of data.career_rome_searches ?? []) {
+    try {
+      await db.execute(
+        `INSERT OR REPLACE INTO career_rome_searches(
+          id,sector_group,job_title,rome_code,lm_label,lm_url,lm_last_used_at,
+          cv_id,cv_label,cv_url,cv_last_used_at,cities_json,notes,idx,created_at,updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        [
+          romeRow.id,
+          romeRow.sector_group ?? 'Autres secteurs',
+          romeRow.job_title,
+          romeRow.rome_code,
+          romeRow.lm_label ?? null,
+          romeRow.lm_url ?? null,
+          romeRow.lm_last_used_at ?? null,
+          romeRow.cv_id ?? null,
+          romeRow.cv_label ?? null,
+          romeRow.cv_url ?? null,
+          romeRow.cv_last_used_at ?? null,
+          typeof romeRow.cities_json === 'string' ? romeRow.cities_json : JSON.stringify(romeRow.cities ?? {}),
+          romeRow.notes ?? null,
+          romeRow.idx ?? 0,
+          romeRow.created_at ?? new Date().toISOString(),
+          romeRow.updated_at ?? romeRow.created_at ?? new Date().toISOString(),
         ]
       )
     } catch {}
@@ -633,8 +682,11 @@ export function detectBackupKind(value: unknown): ImportBackupResult['kind'] {
   return 'yoridokoro';
 }
 
-export async function importBackup(filePath: string): Promise<ImportBackupResult> {
-  const raw = await fsAPI().readTextFile(filePath) as string;
+export async function createBackupObject() {
+  return createBackup();
+}
+
+export async function importBackupFromJsonString(raw: string): Promise<ImportBackupResult> {
   let backup: any;
   try {
     backup = JSON.parse(raw);
@@ -660,6 +712,11 @@ export async function importBackup(filePath: string): Promise<ImportBackupResult
   const { synchronizeStudyDataDurability } = await import('./chapters');
   await synchronizeStudyDataDurability();
   return { kind: 'yoridokoro' };
+}
+
+export async function importBackup(filePath: string): Promise<ImportBackupResult> {
+  const raw = await fsAPI().readTextFile(filePath) as string;
+  return importBackupFromJsonString(raw);
 }
 
 export type AutoExportSlot = 1 | 2 | 'art-html';
