@@ -69,6 +69,177 @@ import {
   type ObjectiveWithSteps,
 } from '../../lib/quickLaunch'
 import { useArgonauten } from '../rework/useRework'
+import { useIsMobile } from '../../hooks/useIsMobile'
+
+export function GoogleDriveSyncModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [driveConfig, setDriveConfig] = useState(() => getGoogleDriveSyncConfig())
+  const [driveBusy, setDriveBusy] = useState<'push' | 'pull' | null>(null)
+  const [driveStatus, setDriveStatus] = useState<string>('')
+  const [copiedScript, setCopiedScript] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setDriveConfig(getGoogleDriveSyncConfig())
+      setDriveStatus('')
+    }
+  }, [open])
+
+  if (!open) return null
+
+  return createPortal(
+    <div className="argo-drive-modal-backdrop" onClick={onClose}>
+      <div className="argo-drive-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label="Synchronisation Google Drive">
+        <header className="argo-drive-modal-header">
+          <div>
+            <span className="argo-pod-kicker">PC ⇄ Samsung S23 Ultra</span>
+            <h3><Cloud size={18} /> Synchronisation Google Drive</h3>
+          </div>
+          <button type="button" className="argo-pod-close" onClick={onClose} aria-label="Fermer">
+            <X size={16} />
+          </button>
+        </header>
+
+        {driveStatus && <div className="argo-drive-status-banner">{driveStatus}</div>}
+
+        <div className="argo-drive-actions-grid">
+          <button
+            type="button"
+            className="argo-drive-action-card is-primary"
+            disabled={driveBusy !== null}
+            onClick={async () => {
+              try {
+                setDriveBusy('push')
+                setDriveStatus('Envoi de votre sauvegarde vers Google Drive…')
+                await pushBackupToGoogleDrive()
+                setDriveConfig(getGoogleDriveSyncConfig())
+                setDriveStatus('✓ Sauvegarde envoyée sur Google Drive avec succès !')
+              } catch (err: any) {
+                setDriveStatus(`⚠ ${err?.message || String(err)}`)
+              } finally {
+                setDriveBusy(null)
+              }
+            }}
+          >
+            <Upload size={18} />
+            <strong>{driveBusy === 'push' ? 'Envoi en cours…' : 'Envoyer vers Drive (Push)'}</strong>
+            <small>Sauvegarde PC/Mobile → Cloud</small>
+          </button>
+
+          <button
+            type="button"
+            className="argo-drive-action-card is-accent"
+            disabled={driveBusy !== null}
+            onClick={async () => {
+              try {
+                setDriveBusy('pull')
+                setDriveStatus('Récupération depuis Google Drive…')
+                await pullBackupFromGoogleDrive()
+                setDriveConfig(getGoogleDriveSyncConfig())
+                setDriveStatus('✓ Sauvegarde Google Drive chargée ! Rechargement…')
+                window.setTimeout(() => window.location.reload(), 900)
+              } catch (err: any) {
+                setDriveStatus(`⚠ ${err?.message || String(err)}`)
+              } finally {
+                setDriveBusy(null)
+              }
+            }}
+          >
+            <Download size={18} />
+            <strong>{driveBusy === 'pull' ? 'Téléchargement…' : 'Récupérer de Drive (Pull)'}</strong>
+            <small>Cloud → Cet appareil</small>
+          </button>
+
+          <button
+            type="button"
+            className="argo-drive-action-card"
+            onClick={async () => {
+              try {
+                await shareOrDownloadBackupForDrive()
+                setDriveStatus('✓ Fichier yoridokoro-backup.json prêt pour Google Drive.')
+              } catch (err: any) {
+                setDriveStatus(`⚠ ${err?.message || String(err)}`)
+              }
+            }}
+          >
+            <Upload size={16} />
+            <strong>Exporter / Partager .json</strong>
+            <small>Vers l’app Google Drive Android / PC</small>
+          </button>
+
+          <button
+            type="button"
+            className="argo-drive-action-card"
+            onClick={async () => {
+              try {
+                const ok = await pickAndImportBackupFromDevice()
+                if (ok) {
+                  setDriveStatus('✓ Sauvegarde importée ! Rechargement…')
+                  window.setTimeout(() => window.location.reload(), 800)
+                }
+              } catch (err: any) {
+                setDriveStatus(`⚠ ${err?.message || String(err)}`)
+              }
+            }}
+          >
+            <Download size={16} />
+            <strong>Importer depuis Drive / Fichier</strong>
+            <small>Sélecteur natif Android / PC</small>
+          </button>
+        </div>
+
+        <div className="argo-drive-config-box">
+          <label>
+            <span>URL Pont Google Drive 1-Clic (Google Apps Script — sans expiration)</span>
+            <input
+              value={driveConfig.appsScriptUrl}
+              onChange={e => {
+                const next = saveGoogleDriveSyncConfig({ appsScriptUrl: e.target.value })
+                setDriveConfig(next)
+              }}
+              placeholder="https://script.google.com/macros/s/.../exec"
+            />
+          </label>
+
+          <details className="argo-drive-help">
+            <summary>Comment créer mon lien Google Drive permanent en 30 secondes (gratuit) ?</summary>
+            <div className="argo-drive-help-body">
+              <p>
+                1. Cliquez sur <strong>Copier le script</strong> ci-dessous puis ouvrez <code>script.google.com</code>.<br />
+                2. Créez un <strong>Nouveau projet</strong>, collez le code, puis cliquez sur <strong>Déployer → Nouveau déploiement → Application Web</strong> (Accès : <em>Tout le monde</em>).<br />
+                3. Collez l’URL obtenue ci-dessus sur votre PC et sur votre S23 Ultra : vos boutons <strong>Push / Pull</strong> fonctionneront à vie en 1 clic !
+              </p>
+              <div className="argo-drive-help-btns">
+                <button
+                  type="button"
+                  className="argo-pod-chip-btn"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE)
+                    setCopiedScript(true)
+                    setTimeout(() => setCopiedScript(false), 2000)
+                  }}
+                >
+                  <Copy size={12} /> {copiedScript ? 'Script copié !' : 'Copier le script Google Drive'}
+                </button>
+                <button
+                  type="button"
+                  className="argo-pod-chip-btn"
+                  onClick={() => {
+                    const shell = (window as any).electronAPI?.shell
+                    if (shell?.openExternal) void shell.openExternal('https://script.google.com')
+                    else window.open('https://script.google.com', '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  Ouvrir script.google.com ↗
+                </button>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
 
 function formatClock(totalSeconds: number): string {
   const hrs = Math.floor(totalSeconds / 3600)
@@ -82,6 +253,7 @@ function formatClock(totalSeconds: number): string {
 
 export function ArgonautenTelemetryBar() {
   const isArgonauten = useArgonauten()
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   const [todaySeconds, setTodaySeconds] = useState(0)
   const [activeCareerCount, setActiveCareerCount] = useState(0)
@@ -92,10 +264,6 @@ export function ArgonautenTelemetryBar() {
     () => document.documentElement.dataset.argoImmersion === 'true',
   )
   const [driveModalOpen, setDriveModalOpen] = useState(false)
-  const [driveConfig, setDriveConfig] = useState(() => getGoogleDriveSyncConfig())
-  const [driveBusy, setDriveBusy] = useState<'push' | 'pull' | null>(null)
-  const [driveStatus, setDriveStatus] = useState<string>('')
-  const [copiedScript, setCopiedScript] = useState(false)
 
   const refreshTelemetry = useCallback(async () => {
     if (!isArgonauten) return
@@ -152,7 +320,7 @@ export function ArgonautenTelemetryBar() {
     return () => window.removeEventListener('keydown', onKey)
   }, [isArgonauten])
 
-  if (!isArgonauten) return null
+  if (!isArgonauten || isMobile) return null
 
   const targetSeconds = 3 * 3600 // 3h daily reference
   const fillPct = Math.min(100, Math.round((todaySeconds / targetSeconds) * 100))
@@ -234,11 +402,7 @@ export function ArgonautenTelemetryBar() {
       <button
         type="button"
         className="argo-telemetry-chip argo-drive-sync-btn"
-        onClick={() => {
-          setDriveConfig(getGoogleDriveSyncConfig())
-          setDriveStatus('')
-          setDriveModalOpen(true)
-        }}
+        onClick={() => setDriveModalOpen(true)}
         title="Synchronisation Google Drive (PC ⇄ S23 Ultra)"
       >
         <Cloud size={13} className="argo-telemetry-icon" />
@@ -256,160 +420,7 @@ export function ArgonautenTelemetryBar() {
         <kbd>Alt I</kbd>
       </button>
 
-      {driveModalOpen &&
-        createPortal(
-          <div className="argo-drive-modal-backdrop" onClick={() => setDriveModalOpen(false)}>
-            <div className="argo-drive-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label="Synchronisation Google Drive">
-              <header className="argo-drive-modal-header">
-                <div>
-                  <span className="argo-pod-kicker">PC ⇄ Samsung S23 Ultra</span>
-                  <h3><Cloud size={18} /> Synchronisation Google Drive</h3>
-                </div>
-                <button type="button" className="argo-pod-close" onClick={() => setDriveModalOpen(false)} aria-label="Fermer">
-                  <X size={16} />
-                </button>
-              </header>
-
-              {driveStatus && <div className="argo-drive-status-banner">{driveStatus}</div>}
-
-              <div className="argo-drive-actions-grid">
-                <button
-                  type="button"
-                  className="argo-drive-action-card is-primary"
-                  disabled={driveBusy !== null}
-                  onClick={async () => {
-                    try {
-                      setDriveBusy('push')
-                      setDriveStatus('Envoi de votre sauvegarde vers Google Drive…')
-                      await pushBackupToGoogleDrive()
-                      setDriveConfig(getGoogleDriveSyncConfig())
-                      setDriveStatus('✓ Sauvegarde envoyée sur Google Drive avec succès !')
-                    } catch (err: any) {
-                      setDriveStatus(`⚠ ${err?.message || String(err)}`)
-                    } finally {
-                      setDriveBusy(null)
-                    }
-                  }}
-                >
-                  <Upload size={18} />
-                  <strong>{driveBusy === 'push' ? 'Envoi en cours…' : 'Envoyer vers Drive (Push)'}</strong>
-                  <small>Sauvegarde PC/Mobile → Cloud</small>
-                </button>
-
-                <button
-                  type="button"
-                  className="argo-drive-action-card is-accent"
-                  disabled={driveBusy !== null}
-                  onClick={async () => {
-                    try {
-                      setDriveBusy('pull')
-                      setDriveStatus('Récupération depuis Google Drive…')
-                      await pullBackupFromGoogleDrive()
-                      setDriveConfig(getGoogleDriveSyncConfig())
-                      setDriveStatus('✓ Sauvegarde Google Drive chargée ! Rechargement…')
-                      window.setTimeout(() => window.location.reload(), 900)
-                    } catch (err: any) {
-                      setDriveStatus(`⚠ ${err?.message || String(err)}`)
-                    } finally {
-                      setDriveBusy(null)
-                    }
-                  }}
-                >
-                  <Download size={18} />
-                  <strong>{driveBusy === 'pull' ? 'Téléchargement…' : 'Récupérer de Drive (Pull)'}</strong>
-                  <small>Cloud → Cet appareil</small>
-                </button>
-
-                <button
-                  type="button"
-                  className="argo-drive-action-card"
-                  onClick={async () => {
-                    try {
-                      await shareOrDownloadBackupForDrive()
-                      setDriveStatus('✓ Fichier yoridokoro-backup.json prêt pour Google Drive.')
-                    } catch (err: any) {
-                      setDriveStatus(`⚠ ${err?.message || String(err)}`)
-                    }
-                  }}
-                >
-                  <Upload size={16} />
-                  <strong>Exporter / Partager .json</strong>
-                  <small>Vers l’app Google Drive Android / PC</small>
-                </button>
-
-                <button
-                  type="button"
-                  className="argo-drive-action-card"
-                  onClick={async () => {
-                    try {
-                      const ok = await pickAndImportBackupFromDevice()
-                      if (ok) {
-                        setDriveStatus('✓ Sauvegarde importée ! Rechargement…')
-                        window.setTimeout(() => window.location.reload(), 800)
-                      }
-                    } catch (err: any) {
-                      setDriveStatus(`⚠ ${err?.message || String(err)}`)
-                    }
-                  }}
-                >
-                  <Download size={16} />
-                  <strong>Importer depuis Drive / Fichier</strong>
-                  <small>Sélecteur natif Android / PC</small>
-                </button>
-              </div>
-
-              <div className="argo-drive-config-box">
-                <label>
-                  <span>URL Pont Google Drive 1-Clic (Google Apps Script — sans expiration)</span>
-                  <input
-                    value={driveConfig.appsScriptUrl}
-                    onChange={e => {
-                      const next = saveGoogleDriveSyncConfig({ appsScriptUrl: e.target.value })
-                      setDriveConfig(next)
-                    }}
-                    placeholder="https://script.google.com/macros/s/.../exec"
-                  />
-                </label>
-
-                <details className="argo-drive-help">
-                  <summary>Comment créer mon lien Google Drive permanent en 30 secondes (gratuit) ?</summary>
-                  <div className="argo-drive-help-body">
-                    <p>
-                      1. Cliquez sur <strong>Copier le script</strong> ci-dessous puis ouvrez <code>script.google.com</code>.<br />
-                      2. Créez un <strong>Nouveau projet</strong>, collez le code, puis cliquez sur <strong>Déployer → Nouveau déploiement → Application Web</strong> (Accès : <em>Tout le monde</em>).<br />
-                      3. Collez l’URL obtenue ci-dessus sur votre PC et sur votre S23 Ultra : vos boutons <strong>Push / Pull</strong> fonctionneront à vie en 1 clic !
-                    </p>
-                    <div className="argo-drive-help-btns">
-                      <button
-                        type="button"
-                        className="argo-pod-chip-btn"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_TEMPLATE)
-                          setCopiedScript(true)
-                          setTimeout(() => setCopiedScript(false), 2000)
-                        }}
-                      >
-                        <Copy size={12} /> {copiedScript ? 'Script copié !' : 'Copier le script Google Drive'}
-                      </button>
-                      <button
-                        type="button"
-                        className="argo-pod-chip-btn"
-                        onClick={() => {
-                          const shell = (window as any).electronAPI?.shell
-                          if (shell?.openExternal) void shell.openExternal('https://script.google.com')
-                          else window.open('https://script.google.com', '_blank', 'noopener,noreferrer')
-                        }}
-                      >
-                        Ouvrir script.google.com ↗
-                      </button>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <GoogleDriveSyncModal open={driveModalOpen} onClose={() => setDriveModalOpen(false)} />
 
       {immersion &&
         createPortal(
@@ -431,6 +442,7 @@ export function ArgonautenTelemetryBar() {
 
 export function ArgonautenFloatingPod() {
   const isArgonauten = useArgonauten()
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   const location = useLocation()
   const [open, setOpen] = useState(false)
@@ -493,7 +505,7 @@ export function ArgonautenFloatingPod() {
     return () => window.removeEventListener('keydown', onKey)
   }, [isArgonauten])
 
-  if (!isArgonauten) return null
+  if (!isArgonauten || isMobile) return null
 
   function showToast(msg: string) {
     setToast(msg)

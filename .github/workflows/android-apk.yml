@@ -41,11 +41,11 @@ jobs:
 
       - name: Prepare APK Artifact
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk Yoridokoro-0.2.21-Android.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk Yoridokoro-0.2.22-Android.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Yoridokoro-Android-APK
-          path: Yoridokoro-0.2.21-Android.apk
+          path: Yoridokoro-0.2.22-Android.apk
           if-no-files-found: error

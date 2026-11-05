@@ -20,6 +20,8 @@ import './TodayDashboard.css'
 import { useArgonauten, useRework } from '../design/rework/useRework'
 import { PageHeading, Orbit } from '../design/rework/Primitives'
 import { useTaskCompletionGrace } from '../hooks/useTaskCompletionGrace'
+import { useIsMobile } from '../hooks/useIsMobile'
+import { MobileTodayView } from '../components/MobileTodayView'
 
 type ActiveSession = {
   remainingSeconds?: number
@@ -86,6 +88,7 @@ const QUADRANT_COPY: Record<EisenhowerQuadrant, { title: string; hint: string; u
 export default function TodayDashboard() {
   const rework = useRework()
   const argonauten = useArgonauten()
+  const isMobile = useIsMobile()
   const [selectedQuadrant, setSelectedQuadrant] = useState<EisenhowerQuadrant>('do')
   const workSecondsBySubject = usePlannerAllocation()
   const navigate = useNavigate()
@@ -473,6 +476,27 @@ export default function TodayDashboard() {
 
         </div>
       </section>)
+
+  if (isMobile) {
+    return (
+      <MobileTodayView
+        tasks={eisenhowerTasks}
+        onAddTask={async (title, quadrant) => {
+          const task = await createEisenhowerTask(title, quadrant)
+          setEisenhowerTasks(current => [...current, task])
+        }}
+        onToggleTask={async (task) => {
+          await toggleMatrixTask(task)
+        }}
+        onDeleteTask={async (id) => {
+          const found = eisenhowerTasks.find(t => t.id === id)
+          if (found) await removeMatrixTask(found)
+        }}
+        peopleToContact={peopleToContact}
+        actionView={actionView}
+      />
+    )
+  }
 
   if (argonauten) {
     const urgentCount = eisenhowerTasks.filter(task => task.quadrant === 'do' && !task.done).length

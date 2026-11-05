@@ -245,7 +245,7 @@ export default function Career() {
     } catch {
       // ignore
     }
-    return 'all'
+    return typeof window !== 'undefined' && window.innerWidth <= 860 ? 'rome' : 'all'
   })
 
   const switchTab = useCallback((nextTab: CareerTab) => {

@@ -19,6 +19,8 @@ import './Layout.css';
 import { Navigation } from '../design/rework/Navigation';
 import { useRework } from '../design/rework/useRework';
 import { ArgonautenFloatingPod } from '../design/argonauten/ArgonautenDeck';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { MobileAppShell } from './MobileAppShell';
 
 const MASCOT_DEFAULT_QUOTE = "The exam is won at home, not on exam day 🏠";
 const DEV_NAV_CLICKS = 4;
@@ -100,6 +102,7 @@ export default function Layout() {
     const { t } = useTranslation();
     const { theme, metacognitionDay, language } = useSettings();
     const rework = useRework();
+    const isMobile = useIsMobile();
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [currentIdx, setCurrentIdx] = useState(0);
     const [animClass, setAnimClass] = useState('quote-visible');
@@ -391,8 +394,8 @@ export default function Layout() {
 
     // ── Obsidian layout (unconditional — every theme is obsidian-*) ──────────
     return (
-        <div className={`layout obsidian-layout yoridokoro-layout${rework ? ' rw-layout' : ''}`}>
-                {rework ? <Navigation items={[...primaryNavItems, ...secondaryNavItems]} french={language === 'fr'} onNavigate={handleNavClick} onDev={handleMascotClick} /> : <nav className="obsidian-sidebar yoridokoro-sidebar" aria-label="Navigation principale">
+        <div className={`layout obsidian-layout yoridokoro-layout${rework ? ' rw-layout' : ''}${isMobile ? ' is-mobile-shell' : ''}`}>
+                {isMobile ? <MobileAppShell onNavigate={handleNavClick} /> : rework ? <Navigation items={[...primaryNavItems, ...secondaryNavItems]} french={language === 'fr'} onNavigate={handleNavClick} onDev={handleMascotClick} /> : <nav className="obsidian-sidebar yoridokoro-sidebar" aria-label="Navigation principale">
                     <div className="yoridokoro-brand">
                         <span className="yoridokoro-mark" aria-hidden="true">拠</span>
                         <span className="yoridokoro-brand-copy"><strong>Yoridokoro</strong><small>拠り所</small></span>
