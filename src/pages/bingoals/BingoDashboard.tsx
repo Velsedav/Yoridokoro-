@@ -1,7 +1,8 @@
 import { PageHeading } from '../../design/rework/Primitives'
 import { useRework } from '../../design/rework/useRework'
+import { useIsMobile } from '../../hooks/useIsMobile'
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink, Target, LayoutGrid, Clock3, ArrowRight } from "lucide-react";
+import { Pencil, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink, Target, LayoutGrid, Clock3, ArrowRight, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import BingoModal from "../../components/bingoals/BingoModal";
 import type { DashboardRow, Objective, ObjectiveMediaSummary, Subobjective } from "../../lib/bingoals/db";
@@ -61,9 +62,11 @@ function lastStatus(days: number | null, freqDays: number | null) {
 
 export default function BingoDashboard() {
   const rework = useRework()
+  const isMobile = useIsMobile()
   const nav = useNavigate();
   const { t } = useTranslation();
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
+  const [mobileFilter, setMobileFilter] = useState<'active' | 'all' | 'grid'>('all')
   const [cells, setCells] = useState<Cell[]>(() => DASH_CACHE[CURRENT_YEAR] ?? EMPTY_CELLS);
   const [createSlot, setCreateSlot] = useState<number | null>(null);
   const [mediaMap, setMediaMap] = useState<Map<string, ObjectiveMediaSummary>>(new Map())
@@ -209,6 +212,29 @@ export default function BingoDashboard() {
 
   const occupiedCount = useMemo(() => viewCells.filter(cell => cell.objective_id && cell.objective).length, [viewCells])
   const visualCells = useMemo(() => arrangeBingoCells(viewCells, gridLayout), [viewCells, gridLayout])
+  const firstEmptySlotIndex = useMemo(
+    () => viewCells.find(c => !c.objective_id || !c.objective)?.slot_index ?? null,
+    [viewCells],
+  )
+  const displayedVisualCells = useMemo(() => {
+    if (!isMobile || mobileFilter === 'grid') {
+      return visualCells.map((cell, index) => ({ cell, index }))
+    }
+    const items: Array<{ cell: (typeof visualCells)[number]; index: number }> = []
+    let addedEmptyCard = false
+    visualCells.forEach((cell, index) => {
+      if (cell.kind === 'blocked') return
+      const hasObj = Boolean(cell.value.objective_id && cell.value.objective)
+      if (hasObj) {
+        if (mobileFilter === 'active' && (cell.value.percent ?? 0) >= 1) return
+        items.push({ cell, index })
+      } else if (!addedEmptyCard) {
+        addedEmptyCard = true
+        items.push({ cell, index })
+      }
+    })
+    return items
+  }, [isMobile, mobileFilter, visualCells])
   const navigableGridIndexes = useMemo(
     () => visualCells.flatMap((cell, index) => cell.kind === 'blocked' ? [] : [index]),
     [visualCells],
@@ -334,8 +360,49 @@ export default function BingoDashboard() {
           <button className="btn bingo-grid-settings-btn" onClick={() => { setGridNotice(''); setShowGridSettings(true) }}>
             <LayoutGrid size={16} /> {gridLayout === '3x3-center' ? '3×3 − centre' : gridLayout.replace('x', '×')}
           </button>
+          {isMobile && firstEmptySlotIndex !== null && (
+            <button
+              type="button"
+              className="btn btn-primary bingo-mobile-add-btn"
+              onClick={() => { playSFX(SFX.BINGO_ADD); setCreateSlot(firstEmptySlotIndex) }}
+            >
+              <Plus size={15} /> Objectif
+            </button>
+          )}
         </div>
       </header>
+
+      {isMobile && (
+        <div className="m-bingo-filter-bar" role="tablist" aria-label="Filtrer les objectifs">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileFilter === 'all'}
+            className={mobileFilter === 'all' ? 'is-active' : ''}
+            onClick={() => setMobileFilter('all')}
+          >
+            Objectifs ({occupiedCount})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileFilter === 'active'}
+            className={mobileFilter === 'active' ? 'is-active' : ''}
+            onClick={() => setMobileFilter('active')}
+          >
+            En cours ({viewCells.filter(c => c.objective && (c.percent ?? 0) < 1).length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileFilter === 'grid'}
+            className={mobileFilter === 'grid' ? 'is-active' : ''}
+            onClick={() => setMobileFilter('grid')}
+          >
+            Grille complète
+          </button>
+        </div>
+      )}
 
         {loadError && (
           <div className="bingo-load-error" role="alert">
@@ -369,7 +436,7 @@ export default function BingoDashboard() {
           role="group"
           aria-label={t('bingoals.grid_aria')}
         >
-          {visualCells.map((visualCell, visualIndex) => {
+          {displayedVisualCells.map(({ cell: visualCell, index: visualIndex }) => {
             if (visualCell.kind === 'blocked') return <div key={`void-${visualIndex}`} className="bingo-grid-void" aria-hidden="true"><span>Une respiration dans la grille</span></div>
             const c = visualCell.value
             if (!c.objective_id || !c.objective) {

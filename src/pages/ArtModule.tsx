@@ -18,6 +18,109 @@ const embeddedOverrides = `
   @media(max-width:760px){.topbar{height:auto;padding-top:18px;align-items:flex-start}.top-actions{flex-wrap:wrap}}
 `
 
+const mobileArtOverrides = `
+  @media (max-width: 860px) {
+    :host, .art-native-root, .app, .main {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow-x: hidden !important;
+      padding-bottom: 84px !important;
+    }
+    .topbar {
+      position: relative !important;
+      height: auto !important;
+      padding: 10px 12px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
+    }
+    .topbar-heading {
+      display: none !important;
+    }
+    .topbar-utilities, .top-actions {
+      width: 100% !important;
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+    }
+    .search-input-wrap {
+      flex: 1 1 100% !important;
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+    .search-input {
+      width: 100% !important;
+      min-height: 36px !important;
+      font-size: 13px !important;
+    }
+    .view-tabs {
+      flex: 1 1 auto !important;
+      display: flex !important;
+      overflow-x: auto !important;
+    }
+    .view-tabs button, .primary-btn, .ghost-btn, .art-time-button {
+      min-height: 34px !important;
+      padding: 0 10px !important;
+      font-size: 11px !important;
+    }
+    .art-category-tabs {
+      position: sticky !important;
+      top: 0 !important;
+      padding: 8px 12px !important;
+      gap: 6px !important;
+      overflow-x: auto !important;
+      flex-wrap: nowrap !important;
+      -webkit-overflow-scrolling: touch;
+    }
+    .art-category-tabs button {
+      min-height: 32px !important;
+      padding: 0 10px !important;
+      font-size: 11px !important;
+      flex: 0 0 auto !important;
+    }
+    .overview, .ladder, .watchlist, .stats-view, .duel-stage {
+      padding: 12px !important;
+    }
+    .overview-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 10px !important;
+    }
+    .overview-card {
+      min-height: 0 !important;
+    }
+    .ladder-toolbar, .watchlist-toolbar {
+      padding: 8px 0 !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
+    }
+    .ladder-row, .watchlist-row {
+      padding: 10px !important;
+      gap: 10px !important;
+      flex-wrap: wrap !important;
+    }
+    .drawer-backdrop, .modal-backdrop {
+      top: 56px !important;
+      bottom: 64px !important;
+      height: calc(100dvh - 120px) !important;
+    }
+    .drawer, .drawer--notebook {
+      width: 100% !important;
+      max-width: 100vw !important;
+      height: 100% !important;
+      padding: 14px !important;
+    }
+    .modal-card {
+      width: calc(100vw - 20px) !important;
+      max-width: 100% !important;
+      max-height: calc(100dvh - 140px) !important;
+      padding: 14px !important;
+      overflow-y: auto !important;
+    }
+  }
+`
+
 const shadowArtStyles=artStyles
   .replaceAll(":root[data-color-scheme='dark']",":host([data-color-scheme='dark'])")
   .replaceAll(":root:not([data-theme='keystone'])",":host(:not([data-theme='keystone']))")
@@ -36,7 +139,7 @@ export default function ArtModule() {
     const shadow=host.shadowRoot||host.attachShadow({mode:'open'}),style=document.createElement('style'),mount=document.createElement('div')
     // Konomi's standalone stylesheet targets :root. Inside Yoridokoro's shadow
     // boundary the equivalent root is :host, so keep every palette override active.
-    style.textContent=shadowArtStyles+embeddedOverrides+reworkArtStyles;mount.className='art-native-root';shadow.append(style,mount)
+    style.textContent=shadowArtStyles+embeddedOverrides+reworkArtStyles+mobileArtOverrides;mount.className='art-native-root';shadow.append(style,mount)
     setArtMount(mount)
     return()=>{setArtMount(null);shadow.replaceChildren()}
   },[])

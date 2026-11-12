@@ -1,7 +1,8 @@
 import { PageHeading } from '../design/rework/Primitives'
 import { useRework } from '../design/rework/useRework'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { Archive, Building2, CalendarClock, Mail, MessageCircle, Phone, Plus, Search, StickyNote, UserRound, Users, Video, X } from 'lucide-react'
+import { Archive, ArrowLeft, Building2, CalendarClock, Mail, MessageCircle, Phone, Plus, Search, StickyNote, UserRound, Users, Video, X } from 'lucide-react'
 import { addInteraction, addPersonNote, createPerson, daysSinceContact, getInteractions, getPeople, getPersonNotes, updatePerson, type InteractionChannel, type Person, type PersonInteraction, type PersonNote, type RelationshipKind } from '../lib/relations'
 import './Relations.css'
 import { useDialogFocus } from '../hooks/useDialogFocus'
@@ -29,8 +30,10 @@ function AccessibleDialog({ title, onClose, children }: { title: string; onClose
 
 export default function Relations() {
   const rework = useRework()
+  const isMobile = useIsMobile()
   const [people, setPeople] = useState<Person[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [mobileShowDetail, setMobileShowDetail] = useState(false)
   const [interactions, setInteractions] = useState<PersonInteraction[]>([])
   const [notes, setNotes] = useState<PersonNote[]>([])
   const [query, setQuery] = useState('')
@@ -121,14 +124,31 @@ export default function Relations() {
       {rework && <PageHeading title="Relations" />}
     <header className="rel-topbar"><div><span className="rel-eyebrow"><Users size={14} /> Mémoire relationnelle</span><h1>Relations</h1><p>Gardez les personnes importantes dans votre champ de vision.</p></div><button className="rel-primary" onClick={() => setDialog('person')}><Plus size={17} /> Ajouter une personne</button></header>
     {notice && <div className="rel-notice" role="status" aria-live="polite">{notice}{undoPerson && <button className="rel-text-button" onClick={() => void restorePerson(undoPerson)}>Annuler</button>}<button onClick={() => setNotice('')} aria-label="Fermer le message"><X size={14} /></button></div>}
-    <div className="rel-shell">
+    <div className={`rel-shell${isMobile ? (mobileShowDetail && selected ? ' m-rel-detail-mode' : ' m-rel-list-mode') : ''}`}>
       <aside className="rel-list-pane" aria-label="Liste des personnes">
+        {isMobile && (
+          <div className="m-rel-list-head">
+            <strong>Contacts ({filtered.length})</strong>
+            <button type="button" className="rel-primary" onClick={() => setDialog('person')}>
+              <Plus size={15} /> Ajouter
+            </button>
+          </div>
+        )}
         <div className="rel-search"><Search size={16} aria-hidden="true" /><label className="sr-only" htmlFor="rel-search">Rechercher une personne</label><input id="rel-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher…" /></div>
         <div className="rel-kind-filter" aria-label="Filtrer par relation">{(['all', 'family', 'friend', 'professional'] as const).map(value => <button key={value} className={kind === value ? 'active' : ''} onClick={() => setKind(value)} aria-pressed={kind === value}>{value === 'all' ? 'Toutes' : kindLabels[value]}</button>)}</div>
         <button type="button" className="rel-secondary rel-archives-toggle" aria-pressed={showArchived} onClick={toggleArchives}><Archive size={15} aria-hidden="true" />{showArchived ? 'Relations actives' : 'Archives'}{!showArchived && <small>{people.filter(person => person.archived).length || ''}</small>}</button>
-        <ol className="rel-person-list">{filtered.map(person => <li key={person.id}><button className={selectedId === person.id ? 'active' : ''} onClick={() => setSelectedId(person.id)}><span className={`rel-avatar kind-${person.relationship_kind}`} aria-hidden="true">{initials(person.display_name)}</span><span><strong>{person.display_name}</strong><small>{contactLabel(person)}</small></span>{person.follow_up_at && <CalendarClock size={15} aria-label="Relance planifiée" />}</button></li>)}{filtered.length === 0 && <li className="rel-empty">Aucune personne ne correspond.</li>}</ol>
+        <ol className="rel-person-list">{filtered.map(person => <li key={person.id}><button className={selectedId === person.id ? 'active' : ''} onClick={() => { setSelectedId(person.id); if (isMobile) setMobileShowDetail(true) }}><span className={`rel-avatar kind-${person.relationship_kind}`} aria-hidden="true">{initials(person.display_name)}</span><span><strong>{person.display_name}</strong><small>{contactLabel(person)}</small></span>{person.follow_up_at && <CalendarClock size={15} aria-label="Relance planifiée" />}</button></li>)}{filtered.length === 0 && <li className="rel-empty">Aucune personne ne correspond.</li>}</ol>
       </aside>
       <main className="rel-detail">
+        {isMobile && selected && (
+          <button
+            type="button"
+            className="m-rel-back-btn"
+            onClick={() => setMobileShowDetail(false)}
+          >
+            <ArrowLeft size={16} /> Retour aux contacts ({filtered.length})
+          </button>
+        )}
         {selected ? <>
           <section className="rel-profile"><div className={`rel-profile-avatar kind-${selected.relationship_kind}`} aria-hidden="true">{initials(selected.display_name)}</div><div><span className="rel-kind">{kindLabels[selected.relationship_kind]}</span><h2>{selected.display_name}</h2><p>{[selected.role, selected.organization].filter(Boolean).join(' · ') || 'Informations à compléter'}</p></div><div className="rel-profile-actions">{selected.archived ? <button className="rel-secondary" onClick={() => void restorePerson(selected)}>Restaurer</button> : <><button className="rel-primary" onClick={() => setDialog('interaction')}><MessageCircle size={16} /> Enregistrer un échange</button><button className="rel-icon-button" onClick={archiveSelected} aria-label={`Archiver ${selected.display_name}`} title="Archiver"><Archive size={17} /></button></>}</div></section>
           <div className="rel-summary"><div><small>Dernier contact</small><strong>{contactLabel(selected)}</strong></div><div><small>Échanges enregistrés</small><strong>{selected.interaction_count}</strong></div><div><small>Prochaine relance</small><strong>{selected.follow_up_at ? new Date(selected.follow_up_at + 'T00:00:00').toLocaleDateString('fr-FR') : 'Non planifiée'}</strong></div></div>

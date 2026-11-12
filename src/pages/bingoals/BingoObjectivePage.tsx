@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Clock3, ExternalLink, Maximize, Minimize, Minus, Pencil, Plus, Target, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, ExternalLink, Maximize, Minimize, Minus, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import "../../styles/bingoals.css";
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 import BingoModal from "../../components/bingoals/BingoModal";
@@ -76,9 +77,11 @@ function isKeyboardInput(target: EventTarget | null) {
 export default function BingoObjectivePage() {
   const { id } = useParams<{ id: string }>();
   const objectiveId = id!;
+  const isMobile = useIsMobile();
   const { t } = useTranslation();
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [mobileTab, setMobileTab] = useState<'active' | 'steps' | 'memories'>('active')
 
   const [obj, setObj] = useState<Objective | null>(null);
   const [subs, setSubs] = useState<Subobjective[]>([]);
@@ -458,6 +461,165 @@ export default function BingoObjectivePage() {
       </p>
 
       {/* ── Responsive layout ── */}
+      {isMobile ? (
+        <div className="m-obj-page-body">
+          <div className="m-obj-detail-tabs" role="tablist" aria-label="Sections de l’objectif">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobileTab === 'active'}
+              className={mobileTab === 'active' ? 'is-active' : ''}
+              onClick={() => setMobileTab('active')}
+            >
+              Étape active
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobileTab === 'steps'}
+              className={mobileTab === 'steps' ? 'is-active' : ''}
+              onClick={() => setMobileTab('steps')}
+            >
+              Étapes ({subs.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mobileTab === 'memories'}
+              className={mobileTab === 'memories' ? 'is-active' : ''}
+              onClick={() => setMobileTab('memories')}
+            >
+              Souvenirs ({media.length})
+            </button>
+          </div>
+
+          {subs.length === 0 ? (
+            <div className="objPage-empty">
+              <Target size={28} aria-hidden="true" />
+              <h2>{t('bingoals.empty_objective_title')}</h2>
+              <p>{t('bingoals.empty_objective_desc')}</p>
+              <button className="btn btn-primary" onClick={() => setAddOpen(true)}>{t('bingoals.add_subobjective')}</button>
+            </div>
+          ) : mobileTab === 'active' ? (
+            <div className="m-obj-active-cockpit">
+              {(() => {
+                const activeSub = subs.find(x => x.id === activeSubId) ?? subs[0]
+                if (!activeSub) return null
+                const currentIdx = subs.findIndex(x => x.id === activeSub.id)
+                return (
+                  <>
+                    <div className="m-obj-step-switcher">
+                      <button
+                        type="button"
+                        className="btn btn-icon"
+                        disabled={subs.length <= 1}
+                        onClick={() => {
+                          const prevIdx = (currentIdx - 1 + subs.length) % subs.length
+                          setActiveSubId(subs[prevIdx].id)
+                        }}
+                        aria-label="Étape précédente"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <select
+                        className="m-obj-step-select"
+                        aria-label="Choisir l’étape active"
+                        value={activeSub.id}
+                        onChange={e => setActiveSubId(e.target.value)}
+                      >
+                        {subs.map((s, i) => {
+                          const { autoDone, hasTarget } = computeAutoDone(s)
+                          const done = autoDone || (!hasTarget && !!s.is_done)
+                          return (
+                            <option key={s.id} value={s.id}>
+                              {i + 1}/{subs.length} · {done ? '✓ ' : '▶ '}{s.title}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn btn-icon"
+                        disabled={subs.length <= 1}
+                        onClick={() => {
+                          const nextIdx = (currentIdx + 1) % subs.length
+                          setActiveSubId(subs[nextIdx].id)
+                        }}
+                        aria-label="Étape suivante"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                    <div className="objPage-activeCol m-obj-active-card">
+                      <ActiveTimerSection
+                        s={activeSub}
+                        timeStats={timeMap.get(activeSub.id) ?? { total_ms: 0, last_end: null }}
+                        subs={subs}
+                        setSubs={setSubs}
+                        running={running}
+                        setRunning={setRunning}
+                        stopTimerIfRunning={stopTimerIfRunning}
+                        subMedia={mediaBySub.get(activeSub.id) ?? []}
+                        reload={reload}
+                        playingSubId={playingSubId}
+                        setPlayingSubId={setPlayingSubId}
+                      />
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+          ) : mobileTab === 'steps' ? (
+            <div className="subGrid">
+              {subs.map((s, index) => (
+                <SubobjectiveTile
+                  key={s.id}
+                  s={s}
+                  subMedia={mediaBySub.get(s.id) ?? []}
+                  running={running}
+                  activeSubId={activeSubId}
+                  setActiveSubId={(subId) => {
+                    setActiveSubId(subId)
+                    if (subId) setMobileTab('active')
+                  }}
+                  onAddLink={() => setPendingAddLinkSubId(s.id)}
+                  navigationIndex={index}
+                  isKeyboardTabStop={keyboardFocusSubId === s.id}
+                  onKeyboardFocus={() => setKeyboardFocusSubId(s.id)}
+                  onKeyboardNavigate={(event) => handleSubobjectiveKeyDown(event, index)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="objPage-listCol">
+              {sortedSubs.map((s, index) => (
+                <SubobjectiveMemoryStrip
+                  key={s.id}
+                  s={s}
+                  subs={subs}
+                  setSubs={setSubs}
+                  timeStats={timeMap.get(s.id) ?? { total_ms: 0, last_end: null }}
+                  running={running}
+                  setRunning={setRunning}
+                  stopTimerIfRunning={stopTimerIfRunning}
+                  subMedia={mediaBySub.get(s.id) ?? []}
+                  activeSubId={activeSubId}
+                  setActiveSubId={(subId) => {
+                    setActiveSubId(subId)
+                    if (subId) setMobileTab('active')
+                  }}
+                  reload={reload}
+                  onAddLink={() => setPendingAddLinkSubId(s.id)}
+                  navigationIndex={index}
+                  isKeyboardTabStop={keyboardFocusSubId === s.id}
+                  onKeyboardFocus={() => setKeyboardFocusSubId(s.id)}
+                  onKeyboardNavigate={(event) => handleSubobjectiveKeyDown(event, index)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
       <div className={`objPage-layout${listView === 'overview' ? ' objPage-layout--memories' : ' objPage-layout--focus'}`}>
 
         {/* List column */}
@@ -535,6 +697,7 @@ export default function BingoObjectivePage() {
           )
         })()}
       </div>
+      )}
 
       {/* Narrow overlay — slide-up timer panel (CSS hides on 900px+) */}
       <div className={`objPage-overlay${activeSubId ? ' objPage-overlay--open' : ''}`}>

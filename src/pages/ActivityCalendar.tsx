@@ -36,6 +36,7 @@ import {
 import './ActivityCalendar.css'
 import { useRework } from '../design/rework/useRework'
 import { useDialogFocus } from '../hooks/useDialogFocus'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { PageHeading } from '../design/rework/Primitives'
 import { syncLegacyTime } from '../lib/timeSync'
 import { getSessionEvidence, type SessionEvidence } from '../lib/db'
@@ -90,6 +91,8 @@ function toLocalDateTimeInput(date = new Date()) {
 
 export default function ActivityCalendar() {
   const rework = useRework()
+  const isMobile = useIsMobile()
+  const [mobileSection, setMobileSection] = useState<'journal' | 'activities' | 'traces'>('journal')
   let navigate: ReturnType<typeof useNavigate> | null = null
   try {
     // ActivityCalendar unit tests may mount without a Router
@@ -412,8 +415,57 @@ export default function ActivityCalendar() {
     [nonGameActivities],
   )
 
-  return <div className={`ac-page${rework ? ' rw-history' : ''}`}>
+  return <div className={`ac-page${rework ? ' rw-history' : ''}${isMobile ? ` m-ac-section-${mobileSection}` : ''}`}>
     {rework && <PageHeading title="Historique" actions={<div className="rw-segment" role="group" aria-label="Présentation de l’historique"><button aria-pressed={journal} onClick={() => setJournal(true)}>Journal</button><button aria-pressed={!journal} onClick={() => setJournal(false)}>Calendrier</button></div>} />}
+    {isMobile && (
+      <div className="m-ac-toolbar">
+        <div className="m-ac-tabs" role="tablist" aria-label="Sections de l’historique">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileSection === 'journal'}
+            className={mobileSection === 'journal' ? 'is-active' : ''}
+            onClick={() => setMobileSection('journal')}
+          >
+            Journal
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileSection === 'activities'}
+            className={mobileSection === 'activities' ? 'is-active' : ''}
+            onClick={() => setMobileSection('activities')}
+          >
+            Activités ({nonGameActivities.length})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileSection === 'traces'}
+            className={mobileSection === 'traces' ? 'is-active' : ''}
+            onClick={() => setMobileSection('traces')}
+          >
+            Traces
+          </button>
+        </div>
+        <div className="m-ac-quick-btns">
+          <button
+            type="button"
+            className="m-btn-primary"
+            onClick={() => setShowManual(v => !v)}
+          >
+            <Plus size={14} /> Temps
+          </button>
+          <button
+            type="button"
+            className="m-btn-secondary"
+            onClick={() => setShowCreate(v => !v)}
+          >
+            <Plus size={14} /> Activité
+          </button>
+        </div>
+      </div>
+    )}
     <header className="ac-header">
       <div>
         <span className="ac-eyebrow"><Clock3 size={14} /> Registre du temps</span>

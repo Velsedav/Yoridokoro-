@@ -19,6 +19,7 @@ import { ANALYTICS_POLICY_ID, ANALYTICS_POLICY_VERSION, recordBehaviorEvent } fr
 import './ObsidianHome.css'
 import { useRework } from '../design/rework/useRework'
 import { PageHeading } from '../design/rework/Primitives'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 type ViewMode = 'list' | 'board'
 const LS_VIEW_KEY = 'obsidian-home-view'
@@ -579,6 +580,8 @@ interface ListViewProps {
 
 function ListView({ subjects, allChapters, onStart, onEdit }: ListViewProps) {
   const { t } = useTranslation()
+  const isMobile = useIsMobile()
+  const navigate = useNavigate()
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -627,6 +630,77 @@ function ListView({ subjects, allChapters, onStart, onEdit }: ListViewProps) {
   }
 
   const COL_COUNT = 6
+
+  if (isMobile) {
+    return (
+      <div className="m-study-subject-list">
+        {sorted.map(subject => {
+          const retention = getSubjectRetention(subject.id, allChapters)
+          const lastStudied = subject.last_studied_at
+            ? formatRelativeDate(subject.last_studied_at, t)
+            : t('subjects.never')
+          const subjectChapters = allChapters.filter(c => c.subjectId === subject.id && !c.archived)
+          return (
+            <article key={subject.id} className="m-study-subject-card" onClick={() => onEdit(subject)}>
+              <div className="m-study-subject-head">
+                <div>
+                  <h3>{subject.name}</h3>
+                  {subject.tags.length > 0 && (
+                    <div className="m-study-subject-tags">
+                      {subject.tags.map(tag => (
+                        <span key={tag.id} className="ohi-tag">#{tag.name}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span
+                  className="m-study-retention-badge"
+                  style={{ color: retentionColor(retention) }}
+                >
+                  {retention !== null ? `${retention}%` : '—'}
+                </span>
+              </div>
+
+              <div className="m-study-subject-stats">
+                <span><strong>{subjectChapters.length}</strong> chap.</span>
+                <span>·</span>
+                <span><strong>{formatH(subject.total_minutes / 60)}</strong> au total</span>
+                <span>·</span>
+                <span>{lastStudied}</span>
+              </div>
+
+              <div className="m-study-subject-actions" onClick={e => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="m-btn-secondary"
+                  onClick={() => navigate(`/subject/${subject.id}`)}
+                >
+                  Détails
+                </button>
+                <button
+                  type="button"
+                  className="m-btn-secondary"
+                  onClick={() => onEdit(subject)}
+                >
+                  Chapitres
+                </button>
+                <button
+                  type="button"
+                  className="m-btn-primary"
+                  onClick={() => onStart(subject)}
+                >
+                  ▶ {t('subjects.start')}
+                </button>
+              </div>
+            </article>
+          )
+        })}
+        {sorted.length === 0 && (
+          <div className="ohi-empty">{t('subjects.no_match')}</div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="ohi-list-wrap">

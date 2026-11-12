@@ -1,62 +1,87 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   Briefcase,
   Check,
-  Clock,
-  Heart,
+  Clock3,
+  HeartHandshake,
   Pause,
   Play,
   Plus,
   Square,
   Target,
   Trash2,
-  Zap,
 } from 'lucide-react'
-import {
-  elapsedActivitySeconds,
-  pauseActivityTimer,
-  readActiveActivityTimer,
-  resumeActivityTimer,
-  startActivityTimer,
-  stopActivityTimer,
-  type ActiveActivityTimer,
-} from '../lib/activityTime'
-import { ensureJobSearchActivity } from '../lib/career'
+import TimeDistributionPanel from './TimeDistributionPanel'
 import {
   EISENHOWER_QUADRANTS,
+  moveEisenhowerTask,
   type EisenhowerQuadrant,
   type EisenhowerTask,
 } from '../lib/eisenhower'
+import {
+  elapsedActivitySeconds,
+  getHistoryTimeEntries,
+  pauseActivityTimer,
+  readActiveActivityTimer,
+  resumeActivityTimer,
+  saveTimeEntry,
+  startActivityTimer,
+  startOfWeek,
+  stopActivityTimer,
+  type ActiveActivityTimer,
+} from '../lib/activityTime'
+import {
+  ensureJobSearchActivity,
+  getCareerApplications,
+  getCareerRomeSearches,
+  ROME_CITIES,
+  todayDateInput,
+} from '../lib/career'
 import {
   loadObjectivesWithSteps,
   recordManualTimeWithBridge,
   startObjectiveStepTimer,
   type ObjectiveWithSteps,
 } from '../lib/quickLaunch'
-import TimeDistributionPanel from './TimeDistributionPanel'
-import type { Person } from '../lib/relations'
-import { daysSinceContact } from '../lib/relations'
+import { computeObjectivePercent } from '../lib/bingoals/progress'
+import { daysSinceContact, type Person } from '../lib/relations'
 
-const ACTIVITY_TIME_UPDATED_EVENT = 'yoridokoro-activity-timer-changed'
-
-const QUADRANT_SHORT: Record<EisenhowerQuadrant, string> = {
-  do: 'Urgent',
-  schedule: 'Planifier',
-  delegate: 'Simplifier',
-  eliminate: 'Laisser',
+export interface MobileTodayViewProps {
+  tasks: EisenhowerTask[]
+  onAddTask: (title: string, quadrant: EisenhowerQuadrant) => Promise<void>
+  onToggleTask: (task: EisenhowerTask) => Promise<void>
+  onDeleteTask: (id: string) => Promise<void>
+  peopleToContact: Person[]
+  actionView: ReactNode
 }
 
-function formatClock(totalSeconds: number): string {
-  const hrs = Math.floor(totalSeconds / 3600)
-  const mins = Math.floor((totalSeconds % 3600) / 60)
-  const secs = totalSeconds % 60
-  if (hrs > 0) {
-    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  }
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+const QUADRANT_META: Record<EisenhowerQuadrant, { shortLabel: string; subtitle: string; accent: string }> = {
+  do: { shortLabel: 'Urgent', subtitle: 'Faire maintenant', accent: '#f59e0b' },
+  schedule: { shortLabel: 'Planifier', subtitle: 'Important', accent: '#60a5fa' },
+  delegate: { shortLabel: 'Simplifier', subtitle: 'Déléguer', accent: '#a78bfa' },
+  eliminate: { shortLabel: 'Éliminer', subtitle: 'Laisser', accent: '#9ca3af' },
 }
+
+function formatDurationShort(seconds: number) {
+  const mins = Math.floor(seconds / 60)
+  const hrs = Math.floor(mins / 60)
+  if (hrs > 0) return `${hrs}h${String(mins % 60).padStart(2, '0')}`
+  return `${mins}m`
+}
+
+function formatTimerClock(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+type TodayMobileSection = 'all' | 'tasks' | 'goals' | 'balance'
 
 export function MobileTodayView({
   tasks,
@@ -65,357 +90,568 @@ export function MobileTodayView({
   onDeleteTask,
   peopleToContact,
   actionView,
-}: {
-  tasks: EisenhowerTask[]
-  onAddTask: (title: string, quadrant: EisenhowerQuadrant) => Promise<void>
-  onToggleTask: (task: EisenhowerTask, done: boolean) => Promise<void>
-  onDeleteTask: (id: string) => Promise<void>
-  peopleToContact: Person[]
-  actionView: React.ReactNode
-}) {
+}: MobileTodayViewProps) {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'priorities' | 'objectives' | 'summary'>('priorities')
-  const [quadrant, setQuadrant] = useState<EisenhowerQuadrant>('do')
-  const [taskInput, setTaskInput] = useState('')
-  const [careerActId, setCareerActId] = useState('')
-  const [objectives, setObjectives] = useState<ObjectiveWithSteps[]>([])
-  const [activeTimer, setActiveTimer] = useState<ActiveActivityTimer | null>(() => readActiveActivityTimer())
-  const [now, setNow] = useState(() => Date.now())
-  const [toast, setToast] = useState('')
+  const [section, setSection] = useState<TodayMobileSection>('all')
+  const [activeQuadTab, setActiveQuadTab] = useState<EisenhowerQuadrant | 'all'>('all')
+  const [showAddTask, setShowAddTask] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newQuad, setNewQuad] = useState<EisenhowerQuadrant>('do')
+  const [notice, setNotice] = useState('')
 
-  const refresh = useCallback(async () => {
+  const [now, setNow] = useState(() => new Date())
+  const [activeTimer, setActiveTimer] = useState<ActiveActivityTimer | null>(() => readActiveActivityTimer())
+  const [jobActivityId, setJobActivityId] = useState<string>('')
+  const [todayCareerSeconds, setTodayCareerSeconds] = useState(0)
+  const [weekCareerSeconds, setWeekCareerSeconds] = useState(0)
+  const [careerInProgressCount, setCareerInProgressCount] = useState(0)
+  const [careerRomeDueCount, setCareerRomeDueCount] = useState(0)
+
+  const [objectivesWithSteps, setObjectivesWithSteps] = useState<ObjectiveWithSteps[]>([])
+  const [selectedSubByObj, setSelectedSubByObj] = useState<Record<string, string>>({})
+
+  const refreshData = useCallback(async () => {
     try {
-      const [actId, objs] = await Promise.all([
+      const [actId, apps, romeRows, objs] = await Promise.all([
         ensureJobSearchActivity(),
+        getCareerApplications(),
+        getCareerRomeSearches(),
         loadObjectivesWithSteps(),
       ])
-      setCareerActId(actId)
-      setObjectives(objs)
-      setActiveTimer(readActiveActivityTimer())
+      setJobActivityId(actId)
+      setCareerInProgressCount(apps.filter(a => a.status === 'en_cours').length)
+
+      const todayStr = todayDateInput()
+      let dueCount = 0
+      for (const r of romeRows) {
+        const anyConsultedToday = ROME_CITIES.some(c => r.cities[c.key]?.last_consulted_at?.slice(0, 10) === todayStr)
+        if (!anyConsultedToday) dueCount++
+      }
+      setCareerRomeDueCount(dueCount)
+      setObjectivesWithSteps(objs)
+
+      const weekStart = startOfWeek(new Date())
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 7)
+      const entries = await getHistoryTimeEntries(weekStart, weekEnd)
+      const careerEntries = entries.filter(e => e.activity_id === actId || e.activity_kind === 'career')
+      const weekSecs = careerEntries.reduce((acc, item) => acc + (Number(item.duration_seconds) || 0), 0)
+      const todaySecs = careerEntries
+        .filter(e => e.started_at?.slice(0, 10) === todayStr)
+        .reduce((acc, item) => acc + (Number(item.duration_seconds) || 0), 0)
+      setWeekCareerSeconds(weekSecs)
+      setTodayCareerSeconds(todaySecs)
     } catch {
-      // ignore
+      // ignore in unit test mocks
     }
   }, [])
 
   useEffect(() => {
-    void refresh()
-    const onUpdate = () => void refresh()
-    window.addEventListener(ACTIVITY_TIME_UPDATED_EVENT, onUpdate)
-    return () => window.removeEventListener(ACTIVITY_TIME_UPDATED_EVENT, onUpdate)
-  }, [refresh])
+    void refreshData()
+  }, [refreshData])
 
   useEffect(() => {
-    if (!activeTimer || activeTimer.pausedAt) return
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [activeTimer])
+    const interval = window.setInterval(() => {
+      setNow(new Date())
+      setActiveTimer(readActiveActivityTimer())
+    }, 1000)
+    const onTimerChanged = () => void refreshData()
+    window.addEventListener('yoridokoro-activity-timer-changed', onTimerChanged)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('yoridokoro-activity-timer-changed', onTimerChanged)
+    }
+  }, [refreshData])
 
-  function flash(msg: string) {
-    setToast(msg)
-    window.setTimeout(() => setToast(''), 2500)
+  const isTimingCareer = Boolean(activeTimer && jobActivityId && activeTimer.activityId === jobActivityId)
+  const liveCareerSeconds =
+    todayCareerSeconds + (isTimingCareer && activeTimer ? elapsedActivitySeconds(activeTimer, now) : 0)
+
+  const openTasks = tasks.filter(t => !t.done)
+  const doneTasksToday = tasks.filter(t => Boolean(t.done))
+  const filteredTasks =
+    activeQuadTab === 'all' ? openTasks : openTasks.filter(t => t.quadrant === activeQuadTab)
+
+  const activeObjectives = objectivesWithSteps.filter(item => {
+    const pct = computeObjectivePercent(item.objective, item.subobjectives) ?? 0
+    return pct < 1
+  })
+
+  async function handleCreateTask(e: FormEvent) {
+    e.preventDefault()
+    const clean = newTitle.trim()
+    if (!clean) return
+    await onAddTask(clean, newQuad)
+    setNewTitle('')
+    setShowAddTask(false)
   }
 
-  async function handleStartCareerTimer() {
-    if (!careerActId) return
-    const next = startActivityTimer(careerActId)
-    setActiveTimer(next)
-    flash('Chrono Recherche d’emploi lancé')
+  async function handleToggleCareerTimer() {
+    if (!jobActivityId) return
+    if (isTimingCareer) {
+      await stopActivityTimer("Recherche d'emploi")
+      setActiveTimer(readActiveActivityTimer())
+      setNotice('Session Recherche d’emploi enregistrée.')
+      await refreshData()
+      return
+    }
+    if (activeTimer) {
+      await stopActivityTimer()
+    }
+    startActivityTimer(jobActivityId, new Date(), { detailLabel: "Recherche d'emploi" })
+    setActiveTimer(readActiveActivityTimer())
+    setNotice("Chronomètre Recherche d'emploi démarré.")
   }
 
-  async function handleQuickCareerLog(minutes: number) {
-    if (!careerActId) return
-    await recordManualTimeWithBridge({
-      activityId: careerActId,
-      startedAt: new Date(Date.now() - minutes * 60_000),
-      durationMinutes: minutes,
-      note: 'Session recherche d’emploi (Mobile)',
+  async function handleQuickLogCareer(minutes: number) {
+    if (!jobActivityId) return
+    const ended = new Date()
+    const started = new Date(ended.getTime() - minutes * 60_000)
+    await saveTimeEntry({
+      activity_id: jobActivityId,
+      started_at: started.toISOString(),
+      ended_at: ended.toISOString(),
+      duration_seconds: minutes * 60,
+      note: "Session Recherche d'emploi",
+      source: 'manual',
     })
-    flash(`+${minutes} min enregistrées en Recherche d’emploi`)
-    await refresh()
+    window.dispatchEvent(new CustomEvent('yoridokoro-activity-timer-changed'))
+    setNotice(`+${minutes} min ajoutées à Recherche d’emploi.`)
+    await refreshData()
   }
 
-  async function handleQuickObjLog(item: ObjectiveWithSteps, minutes: number) {
+  async function handleStartObjectiveChrono(item: ObjectiveWithSteps) {
+    if (activeTimer) {
+      await stopActivityTimer()
+    }
+    const chosen = selectedSubByObj[item.objective.id]
+    const subId = chosen?.startsWith('sub:') ? chosen.slice(4) : item.currentSubobjective?.id
+    await startObjectiveStepTimer(
+      { id: item.objective.id, title: item.objective.title, activityId: item.activityId },
+      subId ? { subobjectiveId: subId } : undefined,
+    )
+    setActiveTimer(readActiveActivityTimer())
+    setNotice(`Chrono démarré : ${item.objective.title}`)
+  }
+
+  async function handleQuickLogObjective(item: ObjectiveWithSteps, minutes: number) {
+    const chosen = selectedSubByObj[item.objective.id]
+    const subId = chosen?.startsWith('sub:') ? chosen.slice(4) : item.currentSubobjective?.id
     await recordManualTimeWithBridge({
       activityId: item.activityId,
       startedAt: new Date(Date.now() - minutes * 60_000),
       durationMinutes: minutes,
       objectiveId: item.objective.id,
-      subobjectiveId: item.currentSubobjective?.id,
+      subobjectiveId: subId,
     })
-    flash(`+${minutes} min · ${item.objective.title}`)
-    await refresh()
+    setNotice(`+${minutes} min enregistrées sur ${item.objective.title}.`)
+    await refreshData()
   }
-
-  async function handleSubmitTask(e: FormEvent) {
-    e.preventDefault()
-    if (!taskInput.trim()) return
-    await onAddTask(taskInput.trim(), quadrant)
-    setTaskInput('')
-  }
-
-  const visibleTasks = tasks.filter(t => t.quadrant === quadrant && !t.done)
 
   return (
     <div className="m-today">
-      {toast && <div className="m-toast">{toast}</div>}
+      {notice && (
+        <div className="m-toast" role="status" onClick={() => setNotice('')}>
+          <span>{notice}</span>
+          <small>OK</small>
+        </div>
+      )}
 
-      {/* 3-Tab Segmented Switcher */}
-      <div className="m-seg-tabs" role="tablist">
+      {/* Top Segmented View Filter */}
+      <div className="m-today-segment" role="tablist" aria-label="Sections Aujourd'hui">
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'priorities'}
-          className={tab === 'priorities' ? 'is-active' : ''}
-          onClick={() => setTab('priorities')}
+          aria-selected={section === 'all'}
+          className={section === 'all' ? 'is-active' : ''}
+          onClick={() => setSection('all')}
         >
-          <Zap size={15} /> Priorités ({tasks.filter(t => t.quadrant === 'do' && !t.done).length})
+          Tout
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'objectives'}
-          className={tab === 'objectives' ? 'is-active' : ''}
-          onClick={() => setTab('objectives')}
+          aria-selected={section === 'tasks'}
+          className={section === 'tasks' ? 'is-active' : ''}
+          onClick={() => setSection('tasks')}
         >
-          <Target size={15} /> Objectifs ({objectives.length})
+          Priorités ({openTasks.length})
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'summary'}
-          className={tab === 'summary' ? 'is-active' : ''}
-          onClick={() => setTab('summary')}
+          aria-selected={section === 'goals'}
+          className={section === 'goals' ? 'is-active' : ''}
+          onClick={() => setSection('goals')}
         >
-          <Clock size={15} /> Bilan
+          Objectifs ({activeObjectives.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={section === 'balance'}
+          className={section === 'balance' ? 'is-active' : ''}
+          onClick={() => setSection('balance')}
+        >
+          Bilan
         </button>
       </div>
 
-      {tab === 'priorities' && (
-        <div className="m-today-stack">
-          {/* Quick Career & Study Card */}
-          <section className="m-card m-card--highlight">
-            <div className="m-card-row">
-              <div className="m-card-title-group">
-                <Briefcase size={17} />
-                <div>
-                  <strong>Recherche d’emploi</strong>
-                  <small>Radar ROME France Travail & Chrono</small>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="m-link-pill"
-                onClick={() => navigate('/career')}
-              >
-                Ouvrir ROME <ArrowRight size={13} />
-              </button>
-            </div>
-
-            {activeTimer ? (
-              <div className="m-active-timer-box">
-                <div>
-                  <small>{activeTimer.pausedAt ? 'En pause' : 'Chronomètre actif'}</small>
-                  <strong className="m-active-timer-clock">
-                    {formatClock(elapsedActivitySeconds(activeTimer, now))}
-                  </strong>
-                </div>
-                <div className="m-active-timer-btns">
-                  <button
-                    type="button"
-                    className="m-btn m-btn--secondary"
-                    onClick={() => setActiveTimer(activeTimer.pausedAt ? resumeActivityTimer() : pauseActivityTimer())}
-                  >
-                    {activeTimer.pausedAt ? <Play size={14} fill="currentColor" /> : <Pause size={14} />}
-                    {activeTimer.pausedAt ? 'Reprendre' : 'Pause'}
-                  </button>
-                  <button
-                    type="button"
-                    className="m-btn m-btn--danger"
-                    onClick={async () => {
-                      await stopActivityTimer()
-                      setActiveTimer(null)
-                      flash('Session enregistrée !')
-                    }}
-                  >
-                    <Square size={13} fill="currentColor" /> Stop
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="m-quick-chips-row">
-                <button type="button" className="m-btn m-btn--primary" onClick={() => void handleStartCareerTimer()}>
-                  <Play size={14} fill="currentColor" /> Lancer Chrono
-                </button>
-                <button type="button" className="m-chip" onClick={() => void handleQuickCareerLog(15)}>
-                  +15m
-                </button>
-                <button type="button" className="m-chip" onClick={() => void handleQuickCareerLog(30)}>
-                  +30m
-                </button>
-                <button type="button" className="m-chip" onClick={() => void handleQuickCareerLog(60)}>
-                  +1h
-                </button>
-              </div>
-            )}
-          </section>
-
-          {/* Priority Tasks Card */}
-          <section className="m-card">
-            <header className="m-card-header">
-              <strong>Tâches à faire</strong>
-              <div className="m-quadrant-pills">
-                {EISENHOWER_QUADRANTS.map(q => {
-                  const count = tasks.filter(t => t.quadrant === q && !t.done).length
-                  return (
-                    <button
-                      key={q}
-                      type="button"
-                      className={quadrant === q ? 'is-active' : ''}
-                      onClick={() => setQuadrant(q)}
-                    >
-                      {QUADRANT_SHORT[q]} {count > 0 ? `(${count})` : ''}
-                    </button>
-                  )
-                })}
-              </div>
-            </header>
-
-            <form className="m-task-form" onSubmit={e => void handleSubmitTask(e)}>
-              <input
-                value={taskInput}
-                onChange={e => setTaskInput(e.target.value)}
-                placeholder={`Ajouter dans « ${QUADRANT_SHORT[quadrant]} »…`}
-              />
-              <button type="submit" className="m-btn m-btn--primary m-btn--icon" aria-label="Ajouter">
-                <Plus size={18} />
-              </button>
-            </form>
-
-            <ul className="m-task-list">
-              {visibleTasks.map(task => (
-                <li key={task.id} className="m-task-item">
-                  <button
-                    type="button"
-                    className="m-task-check"
-                    onClick={() => void onToggleTask(task, true)}
-                    aria-label="Terminer la tâche"
-                  >
-                    <Check size={15} />
-                  </button>
-                  <span className="m-task-title">{task.title}</span>
-                  <button
-                    type="button"
-                    className="m-task-del"
-                    onClick={() => void onDeleteTask(task.id)}
-                    aria-label="Supprimer"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </li>
-              ))}
-              {visibleTasks.length === 0 && (
-                <li className="m-empty-hint">Aucune tâche dans « {QUADRANT_SHORT[quadrant]} ».</li>
-              )}
-            </ul>
-          </section>
-
-          {/* Compact Study Step */}
-          <div className="m-compact-study-wrap">{actionView}</div>
-        </div>
+      {/* 1. HERO: Study Next Step / Active Session (from TodayDashboard actionView) */}
+      {(section === 'all' || section === 'goals') && (
+        <section className="m-card m-card-study">
+          {actionView}
+        </section>
       )}
 
-      {tab === 'objectives' && (
-        <div className="m-today-stack">
-          {objectives.map(item => (
-            <article key={item.objective.id} className="m-card">
-              <div className="m-card-row">
-                <div className="m-card-title-group">
-                  <Target size={16} />
-                  <div>
-                    <strong>{item.objective.title}</strong>
-                    <small>
-                      {item.currentSubobjective
-                        ? `Étape : ${item.currentSubobjective.title}`
-                        : `${item.subobjectives.length} sous-objectifs`}
-                    </small>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="m-link-pill"
-                  onClick={() => navigate(`/bingoals/objective/${item.objective.id}`)}
-                >
-                  Ouvrir <ArrowRight size={12} />
-                </button>
-              </div>
-              <div className="m-quick-chips-row">
-                <button
-                  type="button"
-                  className="m-btn m-btn--primary"
-                  onClick={async () => {
-                    const next = await startObjectiveStepTimer(
-                      { id: item.objective.id, title: item.objective.title, activityId: item.activityId },
-                      item.currentSubobjective ? { subobjectiveId: item.currentSubobjective.id } : undefined,
-                    )
-                    setActiveTimer(next)
-                    flash(`Chrono lancé : ${item.objective.title}`)
-                  }}
-                >
-                  <Play size={13} fill="currentColor" /> Chrono
-                </button>
-                <button type="button" className="m-chip" onClick={() => void handleQuickObjLog(item, 15)}>
-                  +15m
-                </button>
-                <button type="button" className="m-chip" onClick={() => void handleQuickObjLog(item, 30)}>
-                  +30m
-                </button>
-                <button type="button" className="m-chip" onClick={() => void handleQuickObjLog(item, 60)}>
-                  +1h
-                </button>
-              </div>
-            </article>
-          ))}
-          {objectives.length === 0 && (
-            <div className="m-card">
-              <p className="m-empty-hint">Aucun objectif configuré pour le moment.</p>
-              <button type="button" className="m-btn m-btn--primary" onClick={() => navigate('/bingoals')}>
-                Ouvrir les Objectifs
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'summary' && (
-        <div className="m-today-stack">
-          <div className="m-card">
-            <TimeDistributionPanel now={new Date()} />
+      {/* 2. QUICK CAREER & ROME CARD */}
+      {section === 'all' && (
+        <section className={`m-card m-card-career${isTimingCareer ? ' is-live' : ''}`}>
+          <div className="m-card-top">
+            <span className="m-card-eyebrow">
+              <Briefcase size={13} /> Recherche d’emploi
+            </span>
+            <button type="button" className="m-link-btn" onClick={() => navigate('/career')}>
+              Ouvrir ROME <ArrowRight size={13} />
+            </button>
           </div>
 
-          {peopleToContact.length > 0 && (
-            <section className="m-card">
-              <header className="m-card-header">
-                <strong><Heart size={15} /> Relations à cultiver</strong>
-                <button type="button" className="m-link-pill" onClick={() => navigate('/relations')}>
-                  Tout voir
+          <div className="m-career-metrics">
+            <div>
+              <small>{isTimingCareer ? 'Session' : 'Aujourd’hui'}</small>
+              <strong>
+                {isTimingCareer && activeTimer
+                  ? formatTimerClock(elapsedActivitySeconds(activeTimer, now))
+                  : formatDurationShort(liveCareerSeconds)}
+              </strong>
+            </div>
+            <div>
+              <small>Semaine</small>
+              <strong>{formatDurationShort(weekCareerSeconds)}</strong>
+            </div>
+            <div onClick={() => navigate('/career')} style={{ cursor: 'pointer' }}>
+              <small>Radar ROME</small>
+              <strong className={careerRomeDueCount > 0 ? 'is-warn' : ''}>
+                {careerRomeDueCount > 0 ? `${careerRomeDueCount} métiers` : 'À jour ✓'}
+              </strong>
+            </div>
+            <div onClick={() => navigate('/career')} style={{ cursor: 'pointer' }}>
+              <small>En cours</small>
+              <strong>{careerInProgressCount}</strong>
+            </div>
+          </div>
+
+          <div className="m-career-controls">
+            {isTimingCareer ? (
+              <>
+                <button
+                  type="button"
+                  className="m-btn-secondary"
+                  onClick={() => setActiveTimer(activeTimer?.pausedAt ? resumeActivityTimer() : pauseActivityTimer())}
+                >
+                  {activeTimer?.pausedAt ? <Play size={14} /> : <Pause size={14} />}
+                  <span>{activeTimer?.pausedAt ? 'Reprendre' : 'Pause'}</span>
                 </button>
-              </header>
-              <ul className="m-task-list">
-                {peopleToContact.map(person => {
-                  const days = daysSinceContact(person)
-                  return (
-                    <li key={person.id} className="m-task-item" onClick={() => navigate('/relations')}>
-                      <span className="m-task-title">{person.display_name}</span>
-                      <small className="m-muted-tag">
-                        {days === null ? 'Jamais noté' : `Il y a ${days} j`}
-                      </small>
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
+                <button type="button" className="m-btn-danger" onClick={() => void handleToggleCareerTimer()}>
+                  <Square size={14} fill="currentColor" />
+                  <span>Stop</span>
+                </button>
+              </>
+            ) : (
+              <button type="button" className="m-btn-accent" onClick={() => void handleToggleCareerTimer()}>
+                <Play size={14} fill="currentColor" />
+                <span>Chrono Emploi</span>
+              </button>
+            )}
+            <div className="m-chip-group">
+              {[15, 30, 60].map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  className="m-chip"
+                  onClick={() => void handleQuickLogCareer(m)}
+                >
+                  +{m === 60 ? '1h' : `${m}m`}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 3. PRIORITÉS DU JOUR (Eisenhower) */}
+      {(section === 'all' || section === 'tasks') && (
+        <section className="m-card m-card-tasks">
+          <div className="m-card-top">
+            <span className="m-card-eyebrow">
+              <Check size={14} /> Priorités ({openTasks.length})
+            </span>
+            <button
+              type="button"
+              className="m-btn-small"
+              onClick={() => setShowAddTask(v => !v)}
+            >
+              <Plus size={14} /> {showAddTask ? 'Fermer' : 'Ajouter'}
+            </button>
+          </div>
+
+          {showAddTask && (
+            <form className="m-task-form" onSubmit={e => void handleCreateTask(e)}>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={e => setNewTitle(e.target.value)}
+                placeholder="Nouvelle priorité concrète…"
+                autoFocus
+              />
+              <div className="m-task-form-row">
+                <select
+                  value={newQuad}
+                  onChange={e => setNewQuad(e.target.value as EisenhowerQuadrant)}
+                >
+                  {EISENHOWER_QUADRANTS.map(qId => (
+                    <option key={qId} value={qId}>
+                      {QUADRANT_META[qId].shortLabel} — {QUADRANT_META[qId].subtitle}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="m-btn-primary">Ajouter</button>
+              </div>
+            </form>
           )}
-        </div>
+
+          <div className="m-quad-tabs" role="tablist">
+            <button
+              type="button"
+              className={activeQuadTab === 'all' ? 'is-active' : ''}
+              onClick={() => setActiveQuadTab('all')}
+            >
+              Toutes ({openTasks.length})
+            </button>
+            {EISENHOWER_QUADRANTS.map(qId => {
+              const count = openTasks.filter(t => t.quadrant === qId).length
+              return (
+                <button
+                  key={qId}
+                  type="button"
+                  className={activeQuadTab === qId ? 'is-active' : ''}
+                  onClick={() => setActiveQuadTab(qId)}
+                >
+                  {QUADRANT_META[qId].shortLabel} ({count})
+                </button>
+              )
+            })}
+          </div>
+
+          {filteredTasks.length === 0 ? (
+            <p className="m-empty">
+              {openTasks.length === 0
+                ? 'Aucune priorité en attente. Ajoutez vos actions clés du jour !'
+                : 'Aucune tâche dans ce quadrant.'}
+            </p>
+          ) : (
+            <ul className="m-task-list">
+              {filteredTasks.map(task => {
+                const qMeta = QUADRANT_META[task.quadrant]
+                return (
+                  <li key={task.id} className={`m-task-row is-${task.quadrant}`}>
+                    <button
+                      type="button"
+                      className="m-task-check"
+                      onClick={() => void onToggleTask(task)}
+                      aria-label={`Terminer ${task.title}`}
+                    />
+                    <div className="m-task-body">
+                      <span>{task.title}</span>
+                      <small style={{ color: qMeta?.accent }}>{qMeta?.shortLabel}</small>
+                    </div>
+                    <select
+                      className="m-task-quad-select"
+                      aria-label={`Déplacer ${task.title}`}
+                      value={task.quadrant}
+                      onChange={e => {
+                        const nextQ = e.target.value as EisenhowerQuadrant
+                        void moveEisenhowerTask(task.id, nextQ)
+                      }}
+                    >
+                      {EISENHOWER_QUADRANTS.map(qId => (
+                        <option key={qId} value={qId}>{QUADRANT_META[qId].shortLabel}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="m-task-del"
+                      onClick={() => void onDeleteTask(task.id)}
+                      aria-label={`Supprimer ${task.title}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          {doneTasksToday.length > 0 && (
+            <details className="m-done-drawer">
+              <summary>{doneTasksToday.length} terminée{doneTasksToday.length > 1 ? 's' : ''}</summary>
+              <ul>
+                {doneTasksToday.map(task => (
+                  <li key={task.id}>
+                    <button type="button" onClick={() => void onToggleTask(task)}>
+                      <Check size={13} /> <s>{task.title}</s>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+      )}
+
+      {/* 4. OBJECTIFS BINGOALS ACTIFS */}
+      {(section === 'all' || section === 'goals') && (
+        <section className="m-card m-card-objectives">
+          <div className="m-card-top">
+            <span className="m-card-eyebrow">
+              <Target size={14} /> Objectifs actifs ({activeObjectives.length})
+            </span>
+            <button type="button" className="m-link-btn" onClick={() => navigate('/bingoals')}>
+              Tous <ArrowRight size={13} />
+            </button>
+          </div>
+
+          {activeObjectives.length === 0 ? (
+            <p className="m-empty">Aucun objectif actif.</p>
+          ) : (
+            <div className="m-obj-list">
+              {(section === 'goals' ? activeObjectives : activeObjectives.slice(0, 6)).map(item => {
+                const isRunningThis = activeTimer?.activityId === item.activityId
+                const chosenValue =
+                  selectedSubByObj[item.objective.id] ??
+                  (item.currentSubobjective ? `sub:${item.currentSubobjective.id}` : '')
+                const pct = Math.round((computeObjectivePercent(item.objective, item.subobjectives) ?? 0) * 100)
+
+                return (
+                  <article
+                    key={item.objective.id}
+                    className={`m-obj-item${isRunningThis ? ' is-running' : ''}`}
+                  >
+                    <div className="m-obj-head">
+                      <button
+                        type="button"
+                        className="m-obj-title"
+                        onClick={() => navigate(`/bingoals/objective/${item.objective.id}`)}
+                      >
+                        <strong>{item.objective.title}</strong>
+                        <span>{pct}%</span>
+                      </button>
+                    </div>
+
+                    {item.subobjectives.length > 0 && (
+                      <select
+                        className="m-obj-select"
+                        aria-label={`Étape pour ${item.objective.title}`}
+                        value={chosenValue}
+                        onChange={e =>
+                          setSelectedSubByObj(prev => ({ ...prev, [item.objective.id]: e.target.value }))
+                        }
+                      >
+                        {item.subobjectives.map(sub => (
+                          <option key={sub.id} value={`sub:${sub.id}`}>
+                            {sub.is_done ? '✓ ' : '▶ '}
+                            {sub.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    <div className="m-obj-actions">
+                      {isRunningThis ? (
+                        <button
+                          type="button"
+                          className="m-btn-danger"
+                          onClick={async () => {
+                            await stopActivityTimer()
+                            setActiveTimer(readActiveActivityTimer())
+                            await refreshData()
+                          }}
+                        >
+                          <Square size={12} fill="currentColor" /> Stop ({formatTimerClock(elapsedActivitySeconds(activeTimer!, now))})
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="m-btn-secondary"
+                          onClick={() => void handleStartObjectiveChrono(item)}
+                        >
+                          <Play size={12} fill="currentColor" /> Chrono
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="m-chip"
+                        onClick={() => void handleQuickLogObjective(item, 15)}
+                      >
+                        +15m
+                      </button>
+                      <button
+                        type="button"
+                        className="m-chip"
+                        onClick={() => void handleQuickLogObjective(item, 30)}
+                      >
+                        +30m
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 5. DISTRIBUTION DU TEMPS */}
+      {(section === 'all' || section === 'balance') && (
+        <section className="m-card">
+          <div className="m-card-top">
+            <span className="m-card-eyebrow">
+              <Clock3 size={14} /> Bilan du temps
+            </span>
+            <button type="button" className="m-link-btn" onClick={() => navigate('/calendar')}>
+              Historique <ArrowRight size={13} />
+            </button>
+          </div>
+          <TimeDistributionPanel />
+        </section>
+      )}
+
+      {/* 6. RELATIONS */}
+      {(section === 'all' || section === 'balance') && peopleToContact.length > 0 && (
+        <section className="m-card m-card-compact-list">
+          <div className="m-mini-block">
+            <div className="m-card-top">
+              <span className="m-card-eyebrow">
+                <HeartHandshake size={13} /> Proches à recontacter
+              </span>
+              <button type="button" className="m-link-btn" onClick={() => navigate('/relations')}>
+                Relations <ArrowRight size={12} />
+              </button>
+            </div>
+            {peopleToContact.slice(0, 4).map(person => {
+              const days = daysSinceContact(person, now)
+              return (
+                <div key={person.id} className="m-mini-row" onClick={() => navigate('/relations')}>
+                  <div>
+                    <strong>{person.display_name}</strong>
+                    <small>{days === null ? 'Jamais noté' : `Il y a ${days}j`}</small>
+                  </div>
+                  <span className="m-chip">Voir ↗</span>
+                </div>
+              )
+            })}
+          </div>
+        </section>
       )}
     </div>
   )
