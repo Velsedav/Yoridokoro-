@@ -757,6 +757,11 @@ function ConfigStrip({
 
 const TIER_ORDER: TierType[] = ['S', 'A', 'B', 'C', 'D', 'E', 'F']
 const CATEGORY_ORDER: TechCategory[] = ['comprendre', 'memoriser', 'faire']
+const CATEGORY_TAB_LABELS: Record<TechCategory, string> = {
+  comprendre: 'Comprendre',
+  memoriser: 'Mémoriser',
+  faire: 'Pratiquer',
+}
 
 const FOCUS_TO_CATEGORY: Record<NonNullable<FocusType>, TechCategory> = {
   skill:         'faire',
@@ -770,10 +775,11 @@ function InlineTechniquePicker({ currentId, suggestedCategory, onSelect, onClose
   onSelect: (id: string | null) => void
   onClose: () => void
 }) {
+  const currentTech = currentId ? TECHNIQUES.find(t => t.id === currentId) : null
+  const [activeCategory, setActiveCategory] = useState<TechCategory>(
+    currentTech?.category ?? suggestedCategory ?? 'comprendre'
+  )
   const [query, setQuery] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => { inputRef.current?.focus() }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -783,88 +789,79 @@ function InlineTechniquePicker({ currentId, suggestedCategory, onSelect, onClose
 
   const isSearching = query.trim().length > 0
 
-  const filtered = isSearching
+  const displayedTechniques = isSearching
     ? TECHNIQUES.filter(t => t.name.toLowerCase().includes(query.toLowerCase()))
         .sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier))
-    : null
+    : TECHNIQUES.filter(t => t.category === activeCategory)
+        .sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier))
 
   return (
     <div className="op-inline-picker">
-      <div className="op-inline-picker-search">
-        <input
-          ref={inputRef}
-          className="op-inline-picker-input"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search techniques..."
-        />
-        <button className="op-inline-picker-close" onClick={onClose} aria-label="Close picker">
-          <X size={13} />
-        </button>
-      </div>
-
-      {isSearching ? (
-        <div className="op-inline-picker-flat">
-          {filtered!.length === 0 && (
-            <div className="op-inline-picker-empty">No techniques found</div>
-          )}
-          {filtered!.map(t => (
-            <button
-              key={t.id}
-              className={`op-inline-tech-item${t.id === currentId ? ' op-inline-tech-active' : ''}`}
-              onClick={() => { onSelect(t.id); onClose() }}
-            >
-              <span className="op-inline-tech-check">{t.id === currentId && <Check size={10} />}</span>
-              <span className="op-inline-tech-tier" style={{ color: getTierColor(t.tier) }}>{t.tier}</span>
-              <span className="op-inline-tech-name">{t.name}</span>
-              {t.category && (
-                <span className="op-inline-tech-cat" style={{ color: ANALYTICS_CATEGORY_COLORS[t.category] }}>
-                  {CATEGORY_LABELS[t.category]}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="op-inline-picker-grid">
+      <div className="op-tech-picker-top">
+        <div className="op-tech-cat-tabs" role="tablist" aria-label="Catégories de techniques">
           {CATEGORY_ORDER.map(cat => {
-            const techs = TECHNIQUES
-              .filter(t => t.category === cat)
-              .sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier))
+            const isActive = !isSearching && activeCategory === cat
+            const isSuggested = cat === suggestedCategory
             return (
-              <div key={cat} className={`op-inline-picker-col${cat === suggestedCategory ? ' op-inline-picker-col-suggested' : ''}`}>
-                <div
-                  className="op-inline-picker-col-header"
-                  style={{
-                    color: ANALYTICS_CATEGORY_COLORS[cat],
-                    borderBottom: cat === suggestedCategory
-                      ? `2px solid ${ANALYTICS_CATEGORY_COLORS[cat]}`
-                      : undefined,
-                  }}
-                >
-                  {CATEGORY_LABELS[cat]}
-                  {cat === suggestedCategory && <span className="op-inline-picker-suggested-badge">★</span>}
-                </div>
-                {techs.map(t => (
-                  <button
-                    key={t.id}
-                    className={`op-inline-tech-item${t.id === currentId ? ' op-inline-tech-active' : ''}`}
-                    onClick={() => { onSelect(t.id); onClose() }}
-                  >
-                    <span className="op-inline-tech-check">{t.id === currentId && <Check size={10} />}</span>
-                    <span className="op-inline-tech-tier" style={{ color: getTierColor(t.tier) }}>{t.tier}</span>
-                    <span className="op-inline-tech-name">{t.name}</span>
-                  </button>
-                ))}
-              </div>
+              <button
+                key={cat}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`op-tech-cat-btn${isActive ? ' is-active' : ''}${isSuggested ? ' is-suggested' : ''}`}
+                style={{ '--cat-accent': ANALYTICS_CATEGORY_COLORS[cat] } as React.CSSProperties}
+                onClick={() => {
+                  setActiveCategory(cat)
+                  if (isSearching) setQuery('')
+                }}
+              >
+                <span>{CATEGORY_TAB_LABELS[cat]}</span>
+                {isSuggested && <span className="op-inline-picker-suggested-badge" title="Catégorie recommandée">★</span>}
+              </button>
             )
           })}
         </div>
-      )}
+
+        <div className="op-inline-picker-search">
+          <input
+            className="op-inline-picker-input"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Filtrer les techniques..."
+          />
+          <button type="button" className="op-inline-picker-close" onClick={onClose} aria-label="Fermer le catalogue">
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+
+      <div className="op-tech-picker-bottom">
+        {displayedTechniques.length === 0 ? (
+          <div className="op-inline-picker-empty">Aucune technique trouvée</div>
+        ) : (
+          displayedTechniques.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              className={`op-inline-tech-item${t.id === currentId ? ' op-inline-tech-active' : ''}`}
+              onClick={() => { onSelect(t.id); onClose() }}
+            >
+              <span className="op-inline-tech-tier" style={{ color: getTierColor(t.tier) }}>{t.tier}</span>
+              <span className="op-inline-tech-name">{t.name}</span>
+              {isSearching && t.category && (
+                <span className="op-inline-tech-cat" style={{ color: ANALYTICS_CATEGORY_COLORS[t.category] }}>
+                  {CATEGORY_TAB_LABELS[t.category]}
+                </span>
+              )}
+              <span className="op-inline-tech-check">{t.id === currentId && <Check size={13} />}</span>
+            </button>
+          ))
+        )}
+      </div>
 
       {currentId && (
-        <button className="op-inline-picker-clear" onClick={() => { onSelect(null); onClose() }}>
-          Clear selection
+        <button type="button" className="op-inline-picker-clear" onClick={() => { onSelect(null); onClose() }}>
+          Effacer la sélection
         </button>
       )}
     </div>

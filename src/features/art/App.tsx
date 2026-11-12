@@ -513,7 +513,7 @@ function QuoteCarousel({ item }: { item: RankedItem }) {
       const padding = Number.parseFloat(columnStyle.paddingTop) + Number.parseFloat(columnStyle.paddingBottom);
       const headerHeight = (header?.getBoundingClientRect().height ?? 0) + Number.parseFloat(headerStyle?.marginBottom ?? '0');
       const noteHeight = note?.getBoundingClientRect().height ?? 0;
-      const canShowPair = column.clientWidth >= 560 && drawer.clientHeight >= 700;
+      const canShowPair = window.innerWidth > 860 && column.clientWidth >= 560 && drawer.clientHeight >= 700;
       const availableHeight = canShowPair ? drawer.clientHeight - padding - headerHeight - noteHeight - 8 : 0;
       const heights = Array.from(measurement.querySelectorAll<HTMLElement>('.item-quote')).map((card) => card.getBoundingClientRect().height);
       const nextPages = buildQuotePages(heights, availableHeight, 14);
@@ -542,8 +542,21 @@ function QuoteCarousel({ item }: { item: RankedItem }) {
   const positionLabel = activePage.length === 2 ? `${activePage[0] + 1}–${activePage[1] + 1} sur ${quotes.length}` : `${activePage[0] + 1} sur ${quotes.length}`;
   const canNavigate = pages.length > 1;
   return <section ref={sectionRef} className="item-quotes" aria-label="Citations" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={(event) => !event.currentTarget.contains(event.relatedTarget) && setPaused(false)}>
-    <header className="quote-section-head"><div><span>Citations</span><small>{positionLabel}</small></div>{canNavigate && <div className="quote-carousel-controls"><button type="button" onClick={() => move(-1)} aria-label="Citation précédente"><ChevronLeft size={17} /></button><button type="button" onClick={() => move(1)} aria-label="Citation suivante"><ChevronRight size={17} /></button></div>}</header>
+    <header className="quote-section-head"><div><span>Citations</span><small>{positionLabel}</small></div></header>
     <div className={`quote-stage${activePage.length === 2 ? ' is-two-up' : ''}`}>{visibleQuotes.map((quote) => <figure className="item-quote is-active" key={quote.id}><blockquote>{quote.text}</blockquote>{quote.comment && <figcaption>{quote.comment}</figcaption>}</figure>)}</div>
+    {canNavigate && (
+      <div className="quote-carousel-controls quote-carousel-controls--under">
+        <button type="button" className="quote-nav-btn" onClick={() => move(-1)} aria-label="Citation précédente">
+          <ChevronLeft size={16} />
+          <span>Précédente</span>
+        </button>
+        <span className="quote-carousel-indicator">{positionLabel}</span>
+        <button type="button" className="quote-nav-btn" onClick={() => move(1)} aria-label="Citation suivante">
+          <span>Suivante</span>
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    )}
     <div ref={measurementRef} className="quote-stage is-two-up quote-measurement" aria-hidden="true">{quotes.map((quote) => <figure className="item-quote" key={`measure-${quote.id}`}><blockquote>{quote.text}</blockquote>{quote.comment && <figcaption>{quote.comment}</figcaption>}</figure>)}</div>
   </section>;
 }
@@ -666,6 +679,7 @@ function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onM
                 {shelf === 'collection' && onFight && <button type="button" className="drawer-management-button drawer-management-button--primary" onClick={onFight}><Swords size={16} />Duel</button>}
                 <button type="button" className="drawer-management-button" onClick={onEdit}><Pencil size={16} />{t('Edit details')}</button>
                 {!editingCover && <button type="button" className="drawer-management-button" onClick={() => setEditingCover(true)}><ImageIcon size={17} />{item.imageUrl ? t('Change cover') : t('Add cover')}</button>}
+                <button type="button" className="drawer-management-button drawer-management-button--danger" onClick={requestDelete}><Trash2 size={16} />{shelf === 'collection' ? t('Remove from collection') : t('Remove from watchlist')}</button>
               </div>
               <div className="drawer-more-actions" ref={moreActionsRef}>
                 <button ref={moreActionsButtonRef} type="button" className="drawer-more-trigger" aria-label={t('More actions')} aria-expanded={moreActionsOpen} aria-controls="drawer-more-actions-popover" onClick={() => setMoreActionsOpen((open) => !open)}><MoreHorizontal size={19} aria-hidden="true" /></button>
@@ -1264,15 +1278,18 @@ export default function App({ headerAction, design }: { headerAction?: ReactNode
             <nav className="art-category-tabs" aria-label={t('Your collections')} role="tablist">{categories.map((entry,index)=>{const Icon=categoryIcons[entry.id];return <button key={entry.id} role="tab" tabIndex={category===entry.id?0:-1} className={category===entry.id?'is-active':''} aria-selected={category===entry.id} onKeyDown={event=>handleCategoryKey(event,index)} onClick={(e)=>{selectCategory(entry.id);e.currentTarget.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});}}><Icon size={15}/><span>{categoryCopy(entry.id,t).label}</span><small>{counts[entry.id]}</small></button>})}</nav>
             <header className="topbar">
               {design === 'rework' && !isMobile && <div className="rw-art-heading"><h1>Art</h1></div>}
-              <div className="m-art-title-block"><span className="eyebrow">{definition.eyebrow}</span><h1>{definition.label}</h1></div>
+              <div className="m-art-title-block">
+                <span className="eyebrow">{isMobile ? `${collectionCategoryItems.length} classés · ${Math.round(comparisons)} duels` : definition.eyebrow}</span>
+                <h1>{definition.label}</h1>
+              </div>
               <div className="top-actions">{headerAction}<button className={`button button--outline statistics-toggle ${view === 'statistics' ? 'active' : ''}`} onClick={() => setView(view === 'statistics' ? 'ladder' : 'statistics')}>{view === 'statistics' ? <ListTree size={17} /> : <BarChart3 size={17} />}{view === 'statistics' ? t('View ladder') : t('Statistics')}</button>{shelf === 'collection' && <button className="button button--outline duel-start" disabled={collectionCategoryItems.length < 2} onClick={() => openDuel()}><Swords size={17} />{t('Start a duel')}<kbd>{shortcutLabel(preferences.shortcuts.startDuel)}</kbd></button>}<button className="button button--primary add-item-button" onClick={() => setShowAdd(true)}><Plus size={17} />{shelf === 'collection' ? `${t('Add')} ${definition.singular.toLocaleLowerCase()}` : t('Add to watchlist')}<kbd>{shortcutLabel(preferences.shortcuts.addItem)}</kbd></button></div>
             </header>
-            {view === 'statistics' ? <StatisticsDashboard items={collectionCategoryItems} matches={matchHistory} loading={statisticsLoading} onSelect={setSelected} onFight={openDuel} /> : <><section className="overview" aria-label={t('Collection summary')}>
+            {view === 'statistics' ? <StatisticsDashboard items={collectionCategoryItems} matches={matchHistory} loading={statisticsLoading} onSelect={setSelected} onFight={openDuel} /> : <>{!isMobile && <section className="overview" aria-label={t('Collection summary')}>
               <div className="stat stat--leader"><span className="stat-icon"><KonomiMark /></span><div><small>{t('Current favorite')}</small><strong>{collectionCategoryItems[0]?.title ?? t('Nothing ranked')}</strong><span>{collectionCategoryItems[0]?.creator ?? t('Add an item to begin')}</span></div></div>
               <div className="stat"><span className="stat-icon"><BarChart3 /></span><div><small>{t('Collection')}</small><strong>{collectionCategoryItems.length}</strong><span>{definition.label.toLocaleLowerCase()} {t('ranked')}</span></div></div>
               <div className="stat"><span className="stat-icon"><Swords /></span><div><small>{t('Decisions made')}</small><strong>{Math.round(comparisons)}</strong><span>{t('head-to-head choices')}</span></div></div>
               <div className="stat"><span className="stat-icon"><Zap /></span><div><small>{t('Fast-track')}</small><strong>{provisional}</strong><span>{t('still finding their place')}</span></div></div>
-            </section>
+            </section>}
             <section className="collection" aria-labelledby="ladder-heading">
               <div className="section-head"><h2 id="ladder-heading">{shelf === 'collection' ? design === 'rework' && collectionView === 'covers' ? preferences.language === 'fr' ? 'Votre galerie' : 'Your gallery' : t('Your ladder') : t('Watchlist')}</h2></div>
               {design !== 'rework' && shelf === 'collection' && <PeriodHighlights items={collectionCategoryItems} onSelect={setSelected} onApplyPeriod={(start, end) => { setYearFrom(String(start)); setYearTo(String(end)); setShowFilters(true); }} />}

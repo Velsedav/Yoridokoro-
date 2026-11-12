@@ -455,7 +455,8 @@ export default function Layout() {
                             <Outlet />
                         </div>
                     </main>
-                    <footer className="obsidian-quote-bar" aria-label={language === 'fr' ? 'Citation' : 'Quote'}>
+                    {!isMobile && (
+                        <footer className="obsidian-quote-bar" aria-label={language === 'fr' ? 'Citation' : 'Quote'}>
                             {rework && <span className="rw-quote-mark" aria-hidden="true">“</span>}
                             <span className={`obsidian-quote-text ${animClass}`}>
                                 {currentQuote}
@@ -468,7 +469,8 @@ export default function Layout() {
                             >
                                 <Pencil size={12} />
                             </button>
-                    </footer>
+                        </footer>
+                    )}
                 </div>
 
                 {editorOpen && (
@@ -480,7 +482,7 @@ export default function Layout() {
 
                 <CloseOverlay />
                 <MetacognitionGate />
-                <ArgonautenFloatingPod />
+                {!isMobile && <ArgonautenFloatingPod />}
 
                 {playniteWarning && (
                     <aside className="playnite-import-warning" role="status" aria-live="polite">

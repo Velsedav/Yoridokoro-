@@ -508,6 +508,74 @@ export default function BingoDashboard() {
             )
           })}
         </div>
+      ) : isMobile ? (
+        <div className="m-bingo-mobile-cards" role="list" aria-label={t('bingoals.grid_aria')}>
+          {displayedVisualCells.map(({ cell: visualCell }) => {
+            if (visualCell.kind === 'blocked') return null
+            const c = visualCell.value
+            if (!c.objective_id || !c.objective) {
+              return (
+                <button
+                  key={c.slot_index}
+                  type="button"
+                  className="m-bingo-obj-empty-btn"
+                  disabled={loading || loadError}
+                  onClick={() => { playSFX(SFX.BINGO_ADD); setCreateSlot(c.slot_index) }}
+                >
+                  <Plus size={16} />
+                  <span>{t('bingoals.add_objective')} (Case #{c.slot_index + 1})</span>
+                </button>
+              )
+            }
+            const obj = c.objective
+            const subs = subMap.get(obj.id) ?? []
+            const pct = c.percent !== null ? Math.round(c.percent * 100) : 0
+            const isDone = (c.percent ?? 0) >= 1
+            const progressText = objectiveProgressLabel(obj, subs)
+            const days = daysAgo(c.last_progress_at)
+            const status = lastStatus(days, obj.frequency_days)
+            const lastText = days === null ? 'Jamais' : days === 0 ? 'Aujourd’hui' : `Il y a ${days}j`
+            return (
+              <article
+                key={c.slot_index}
+                role="listitem"
+                className={`m-bingo-obj-card${isDone ? ' is-done' : ''}`}
+                onClick={() => { playSFX(SFX.ENTER_MENU); nav(`/bingoals/objective/${obj.id}`) }}
+              >
+                <div className="m-bingo-obj-thumb">
+                  {obj.cover_data ? (
+                    <img src={obj.cover_data} alt="" loading="lazy" />
+                  ) : (
+                    <span>{pct}%</span>
+                  )}
+                </div>
+                <div className="m-bingo-obj-main">
+                  <div className="m-bingo-obj-top">
+                    <strong className="m-bingo-obj-title">{obj.title}</strong>
+                    <span className={`m-bingo-obj-pct${isDone ? ' is-done' : ''}`}>
+                      {isDone ? '✓ 100%' : `${pct}%`}
+                    </span>
+                  </div>
+                  <div className="m-bingo-obj-bar">
+                    <div style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+                  </div>
+                  <div className="m-bingo-obj-meta">
+                    <span>{progressText}</span>
+                    {c.total_ms > 0 && (
+                      <>
+                        <span>·</span>
+                        <span>{formatDuration(c.total_ms)}</span>
+                      </>
+                    )}
+                    <span>·</span>
+                    <span className={`m-bingo-status-text is-${status}`}>{lastText}</span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="m-bingo-obj-arrow" />
+              </article>
+            )
+          })}
+        </div>
       ) : (
         <div
           ref={gridRef}

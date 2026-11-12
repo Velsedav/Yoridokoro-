@@ -134,6 +134,7 @@ function TopBar({ todayHours, weekHours, filter, onFilterChange, view, onViewCha
 
 export default function ObsidianHome() {
   const rework = useRework()
+  const isMobile = useIsMobile()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { subjects, studyTime, allChapters, loading, setSubjects, setAllChapters } = useObsidianData()
@@ -402,15 +403,14 @@ export default function ObsidianHome() {
             onArchiveReview={archiveReview}
           />
         </details>
-        {view === 'list' && (
+        {(isMobile || view === 'list') ? (
           <ListView
             subjects={filtered}
             allChapters={allChapters}
             onStart={startSubject}
             onEdit={setEditingSubject}
           />
-        )}
-        {view === 'board' && (
+        ) : (
           <BoardView
             subjects={filtered}
             allChapters={allChapters}

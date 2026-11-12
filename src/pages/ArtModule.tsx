@@ -26,6 +26,12 @@ const mobileArtOverrides = `
     justify-content: space-between;
     padding: 10px 14px 0;
   }
+  .m-drawer-QuickNav .drawer-close {
+    position: static;
+    top: auto;
+    right: auto;
+    margin-left: auto;
+  }
   .m-drawer-stepper {
     display: inline-flex;
     align-items: center;
@@ -49,6 +55,46 @@ const mobileArtOverrides = `
     border-color: var(--accent) !important;
     font-weight: 700 !important;
   }
+  .drawer-management-button--danger {
+    display: none;
+  }
+  .quote-carousel-controls--under {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    width: 100%;
+  }
+  .quote-carousel-controls--under .quote-nav-btn {
+    width: 100%;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface-raised);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .quote-carousel-controls--under .quote-nav-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .quote-carousel-indicator {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    padding: 0 6px;
+    white-space: nowrap;
+  }
 
   @media (max-width: 860px) {
     :host,
@@ -58,13 +104,17 @@ const mobileArtOverrides = `
     .app.rw-art,
     .app.is-mobile-art,
     .main,
-    .rw-art .main {
+    .rw-art .main,
+    :host([data-theme^="yoridokoro-"]) .rw-art .main {
+      width: 100% !important;
+      max-width: 100% !important;
       height: auto !important;
       min-height: 0 !important;
       overflow-x: hidden !important;
       padding-bottom: 32px !important;
       display: flex !important;
       flex-direction: column !important;
+      box-sizing: border-box !important;
     }
 
     /* 1. Single-row horizontal swipeable Category Strip (NEVER wraps into multiple rows!) */
@@ -75,6 +125,9 @@ const mobileArtOverrides = `
       position: sticky !important;
       top: 0 !important;
       z-index: 30 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
       margin: 0 !important;
       padding: 8px 12px !important;
       display: flex !important;
@@ -124,9 +177,12 @@ const mobileArtOverrides = `
     :host([data-theme^="yoridokoro-"]) .topbar,
     :host([data-theme^="yoridokoro-"]) .rw-art .topbar {
       order: -2 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
       min-height: 0 !important;
       height: auto !important;
-      padding: 10px 12px 8px !important;
+      padding: 10px 12px 6px !important;
       margin: 0 !important;
       display: flex !important;
       flex-direction: column !important;
@@ -134,17 +190,21 @@ const mobileArtOverrides = `
       gap: 8px !important;
       border-bottom: 0 !important;
     }
+    :host .topbar > div.m-art-title-block,
     :host([data-theme^="yoridokoro-"]) .rw-art .topbar > div.m-art-title-block {
       display: flex !important;
       align-items: baseline !important;
       justify-content: space-between !important;
       gap: 8px !important;
+      width: 100% !important;
     }
     :host .topbar .eyebrow,
-    :host([data-theme^="yoridokoro-"]) .topbar .eyebrow {
-      font-size: 9px !important;
+    :host([data-theme^="yoridokoro-"]) .topbar .eyebrow,
+    :host([data-theme^="yoridokoro-"]) .rw-art .topbar .eyebrow {
+      font-size: 10px !important;
       margin: 0 !important;
       order: 2 !important;
+      white-space: nowrap !important;
     }
     :host .topbar h1,
     :host([data-theme^="yoridokoro-"]) .topbar h1,
@@ -158,6 +218,8 @@ const mobileArtOverrides = `
     :host([data-theme^="yoridokoro-"]) .top-actions,
     :host([data-theme^="yoridokoro-"]) .rw-art .top-actions {
       width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
       margin: 0 !important;
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -165,13 +227,16 @@ const mobileArtOverrides = `
     }
     :host .top-actions button,
     :host([data-theme^="yoridokoro-"]) .top-actions button,
+    :host([data-theme^="yoridokoro-"]) .rw-art .top-actions button,
     :host .art-time-button {
       min-height: 36px !important;
       height: 36px !important;
-      padding: 0 10px !important;
+      padding: 0 8px !important;
       font-size: 11.5px !important;
       justify-content: center !important;
       width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
       white-space: nowrap !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
@@ -183,122 +248,140 @@ const mobileArtOverrides = `
       display: none !important;
     }
 
-    /* 3. Ultra-compact Overview Stats Strip */
+    /* 3. Hide Desktop Overview Strip on Mobile */
     :host .overview,
     :host([data-theme^="yoridokoro-"]) .overview,
     :host([data-theme^="yoridokoro-"]) .rw-art .overview {
-      order: -1 !important;
-      padding: 4px 12px 8px !important;
-      margin: 0 !important;
-      display: grid !important;
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-      gap: 6px !important;
-    }
-    :host .overview .stat--leader,
-    :host([data-theme^="yoridokoro-"]) .rw-art .overview .stat--leader {
-      display: none !important;
-    }
-    :host .overview .stat,
-    :host([data-theme^="yoridokoro-"]) .overview .stat,
-    :host([data-theme^="yoridokoro-"]) .rw-art .overview .stat {
-      padding: 6px 8px !important;
-      border: 1px solid var(--line) !important;
-      border-radius: 8px !important;
-      background: var(--surface-raised) !important;
-      display: flex !important;
-      flex-direction: column !important;
-      align-items: flex-start !important;
-      gap: 2px !important;
-    }
-    :host .overview .stat-icon {
-      display: none !important;
-    }
-    :host .overview .stat small {
-      font-size: 9.5px !important;
-      line-height: 1.1 !important;
-    }
-    :host .overview .stat strong,
-    :host([data-theme^="yoridokoro-"]) .rw-art .overview .stat strong {
-      font-size: 15px !important;
-      line-height: 1.15 !important;
-    }
-    :host .overview .stat span {
       display: none !important;
     }
 
-    /* 4. Collection Section & Toolbar */
+    /* 4. Collection Section & Toolbar (100% viewport fit, zero overflow!) */
     :host .collection,
     :host([data-theme^="yoridokoro-"]) .collection,
     :host([data-theme^="yoridokoro-"]) .rw-art .collection {
-      padding: 6px 12px 32px !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      padding: 4px 12px 32px !important;
+      margin: 0 !important;
     }
-    :host .section-head {
+    :host .section-head,
+    :host([data-theme^="yoridokoro-"]) .rw-art .section-head {
       display: none !important;
     }
     :host .toolbar,
+    :host([data-theme^="yoridokoro-"]) .toolbar,
     :host([data-theme^="yoridokoro-"]) .rw-art .toolbar {
       display: flex !important;
       flex-wrap: wrap !important;
+      align-items: center !important;
       gap: 6px !important;
-      margin-bottom: 10px !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      margin: 0 0 10px !important;
+      padding: 0 !important;
     }
     :host .toolbar .search-box,
+    :host([data-theme^="yoridokoro-"]) .toolbar .search-box,
     :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .search-box {
       flex: 1 1 100% !important;
       width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
       min-height: 38px !important;
       height: 38px !important;
       padding: 0 10px !important;
+      box-sizing: border-box !important;
       order: 1 !important;
     }
-    :host .toolbar .search-box input {
-      min-height: 36px !important;
+    :host .toolbar .search-box input,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .search-box input {
+      min-height: 34px !important;
+      height: 34px !important;
+      min-width: 0 !important;
+      width: 100% !important;
       font-size: 13px !important;
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
     }
-    :host .toolbar .shelf-toggle {
+    :host .toolbar .shelf-toggle,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .shelf-toggle {
       order: 2 !important;
-      flex: 1 1 auto !important;
+      flex: 1 1 130px !important;
+      min-width: 0 !important;
       display: flex !important;
       min-height: 34px !important;
+      height: 34px !important;
+      box-sizing: border-box !important;
     }
-    :host .toolbar .shelf-toggle button {
+    :host .toolbar .shelf-toggle button,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .shelf-toggle button {
       flex: 1 1 50% !important;
+      min-width: 0 !important;
       font-size: 11.5px !important;
-      padding: 0 8px !important;
+      padding: 0 6px !important;
       min-height: 28px !important;
+      height: 28px !important;
+      white-space: nowrap !important;
     }
-    :host .toolbar .filter-button {
+    :host .toolbar .filter-button,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .filter-button {
       order: 3 !important;
+      flex: 0 0 auto !important;
       min-height: 34px !important;
       height: 34px !important;
       padding: 0 10px !important;
       font-size: 11.5px !important;
+      box-sizing: border-box !important;
+      white-space: nowrap !important;
     }
-    :host .toolbar .copy-list-button {
-      display: none !important;
-    }
-    :host .toolbar .view-toggle {
+    :host .toolbar .view-toggle,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .view-toggle {
       order: 4 !important;
+      flex: 0 0 auto !important;
+      margin-left: 0 !important;
       min-height: 34px !important;
+      height: 34px !important;
+      box-sizing: border-box !important;
     }
-    :host .toolbar .view-toggle button {
+    :host .toolbar .view-toggle button,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .view-toggle button {
       min-height: 28px !important;
-      width: 32px !important;
+      height: 28px !important;
+      width: 30px !important;
       padding: 0 !important;
+    }
+    :host .toolbar .completion-button,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .completion-button {
+      order: 5 !important;
+      flex: 1 1 100% !important;
+      width: 100% !important;
+      justify-content: center !important;
+    }
+    :host .toolbar .copy-list-button,
+    :host([data-theme^="yoridokoro-"]) .rw-art .toolbar .copy-list-button {
+      display: none !important;
     }
 
     /* 5. Clean 2-Column Mobile Filter Panel (No squished selects!) */
     :host .filter-panel,
-    :host([data-theme^="yoridokoro-"]) .filter-panel {
+    :host([data-theme^="yoridokoro-"]) .filter-panel,
+    :host([data-theme^="yoridokoro-"]) .rw-art .filter-panel {
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 8px !important;
       padding: 12px !important;
       margin-bottom: 12px !important;
       border-radius: 12px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
     }
     :host .filter-panel > label:nth-child(1),
-    :host .filter-panel > label:nth-child(2) {
+    :host .filter-panel > label:nth-child(2),
+    :host([data-theme^="yoridokoro-"]) .rw-art .filter-panel > label:nth-child(1),
+    :host([data-theme^="yoridokoro-"]) .rw-art .filter-panel > label:nth-child(2) {
       grid-column: 1 / -1 !important;
     }
     :host .filter-panel > label {
@@ -318,6 +401,7 @@ const mobileArtOverrides = `
       height: 38px !important;
       padding: 6px 10px !important;
       font-size: 13px !important;
+      box-sizing: border-box !important;
     }
     :host .filter-panel > .text-button {
       grid-column: 1 / -1 !important;
@@ -332,6 +416,7 @@ const mobileArtOverrides = `
     :host .cover-rank-groups,
     :host .cover-rank-groups--mobile {
       display: block !important;
+      width: 100% !important;
     }
     :host .cover-grid,
     :host .cover-grid--letterboxd,
@@ -342,6 +427,8 @@ const mobileArtOverrides = `
       gap: 6px !important;
       padding: 0 !important;
       margin: 0 !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
       list-style: none !important;
     }
     :host .cover-card,
@@ -458,7 +545,8 @@ const mobileArtOverrides = `
     }
 
     /* 8. Period Highlights Strip on Mobile */
-    :host .period-highlights {
+    :host .period-highlights,
+    :host([data-theme^="yoridokoro-"]) .rw-art .period-highlights {
       margin-top: 18px !important;
       padding: 12px !important;
     }
@@ -471,29 +559,40 @@ const mobileArtOverrides = `
     :host .overlay--drawer,
     :host .settings-overlay,
     :host([data-theme^="yoridokoro-"]) .overlay,
-    :host([data-theme^="yoridokoro-"]) .overlay--drawer {
+    :host([data-theme^="yoridokoro-"]) .overlay--drawer,
+    :host([data-theme^="yoridokoro-"]) .rw-art .overlay,
+    :host([data-theme^="yoridokoro-"]) .rw-art .overlay--drawer {
       position: fixed !important;
       top: 56px !important;
       left: 0 !important;
       right: 0 !important;
       bottom: 62px !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
       height: auto !important;
-      z-index: 900 !important;
+      z-index: 950 !important;
       padding: 0 !important;
+      margin: 0 !important;
       display: flex !important;
-      align-items: flex-end !important;
+      align-items: stretch !important;
       justify-content: center !important;
-      background: rgba(4, 8, 12, 0.78) !important;
-      backdrop-filter: blur(6px) !important;
+      background: rgba(4, 8, 12, 0.84) !important;
+      backdrop-filter: blur(8px) !important;
+      box-sizing: border-box !important;
     }
     :host .drawer,
     :host .drawer--notebook,
+    :host .drawer.drawer--notebook,
     :host([data-theme^="yoridokoro-"]) .drawer,
-    :host([data-theme^="yoridokoro-"]) .drawer--notebook {
+    :host([data-theme^="yoridokoro-"]) .drawer--notebook,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer.drawer--notebook {
       width: 100% !important;
       max-width: 100vw !important;
+      min-width: 0 !important;
       height: 100% !important;
       max-height: 100% !important;
+      margin: 0 !important;
       border-radius: 16px 16px 0 0 !important;
       border: 0 !important;
       border-top: 1px solid var(--line) !important;
@@ -501,96 +600,237 @@ const mobileArtOverrides = `
       flex-direction: column !important;
       overflow-y: auto !important;
       overflow-x: hidden !important;
-      padding: 0 0 20px !important;
+      padding: 0 0 28px !important;
+      box-sizing: border-box !important;
     }
     :host .m-drawer-QuickNav {
       position: sticky !important;
       top: 0 !important;
-      z-index: 10 !important;
-      padding: 10px 12px !important;
-      background: color-mix(in srgb, var(--surface-raised) 94%, transparent) !important;
-      backdrop-filter: blur(10px) !important;
+      z-index: 20 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 10px 14px !important;
+      background: color-mix(in srgb, var(--surface-raised) 96%, transparent) !important;
+      backdrop-filter: blur(12px) !important;
       border-bottom: 1px solid var(--line) !important;
+      flex-shrink: 0 !important;
+    }
+    :host .m-drawer-QuickNav .drawer-close,
+    :host([data-theme^="yoridokoro-"]) .rw-art .m-drawer-QuickNav .drawer-close {
+      position: static !important;
+      top: auto !important;
+      right: auto !important;
+      margin-left: auto !important;
+      width: 34px !important;
+      height: 34px !important;
+      border-radius: 8px !important;
+      border: 1px solid var(--line) !important;
+      background: var(--surface-subtle) !important;
+      color: var(--text) !important;
+      display: inline-grid !important;
+      place-items: center !important;
     }
     :host .drawer > .drawer-close {
       display: none !important;
     }
-    :host .drawer > .artwork {
-      width: 112px !important;
-      height: 168px !important;
+    :host .drawer > .artwork,
+    :host .drawer--notebook > .artwork,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer > .artwork,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook > .artwork {
+      width: 116px !important;
+      height: 172px !important;
       min-height: 0 !important;
-      max-height: 168px !important;
-      margin: 12px auto 4px !important;
+      max-height: 172px !important;
+      margin: 14px auto 4px !important;
       border-radius: 8px !important;
       overflow: hidden !important;
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important;
       flex-shrink: 0 !important;
     }
     :host .drawer-body,
-    :host([data-theme^="yoridokoro-"]) .drawer-body {
+    :host .drawer--notebook .drawer-body,
+    :host([data-theme^="yoridokoro-"]) .drawer-body,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer-body,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook .drawer-body {
       display: flex !important;
       flex-direction: column !important;
-      padding: 12px 14px !important;
-      gap: 14px !important;
+      padding: 12px 14px 20px !important;
+      gap: 16px !important;
+      height: auto !important;
+      overflow: visible !important;
+      box-sizing: border-box !important;
     }
     :host .drawer-details-column,
-    :host .drawer-content-column {
+    :host .drawer-content-column,
+    :host .drawer--notebook .drawer-details-column,
+    :host .drawer--notebook .drawer-content-column,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook .drawer-details-column,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook .drawer-content-column {
       padding: 0 !important;
+      margin: 0 !important;
+      min-height: 0 !important;
       border: 0 !important;
       width: 100% !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 12px !important;
     }
-    :host .drawer h2#item-title {
+    :host .drawer h2#item-title,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer h2#item-title {
       font-size: 20px !important;
       line-height: 1.2 !important;
       margin: 4px 0 !important;
     }
-    :host .metadata {
+    :host .metadata,
+    :host([data-theme^="yoridokoro-"]) .rw-art .metadata {
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 8px 12px !important;
-      margin-top: 12px !important;
+      margin-top: 8px !important;
       padding: 10px 12px !important;
       border-radius: 10px !important;
       background: var(--surface) !important;
       border: 1px solid var(--line) !important;
     }
-    :host .item-quote {
+    :host .item-quotes {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 8px !important;
       padding: 12px !important;
+      border-radius: 12px !important;
+      background: color-mix(in srgb, var(--surface-subtle) 85%, transparent) !important;
+      border: 1px solid var(--line) !important;
+    }
+    :host .quote-section-head {
+      min-height: 0 !important;
+      margin-bottom: 4px !important;
+      padding-bottom: 6px !important;
+      border-bottom: 1px solid var(--line) !important;
+    }
+    :host .quote-section-head > div:first-child {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      width: 100% !important;
+    }
+    :host .quote-section-head span {
+      font-size: 15px !important;
+      font-weight: 700 !important;
+    }
+    :host .item-quote,
+    :host .drawer--notebook .item-quote,
+    :host([data-theme^="yoridokoro-"]) .rw-art .item-quote,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook .item-quote {
+      padding: 14px 14px 14px 16px !important;
       border-radius: 10px !important;
+      border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)) !important;
+      border-left: 3px solid var(--accent) !important;
+      background: var(--surface-raised) !important;
+      box-shadow: none !important;
+      box-sizing: border-box !important;
     }
     :host .item-quote::before {
       display: none !important;
     }
-    :host .item-quote blockquote {
-      font-size: 14px !important;
-      line-height: 1.45 !important;
+    :host .item-quote blockquote,
+    :host .drawer--notebook .item-quote blockquote,
+    :host([data-theme^="yoridokoro-"]) .rw-art .item-quote blockquote,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook .item-quote blockquote {
+      font-size: 14.5px !important;
+      line-height: 1.5 !important;
       margin: 0 !important;
+      color: var(--text) !important;
     }
-    :host .drawer-management {
+    :host .quote-carousel-controls--under {
+      display: grid !important;
+      grid-template-columns: 1fr auto 1fr !important;
+      align-items: center !important;
+      gap: 8px !important;
+      margin-top: 6px !important;
+      width: 100% !important;
+    }
+    :host .quote-carousel-controls--under .quote-nav-btn {
+      width: 100% !important;
+      height: 40px !important;
+      min-height: 40px !important;
+      padding: 0 10px !important;
+      border-radius: 8px !important;
+      border: 1px solid var(--line) !important;
+      background: var(--surface-raised) !important;
+      color: var(--text) !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 6px !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+    }
+    :host .drawer--notebook .drawer-note-footer,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook .drawer-note-footer {
+      margin-top: 0 !important;
+      padding: 12px !important;
+      border-radius: 10px !important;
+      border: 1px solid var(--line) !important;
+      background: var(--surface) !important;
+    }
+    :host .drawer--notebook .drawer-note-footer h3 {
+      padding-top: 0 !important;
+      border-top: 0 !important;
+      font-size: 14px !important;
+      margin: 0 0 6px !important;
+    }
+    :host .drawer-management,
+    :host .drawer--notebook .drawer-management,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer--notebook .drawer-management {
+      width: 100% !important;
+      margin: 0 !important;
       padding: 12px 0 0 !important;
       border-top: 1px solid var(--line) !important;
+      background: transparent !important;
+      box-sizing: border-box !important;
     }
     :host .drawer-management h3 {
       display: none !important;
     }
-    :host .drawer-management-actions {
-      display: flex !important;
-      flex-wrap: wrap !important;
+    :host .drawer-management-actions,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer-management-actions {
+      display: block !important;
+      width: 100% !important;
+    }
+    :host .drawer-management-main,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer-management-main {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 8px !important;
-      align-items: center !important;
+      width: 100% !important;
     }
-    :host .drawer-management-main {
-      display: flex !important;
-      flex-wrap: wrap !important;
-      gap: 6px !important;
-      flex: 1 1 auto !important;
-    }
-    :host .drawer-management-button {
-      min-height: 36px !important;
-      padding: 0 11px !important;
+    :host .drawer-management-button,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer-management-button {
+      min-height: 40px !important;
+      height: 40px !important;
+      padding: 0 10px !important;
       font-size: 12px !important;
-      flex: 1 1 auto !important;
+      font-weight: 650 !important;
+      width: 100% !important;
       justify-content: center !important;
+      border: 1px solid var(--line) !important;
+      border-radius: 8px !important;
+      background: var(--surface-raised) !important;
+      box-sizing: border-box !important;
+    }
+    :host .drawer-management-button--danger,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer-management-button--danger {
+      display: inline-flex !important;
+      color: #f87171 !important;
+      border-color: rgba(248, 113, 113, 0.35) !important;
+      background: rgba(248, 113, 113, 0.08) !important;
+    }
+    :host .drawer-more-actions,
+    :host([data-theme^="yoridokoro-"]) .rw-art .drawer-more-actions {
+      display: none !important;
     }
 
     /* Add / Edit / Completion Modals */
