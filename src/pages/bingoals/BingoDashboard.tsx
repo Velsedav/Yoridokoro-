@@ -319,58 +319,94 @@ export default function BingoDashboard() {
 
   return (
     <div className="bingoals-root bingo-dashboard-page fade-in">
-      {rework && <PageHeading title="Objectifs" />}
-      <header className="bingo-page-header">
-        <div className="bingo-page-identity">
-          <span className="bingo-page-eyebrow">
-            <Target size={14} aria-hidden="true" />
-            {t('bingoals.eyebrow') || 'Annual direction'}
-          </span>
-          <h1>{t('bingoals.page_title')}</h1>
-          <p>{t('bingoals.page_subtitle') || 'Keep the objectives that matter visible, concrete and ready to act on.'}</p>
-        </div>
-        <div className="bingo-toolbar">
-          <div className="bingo-year-nav">
-            {selectedYear !== CURRENT_YEAR && (
+      {rework && !isMobile && <PageHeading title="Objectifs" />}
+      {!isMobile ? (
+        <header className="bingo-page-header">
+          <div className="bingo-page-identity">
+            <span className="bingo-page-eyebrow">
+              <Target size={14} aria-hidden="true" />
+              {t('bingoals.eyebrow') || 'Annual direction'}
+            </span>
+            <h1>{t('bingoals.page_title')}</h1>
+            <p>{t('bingoals.page_subtitle') || 'Keep the objectives that matter visible, concrete and ready to act on.'}</p>
+          </div>
+          <div className="bingo-toolbar">
+            <div className="bingo-year-nav">
+              {selectedYear !== CURRENT_YEAR && (
+                <button
+                  className="btn bingo-year-return"
+                  onClick={() => setSelectedYear(CURRENT_YEAR)}
+                >
+                  {t('bingoals.return_year').replace('{year}', String(CURRENT_YEAR))}
+                </button>
+              )}
               <button
-                className="btn bingo-year-return"
-                onClick={() => setSelectedYear(CURRENT_YEAR)}
+                className="btn btn-icon bingo-year-btn"
+                aria-label={t('bingoals.prev_year')}
+                disabled={!yearsReady || selectedYear <= oldestYear}
+                onClick={() => setSelectedYear(y => y - 1)}
               >
-                {t('bingoals.return_year').replace('{year}', String(CURRENT_YEAR))}
+                <ChevronLeft size={16} />
               </button>
-            )}
+              <span className="bingo-year-label">{selectedYear}</span>
+              <button
+                className="btn btn-icon bingo-year-btn"
+                aria-label={t('bingoals.next_year')}
+                disabled={selectedYear >= CURRENT_YEAR + 5}
+                onClick={() => setSelectedYear(y => y + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+            <button className="btn bingo-grid-settings-btn" onClick={() => { setGridNotice(''); setShowGridSettings(true) }}>
+              <LayoutGrid size={16} /> {gridLayout === '3x3-center' ? '3×3 − centre' : gridLayout.replace('x', '×')}
+            </button>
+          </div>
+        </header>
+      ) : (
+        <div className="m-bingo-header-bar">
+          <div className="m-bingo-year-pill">
             <button
-              className="btn btn-icon bingo-year-btn"
-              aria-label={t('bingoals.prev_year')}
+              type="button"
+              className="m-bingo-year-arrow"
               disabled={!yearsReady || selectedYear <= oldestYear}
               onClick={() => setSelectedYear(y => y - 1)}
+              aria-label={t('bingoals.prev_year')}
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="bingo-year-label">{selectedYear}</span>
+            <strong>{selectedYear}</strong>
             <button
-              className="btn btn-icon bingo-year-btn"
-              aria-label={t('bingoals.next_year')}
+              type="button"
+              className="m-bingo-year-arrow"
               disabled={selectedYear >= CURRENT_YEAR + 5}
               onClick={() => setSelectedYear(y => y + 1)}
+              aria-label={t('bingoals.next_year')}
             >
               <ChevronRight size={16} />
             </button>
           </div>
-          <button className="btn bingo-grid-settings-btn" onClick={() => { setGridNotice(''); setShowGridSettings(true) }}>
-            <LayoutGrid size={16} /> {gridLayout === '3x3-center' ? '3×3 − centre' : gridLayout.replace('x', '×')}
-          </button>
-          {isMobile && firstEmptySlotIndex !== null && (
+
+          <div className="m-bingo-header-actions">
             <button
               type="button"
-              className="btn btn-primary bingo-mobile-add-btn"
-              onClick={() => { playSFX(SFX.BINGO_ADD); setCreateSlot(firstEmptySlotIndex) }}
+              className="m-bingo-layout-btn"
+              onClick={() => { setGridNotice(''); setShowGridSettings(true) }}
             >
-              <Plus size={15} /> Objectif
+              <LayoutGrid size={14} /> {gridLayout === '3x3-center' ? '3×3−1' : gridLayout.replace('x', '×')}
             </button>
-          )}
+            {firstEmptySlotIndex !== null && (
+              <button
+                type="button"
+                className="m-bingo-add-pill"
+                onClick={() => { playSFX(SFX.BINGO_ADD); setCreateSlot(firstEmptySlotIndex) }}
+              >
+                <Plus size={15} /> Objectif
+              </button>
+            )}
+          </div>
         </div>
-      </header>
+      )}
 
       {isMobile && (
         <div className="m-bingo-filter-bar" role="tablist" aria-label="Filtrer les objectifs">
@@ -381,7 +417,7 @@ export default function BingoDashboard() {
             className={mobileFilter === 'all' ? 'is-active' : ''}
             onClick={() => setMobileFilter('all')}
           >
-            Objectifs ({occupiedCount})
+            Tous ({occupiedCount})
           </button>
           <button
             type="button"
@@ -399,18 +435,19 @@ export default function BingoDashboard() {
             className={mobileFilter === 'grid' ? 'is-active' : ''}
             onClick={() => setMobileFilter('grid')}
           >
-            Grille complète
+            Grille 4×4
           </button>
         </div>
       )}
 
-        {loadError && (
-          <div className="bingo-load-error" role="alert">
-            <span>La grille n’a pas pu être chargée. Vos objectifs n’ont pas été modifiés.</span>
-            <button type="button" className="btn" onClick={() => void load(selectedYear)}>Réessayer</button>
-          </div>
-        )}
+      {loadError && (
+        <div className="bingo-load-error" role="alert">
+          <span>La grille n’a pas pu être chargée. Vos objectifs n’ont pas été modifiés.</span>
+          <button type="button" className="btn" onClick={() => void load(selectedYear)}>Réessayer</button>
+        </div>
+      )}
 
+      {!isMobile && (
         <section className="bingo-next-step" aria-labelledby="bingo-next-step-title">
           <div>
             <span className="bingo-next-step-eyebrow">Prochaine petite victoire</span>
@@ -427,7 +464,51 @@ export default function BingoDashboard() {
             </button>
           )}
         </section>
+      )}
 
+      {isMobile && mobileFilter === 'grid' ? (
+        <div
+          className="m-bingo-board-4x4"
+          style={{ gridTemplateColumns: `repeat(${BINGO_LAYOUT_DEFINITIONS[gridLayout].columns}, minmax(0, 1fr))` }}
+        >
+          {visualCells.map((visualCell, visualIndex) => {
+            if (visualCell.kind === 'blocked') {
+              return <div key={`void-${visualIndex}`} className="m-bingo-board-void">✦</div>
+            }
+            const c = visualCell.value
+            if (!c.objective_id || !c.objective) {
+              return (
+                <button
+                  key={c.slot_index}
+                  type="button"
+                  className="m-bingo-board-empty"
+                  onClick={() => { playSFX(SFX.BINGO_ADD); setCreateSlot(c.slot_index) }}
+                >
+                  <span>+</span>
+                </button>
+              )
+            }
+            const pct = c.percent !== null ? Math.round(c.percent * 100) : 0
+            const isDone = (c.percent ?? 0) >= 1
+            const cover = c.objective.cover_data
+            return (
+              <button
+                key={c.slot_index}
+                type="button"
+                className={`m-bingo-board-cell${isDone ? ' is-done' : ''}`}
+                style={cover ? { backgroundImage: `linear-gradient(180deg, rgba(6,13,22,0.22), rgba(6,13,22,0.88)), url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+                onClick={() => { playSFX(SFX.ENTER_MENU); nav(`/bingoals/objective/${c.objective!.id}`) }}
+              >
+                <span className="m-bingo-board-pct">{pct}%</span>
+                <strong className="m-bingo-board-title">{c.objective.title}</strong>
+                <div className="m-bingo-board-bar">
+                  <div style={{ width: `${pct}%` }} />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      ) : (
         <div
           ref={gridRef}
           className={`grid bingo-grid--${gridLayout}${loading ? ' bingo-grid-loading' : ''}`}
@@ -475,6 +556,7 @@ export default function BingoDashboard() {
             );
           })}
         </div>
+      )}
 
         <CreateObjectiveModal
           slotIndex={createSlot}

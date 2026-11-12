@@ -1056,77 +1056,82 @@ export function MobileCareerView(props: MobileCareerViewProps) {
                       placeholder="En-tête ou accroche CV…"
                     />
 
-                    <BulletNoteEditor
-                      id="m-career-cover-letter"
-                      label="Lettre de motivation"
-                      icon={<FileCheck2 size={15} />}
-                      tone="cover-letter"
-                      bulletMode={false}
-                      minRows={4}
-                      headerAction={
-                        draft.cover_letter?.trim() ? (
-                          <button
-                            type="button"
-                            className="career-copy-btn"
-                            onClick={() => void handleCopyText('cover_letter', draft.cover_letter || '')}
-                          >
-                            <Copy size={12} /> {copiedField === 'cover_letter' ? 'Copié !' : 'Copier'}
-                          </button>
-                        ) : undefined
-                      }
-                      value={draft.cover_letter ?? ''}
-                      onChange={val => setDraft(d => ({ ...d, cover_letter: val }))}
-                      placeholder="Votre lettre de motivation…"
-                    />
+                        <BulletNoteEditor
+                          id="m-career-cover-letter"
+                          label="Lettre de motivation"
+                          icon={<FileCheck2 size={15} />}
+                          tone="cover-letter"
+                          bulletMode={false}
+                          minRows={4}
+                          headerAction={
+                            draft.cover_letter?.trim() ? (
+                              <button
+                                type="button"
+                                className="career-copy-btn"
+                                onClick={() => void handleCopyText('cover_letter', draft.cover_letter || '')}
+                              >
+                                <Copy size={12} /> {copiedField === 'cover_letter' ? 'Copié !' : 'Copier'}
+                              </button>
+                            ) : undefined
+                          }
+                          value={draft.cover_letter ?? ''}
+                          onChange={val => setDraft(d => ({ ...d, cover_letter: val }))}
+                          placeholder="Votre lettre de motivation…"
+                        />
 
-                    <BulletNoteEditor
-                      id="m-career-offer-content"
-                      label="Texte de l’offre"
-                      icon={<FileText size={15} />}
-                      tone="offer"
-                      bulletMode={false}
-                      minRows={3}
-                      value={draft.offer_content ?? ''}
-                      onChange={val => setDraft(d => ({ ...d, offer_content: val }))}
-                      placeholder="Collez l'annonce ici…"
-                    />
+                        <details className="m-done-drawer">
+                          <summary>Annonce, notes d’entretien & points forts</summary>
+                          <div className="m-sheet-subfields">
+                            <BulletNoteEditor
+                              id="m-career-offer-content"
+                              label="Texte de l’offre"
+                              icon={<FileText size={15} />}
+                              tone="offer"
+                              bulletMode={false}
+                              minRows={3}
+                              value={draft.offer_content ?? ''}
+                              onChange={val => setDraft(d => ({ ...d, offer_content: val }))}
+                              placeholder="Collez l'annonce ici…"
+                            />
 
-                    <BulletNoteEditor
-                      id="m-career-questions"
-                      label="Questions & Notes d’entretien"
-                      icon={<HelpCircle size={15} />}
-                      tone="questions"
-                      bulletMode={true}
-                      minRows={3}
-                      value={draft.questions_notes ?? ''}
-                      onChange={val => setDraft(d => ({ ...d, questions_notes: val }))}
-                      placeholder="• Questions à poser…"
-                    />
+                            <BulletNoteEditor
+                              id="m-career-questions"
+                              label="Questions & Notes d’entretien"
+                              icon={<HelpCircle size={15} />}
+                              tone="questions"
+                              bulletMode={true}
+                              minRows={3}
+                              value={draft.questions_notes ?? ''}
+                              onChange={val => setDraft(d => ({ ...d, questions_notes: val }))}
+                              placeholder="• Questions à poser…"
+                            />
 
-                    <BulletNoteEditor
-                      id="m-career-research"
-                      label="Infos entreprise"
-                      icon={<Search size={15} />}
-                      tone="research"
-                      bulletMode={true}
-                      minRows={3}
-                      value={draft.research_notes ?? ''}
-                      onChange={val => setDraft(d => ({ ...d, research_notes: val }))}
-                      placeholder="• Infos clés sur l'entreprise…"
-                    />
+                            <BulletNoteEditor
+                              id="m-career-research"
+                              label="Infos entreprise"
+                              icon={<Search size={15} />}
+                              tone="research"
+                              bulletMode={true}
+                              minRows={3}
+                              value={draft.research_notes ?? ''}
+                              onChange={val => setDraft(d => ({ ...d, research_notes: val }))}
+                              placeholder="• Infos clés sur l'entreprise…"
+                            />
 
-                    <BulletNoteEditor
-                      id="m-career-advantages"
-                      label="Mes points forts"
-                      icon={<Lightbulb size={15} />}
-                      tone="advantages"
-                      bulletMode={true}
-                      minRows={3}
-                      value={draft.advantages_notes ?? ''}
-                      onChange={val => setDraft(d => ({ ...d, advantages_notes: val }))}
-                      placeholder="• Mes atouts pour ce poste…"
-                    />
-                  </div>
+                            <BulletNoteEditor
+                              id="m-career-advantages"
+                              label="Mes points forts"
+                              icon={<Lightbulb size={15} />}
+                              tone="advantages"
+                              bulletMode={true}
+                              minRows={3}
+                              value={draft.advantages_notes ?? ''}
+                              onChange={val => setDraft(d => ({ ...d, advantages_notes: val }))}
+                              placeholder="• Mes atouts pour ce poste…"
+                            />
+                          </div>
+                        </details>
+                      </div>
 
                   {!isCreating && selectedApp && (
                     <button

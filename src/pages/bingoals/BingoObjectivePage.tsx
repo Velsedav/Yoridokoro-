@@ -81,7 +81,11 @@ export default function BingoObjectivePage() {
   const { t } = useTranslation();
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [mobileTab, setMobileTab] = useState<'active' | 'steps' | 'memories'>('active')
+  const [mobileFilter, setMobileFilter] = useState<'all' | 'todo' | 'done' | 'memories'>('all')
+  const [mobileViewMode, setMobileViewMode] = useState<'wall' | 'list'>('wall')
+  const [mobileSearch, setMobileSearch] = useState('')
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
+  const sheetSwipeRef = useRef<{ x: number; y: number } | null>(null)
 
   const [obj, setObj] = useState<Objective | null>(null);
   const [subs, setSubs] = useState<Subobjective[]>([]);
@@ -367,76 +371,78 @@ export default function BingoObjectivePage() {
 
   return (
     <div className="bingoals-root bingo-objective-page fade-in">
-      <header className="objPage-header">
-        <div className="objPage-headerTitleRow">
-          <Link to="/bingoals" className="btn btn-icon" aria-label={t('bingoals.back')}>
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="objPage-headerIdentity">
-            <span className="objPage-eyebrow"><Target size={13} aria-hidden="true" /> {t('bingoals.detail_eyebrow')}</span>
-            <div className="objPage-titleEditRow">
-              <h1 className="objPage-headerTitleText">{obj.title}</h1>
-              <button
-                type="button"
-                className="btn btn-icon objPage-editObjectiveBtn"
-                onClick={() => setEditingObjective(true)}
-                aria-label={t('bingoals.edit_objective')}
-                title={`${t('bingoals.edit_objective')} (E)`}
-              >
-                <Pencil size={15} aria-hidden="true" />
-              </button>
-            </div>
-            <p>{t('bingoals.objective_subtitle')}</p>
-          </div>
-        </div>
-        <div className="objPage-commandbar">
-          <div className="objPage-progressCard">
-            <span className="objPage-headerProgressLabel">{t('bingoals.progress_label')} · {percentText}</span>
-            <strong>{objectiveProgressLabel(obj, subs)}</strong>
-            <div className="objPage-headerBar" role="progressbar" aria-label="Progression de l’objectif" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((percent ?? 0) * 100)}>
-              <div className="objPage-headerBarFill" style={{ width: `${(percent ?? 0) * 100}%` }} />
+      {!isMobile && (
+        <header className="objPage-header">
+          <div className="objPage-headerTitleRow">
+            <Link to="/bingoals" className="btn btn-icon" aria-label={t('bingoals.back')}>
+              <ArrowLeft size={20} />
+            </Link>
+            <div className="objPage-headerIdentity">
+              <span className="objPage-eyebrow"><Target size={13} aria-hidden="true" /> {t('bingoals.detail_eyebrow')}</span>
+              <div className="objPage-titleEditRow">
+                <h1 className="objPage-headerTitleText">{obj.title}</h1>
+                <button
+                  type="button"
+                  className="btn btn-icon objPage-editObjectiveBtn"
+                  onClick={() => setEditingObjective(true)}
+                  aria-label={t('bingoals.edit_objective')}
+                  title={`${t('bingoals.edit_objective')} (E)`}
+                >
+                  <Pencil size={15} aria-hidden="true" />
+                </button>
+              </div>
+              <p>{t('bingoals.objective_subtitle')}</p>
             </div>
           </div>
-          <div className="objPage-headerMeta">
-            <span><Target size={14} aria-hidden="true" /><small>{t('bingoals.last_action')}</small><strong>{formatDaysAgo(lastStudiedDays, t)}</strong></span>
-            <span className="objPage-timeMetric">
-              <Clock3 size={14} aria-hidden="true" />
-              <small>{t('bingoals.invested_time')}</small>
-              <strong>{displayedTime}</strong>
-              <span className="objPage-timePeriodToggle" role="group" aria-label={t('bingoals.time_period_aria')}>
-                {OBJECTIVE_TIME_PERIODS.map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    className={`objPage-timePeriodBtn${timePeriod === period ? ' objPage-timePeriodBtn--active' : ''}`}
-                    onClick={() => setTimePeriod(period)}
-                    aria-pressed={timePeriod === period}
-                  >
-                    {t(`bingoals.time_period_${period}`)}
-                  </button>
-                ))}
+          <div className="objPage-commandbar">
+            <div className="objPage-progressCard">
+              <span className="objPage-headerProgressLabel">{t('bingoals.progress_label')} · {percentText}</span>
+              <strong>{objectiveProgressLabel(obj, subs)}</strong>
+              <div className="objPage-headerBar" role="progressbar" aria-label="Progression de l’objectif" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((percent ?? 0) * 100)}>
+                <div className="objPage-headerBarFill" style={{ width: `${(percent ?? 0) * 100}%` }} />
+              </div>
+            </div>
+            <div className="objPage-headerMeta">
+              <span><Target size={14} aria-hidden="true" /><small>{t('bingoals.last_action')}</small><strong>{formatDaysAgo(lastStudiedDays, t)}</strong></span>
+              <span className="objPage-timeMetric">
+                <Clock3 size={14} aria-hidden="true" />
+                <small>{t('bingoals.invested_time')}</small>
+                <strong>{displayedTime}</strong>
+                <span className="objPage-timePeriodToggle" role="group" aria-label={t('bingoals.time_period_aria')}>
+                  {OBJECTIVE_TIME_PERIODS.map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      className={`objPage-timePeriodBtn${timePeriod === period ? ' objPage-timePeriodBtn--active' : ''}`}
+                      onClick={() => setTimePeriod(period)}
+                      aria-pressed={timePeriod === period}
+                    >
+                      {t(`bingoals.time_period_${period}`)}
+                    </button>
+                  ))}
+                </span>
               </span>
-            </span>
-          </div>
-          <div className="objPage-controls">
-            <div className="objPage-viewToggle" role="group" aria-label="Affichage de l’objectif">
-            {([['focus', t('bingoals.focus_view')], ['overview', t('bingoals.overview_view')]] as const).map(([v, label]) => (
-              <button
-                key={v}
-                className={`objPage-viewBtn${listView === v ? ' objPage-viewBtn--active' : ''}`}
-                onClick={() => setListView(v)}
-                aria-pressed={listView === v}
-              >
-                {label}
-              </button>
-            ))}
             </div>
-            <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER)} onClick={() => setAddOpen(true)}>
-              {t('bingoals.add_subobjective')}
-            </button>
+            <div className="objPage-controls">
+              <div className="objPage-viewToggle" role="group" aria-label="Affichage de l’objectif">
+              {([['focus', t('bingoals.focus_view')], ['overview', t('bingoals.overview_view')]] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  className={`objPage-viewBtn${listView === v ? ' objPage-viewBtn--active' : ''}`}
+                  onClick={() => setListView(v)}
+                  aria-pressed={listView === v}
+                >
+                  {label}
+                </button>
+              ))}
+              </div>
+              <button className="btn btn-primary" onMouseEnter={() => playSFX(SFX.HOVER)} onClick={() => setAddOpen(true)}>
+                {t('bingoals.add_subobjective')}
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {editingObjective && (
         <ObjectiveInlineEditor
@@ -449,177 +455,458 @@ export default function BingoObjectivePage() {
         />
       )}
 
-      <p className="bingo-keyboard-help objPage-keyboard-help" id="objective-keyboard-help">
-        <kbd>← ↑ ↓ →</kbd> {t('bingoals.keyboard_navigate')} <span>·</span>
-        <kbd>J</kbd>/<kbd>K</kbd> {t('bingoals.keyboard_previous_next')} <span>·</span>
-        <kbd>S</kbd> {t('bingoals.keyboard_timer')} <span>·</span>
-        <kbd>−</kbd>/<kbd>+</kbd> {t('bingoals.keyboard_progress')} <span>·</span>
-        <kbd>V</kbd> {t('bingoals.keyboard_view')} <span>·</span>
-        <kbd>N</kbd> {t('bingoals.keyboard_add')} <span>·</span>
-        <kbd>E</kbd> {t('bingoals.keyboard_edit')} <span>·</span>
-        <kbd>B</kbd> {t('bingoals.keyboard_back')}
-      </p>
+      {!isMobile && (
+        <p className="bingo-keyboard-help objPage-keyboard-help" id="objective-keyboard-help">
+          <kbd>← ↑ ↓ →</kbd> {t('bingoals.keyboard_navigate')} <span>·</span>
+          <kbd>J</kbd>/<kbd>K</kbd> {t('bingoals.keyboard_previous_next')} <span>·</span>
+          <kbd>S</kbd> {t('bingoals.keyboard_timer')} <span>·</span>
+          <kbd>−</kbd>/<kbd>+</kbd> {t('bingoals.keyboard_progress')} <span>·</span>
+          <kbd>V</kbd> {t('bingoals.keyboard_view')} <span>·</span>
+          <kbd>N</kbd> {t('bingoals.keyboard_add')} <span>·</span>
+          <kbd>E</kbd> {t('bingoals.keyboard_edit')} <span>·</span>
+          <kbd>B</kbd> {t('bingoals.keyboard_back')}
+        </p>
+      )}
 
       {/* ── Responsive layout ── */}
-      {isMobile ? (
-        <div className="m-obj-page-body">
-          <div className="m-obj-detail-tabs" role="tablist" aria-label="Sections de l’objectif">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mobileTab === 'active'}
-              className={mobileTab === 'active' ? 'is-active' : ''}
-              onClick={() => setMobileTab('active')}
-            >
-              Étape active
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mobileTab === 'steps'}
-              className={mobileTab === 'steps' ? 'is-active' : ''}
-              onClick={() => setMobileTab('steps')}
-            >
-              Étapes ({subs.length})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mobileTab === 'memories'}
-              className={mobileTab === 'memories' ? 'is-active' : ''}
-              onClick={() => setMobileTab('memories')}
-            >
-              Souvenirs ({media.length})
-            </button>
-          </div>
+      {isMobile ? (() => {
+        const doneCount = subs.filter(s => {
+          const { autoDone, hasTarget } = computeAutoDone(s)
+          return autoDone || (!hasTarget && !!s.is_done)
+        }).length
+        const todoCount = Math.max(0, subs.length - doneCount)
+        const query = mobileSearch.trim().toLowerCase()
+        const filteredSubs = subs.filter(s => {
+          const { autoDone, hasTarget } = computeAutoDone(s)
+          const done = autoDone || (!hasTarget && !!s.is_done)
+          if (mobileFilter === 'done' && !done) return false
+          if (mobileFilter === 'todo' && done) return false
+          if (mobileFilter === 'memories' && (mediaBySub.get(s.id)?.length ?? 0) === 0) return false
+          if (query && !s.title.toLowerCase().includes(query)) return false
+          return true
+        })
+        const activeSub = subs.find(x => x.id === activeSubId) ?? subs[0] ?? null
+        const activeIdx = activeSub ? subs.findIndex(x => x.id === activeSub.id) : -1
+        const runningSub = running ? subs.find(x => x.id === running.subId) ?? null : null
 
-          {subs.length === 0 ? (
-            <div className="objPage-empty">
-              <Target size={28} aria-hidden="true" />
-              <h2>{t('bingoals.empty_objective_title')}</h2>
-              <p>{t('bingoals.empty_objective_desc')}</p>
-              <button className="btn btn-primary" onClick={() => setAddOpen(true)}>{t('bingoals.add_subobjective')}</button>
-            </div>
-          ) : mobileTab === 'active' ? (
-            <div className="m-obj-active-cockpit">
-              {(() => {
-                const activeSub = subs.find(x => x.id === activeSubId) ?? subs[0]
-                if (!activeSub) return null
-                const currentIdx = subs.findIndex(x => x.id === activeSub.id)
-                return (
-                  <>
-                    <div className="m-obj-step-switcher">
+        const stepToOffset = (delta: -1 | 1) => {
+          if (subs.length <= 1 || activeIdx < 0) return
+          const nextIdx = (activeIdx + delta + subs.length) % subs.length
+          setActiveSubId(subs[nextIdx].id)
+        }
+
+        const toggleStepDoneQuick = async (s: Subobjective, e: React.MouseEvent) => {
+          e.stopPropagation()
+          const { autoDone, hasTarget } = computeAutoDone(s)
+          if (hasTarget) {
+            const next = autoDone ? Math.max(0, (s.target_total ?? 1) - 1) : (s.target_total ?? 1)
+            const { autoDone: ad } = computeAutoDone({ ...s, progress_current: next })
+            playSFX(ad ? SFX.BINGO_COMPLETE : SFX.BINGO_CHECK)
+            setSubs((prev) => prev.map((x) => (x.id === s.id ? { ...x, progress_current: next } : x)))
+            await updateSubobjective(s.id, { progress_current: next, is_done: ad ? 1 : 0 })
+          } else {
+            playSFX(s.is_done ? SFX.CANCEL : SFX.BINGO_COMPLETE)
+            await updateSubobjective(s.id, { is_done: s.is_done ? 0 : 1 })
+          }
+          await reload()
+        }
+
+        return (
+          <div className="m-obj-explorer">
+            {/* Hero summary card */}
+            <section className="m-obj-hero-card">
+              <div className="m-obj-hero-top">
+                <Link to="/bingoals" className="m-obj-back-pill" aria-label={t('bingoals.back')}>
+                  <ArrowLeft size={16} />
+                  <span>Objectifs</span>
+                </Link>
+                <div className="m-obj-hero-actions">
+                  <button
+                    type="button"
+                    className="m-obj-icon-btn"
+                    onClick={() => setEditingObjective(v => !v)}
+                    aria-label={t('bingoals.edit_objective')}
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="m-obj-primary-pill"
+                    onClick={() => setAddOpen(true)}
+                  >
+                    <Plus size={15} /> Étape
+                  </button>
+                </div>
+              </div>
+
+              <h1 className="m-obj-hero-title">{obj.title}</h1>
+
+              <div className="m-obj-hero-progress">
+                <div className="m-obj-hero-progress-labels">
+                  <strong>{objectiveProgressLabel(obj, subs)}</strong>
+                  <span className="m-obj-hero-pct">{percentText}</span>
+                </div>
+                <div className="m-obj-hero-bar">
+                  <div className="m-obj-hero-bar-fill" style={{ width: `${(percent ?? 0) * 100}%` }} />
+                </div>
+              </div>
+
+              <div className="m-obj-hero-stats">
+                <div className="m-obj-hero-stat">
+                  <small>Temps investi</small>
+                  <strong>{displayedTime}</strong>
+                  <div className="m-obj-period-pills">
+                    {OBJECTIVE_TIME_PERIODS.map(p => (
                       <button
+                        key={p}
                         type="button"
-                        className="btn btn-icon"
-                        disabled={subs.length <= 1}
-                        onClick={() => {
-                          const prevIdx = (currentIdx - 1 + subs.length) % subs.length
-                          setActiveSubId(subs[prevIdx].id)
-                        }}
-                        aria-label="Étape précédente"
+                        className={timePeriod === p ? 'is-active' : ''}
+                        onClick={() => setTimePeriod(p)}
                       >
-                        <ChevronLeft size={16} />
+                        {p === 'total' ? 'Total' : p === 'weekly' ? 'Sem.' : p === 'monthly' ? 'Mois' : 'Trim.'}
                       </button>
-                      <select
-                        className="m-obj-step-select"
-                        aria-label="Choisir l’étape active"
-                        value={activeSub.id}
-                        onChange={e => setActiveSubId(e.target.value)}
-                      >
-                        {subs.map((s, i) => {
-                          const { autoDone, hasTarget } = computeAutoDone(s)
-                          const done = autoDone || (!hasTarget && !!s.is_done)
-                          return (
-                            <option key={s.id} value={s.id}>
-                              {i + 1}/{subs.length} · {done ? '✓ ' : '▶ '}{s.title}
-                            </option>
-                          )
-                        })}
-                      </select>
-                      <button
-                        type="button"
-                        className="btn btn-icon"
-                        disabled={subs.length <= 1}
-                        onClick={() => {
-                          const nextIdx = (currentIdx + 1) % subs.length
-                          setActiveSubId(subs[nextIdx].id)
-                        }}
-                        aria-label="Étape suivante"
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                    <div className="objPage-activeCol m-obj-active-card">
-                      <ActiveTimerSection
-                        s={activeSub}
-                        timeStats={timeMap.get(activeSub.id) ?? { total_ms: 0, last_end: null }}
-                        subs={subs}
-                        setSubs={setSubs}
-                        running={running}
-                        setRunning={setRunning}
-                        stopTimerIfRunning={stopTimerIfRunning}
-                        subMedia={mediaBySub.get(activeSub.id) ?? []}
-                        reload={reload}
-                        playingSubId={playingSubId}
-                        setPlayingSubId={setPlayingSubId}
+                    ))}
+                  </div>
+                </div>
+                <div className="m-obj-hero-stat m-obj-hero-stat--right">
+                  <small>Dernière action</small>
+                  <strong>{formatDaysAgo(lastStudiedDays, t)}</strong>
+                  {activeSub && (
+                    <button
+                      type="button"
+                      className="m-obj-open-timer-btn"
+                      onClick={() => setMobileSheetOpen(true)}
+                    >
+                      <Clock3 size={13} /> Minuteur ({activeIdx + 1}/{subs.length})
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Running timer sticky banner if active */}
+            {runningSub && (
+              <div className="m-obj-running-banner" onClick={() => { setActiveSubId(runningSub.id); setMobileSheetOpen(true) }}>
+                <div className="m-obj-running-info">
+                  <span className="bingo-rec-dot" />
+                  <div>
+                    <small>Session en cours</small>
+                    <strong>{runningSub.title}</strong>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="m-obj-running-stop"
+                  onClick={(e) => { e.stopPropagation(); playSFX(SFX.CANCEL); void stopTimerIfRunning() }}
+                >
+                  Stop
+                </button>
+              </div>
+            )}
+
+            {/* Search + Filter + View Mode Toolbar */}
+            {subs.length > 0 && (
+              <div className="m-obj-toolbar">
+                <div className="m-obj-search-row">
+                  <input
+                    type="search"
+                    className="m-obj-search-input"
+                    value={mobileSearch}
+                    onChange={e => setMobileSearch(e.target.value)}
+                    placeholder={`Rechercher parmi ${subs.length} étapes…`}
+                    aria-label="Rechercher une étape"
+                  />
+                  {mobileSearch && (
+                    <button type="button" className="m-obj-search-clear" onClick={() => setMobileSearch('')}>✕</button>
+                  )}
+                  <div className="m-obj-view-switch" role="group" aria-label="Mode d'affichage">
+                    <button
+                      type="button"
+                      className={mobileViewMode === 'wall' ? 'is-active' : ''}
+                      onClick={() => setMobileViewMode('wall')}
+                    >
+                      Mur 4×4
+                    </button>
+                    <button
+                      type="button"
+                      className={mobileViewMode === 'list' ? 'is-active' : ''}
+                      onClick={() => setMobileViewMode('list')}
+                    >
+                      Liste
+                    </button>
+                  </div>
+                </div>
+
+                <div className="m-obj-filter-pills" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mobileFilter === 'all'}
+                    className={mobileFilter === 'all' ? 'is-active' : ''}
+                    onClick={() => setMobileFilter('all')}
+                  >
+                    Tout ({subs.length})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mobileFilter === 'todo'}
+                    className={mobileFilter === 'todo' ? 'is-active' : ''}
+                    onClick={() => setMobileFilter('todo')}
+                  >
+                    À faire ({todoCount})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mobileFilter === 'done'}
+                    className={mobileFilter === 'done' ? 'is-active' : ''}
+                    onClick={() => setMobileFilter('done')}
+                  >
+                    Terminés ({doneCount})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mobileFilter === 'memories'}
+                    className={mobileFilter === 'memories' ? 'is-active' : ''}
+                    onClick={() => setMobileFilter('memories')}
+                  >
+                    Souvenirs ({media.length})
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {subs.length === 0 ? (
+              <div className="objPage-empty">
+                <Target size={28} aria-hidden="true" />
+                <h2>{t('bingoals.empty_objective_title')}</h2>
+                <p>{t('bingoals.empty_objective_desc')}</p>
+                <button className="btn btn-primary" onClick={() => setAddOpen(true)}>{t('bingoals.add_subobjective')}</button>
+              </div>
+            ) : filteredSubs.length === 0 ? (
+              <div className="m-obj-empty-filter">
+                <p>Aucune étape ne correspond à ce filtre.</p>
+                <button type="button" className="btn" onClick={() => { setMobileFilter('all'); setMobileSearch('') }}>
+                  Afficher les {subs.length} étapes
+                </button>
+              </div>
+            ) : mobileFilter === 'memories' ? (
+              <div className="objPage-listCol m-obj-memories-list">
+                {filteredSubs.map((s, index) => (
+                  <SubobjectiveMemoryStrip
+                    key={s.id}
+                    s={s}
+                    subs={subs}
+                    setSubs={setSubs}
+                    timeStats={timeMap.get(s.id) ?? { total_ms: 0, last_end: null }}
+                    running={running}
+                    setRunning={setRunning}
+                    stopTimerIfRunning={stopTimerIfRunning}
+                    subMedia={mediaBySub.get(s.id) ?? []}
+                    activeSubId={activeSubId}
+                    setActiveSubId={(subId) => {
+                      setActiveSubId(subId)
+                      if (subId) setMobileSheetOpen(true)
+                    }}
+                    reload={reload}
+                    onAddLink={() => setPendingAddLinkSubId(s.id)}
+                    navigationIndex={index}
+                    isKeyboardTabStop={keyboardFocusSubId === s.id}
+                    onKeyboardFocus={() => setKeyboardFocusSubId(s.id)}
+                    onKeyboardNavigate={(event) => handleSubobjectiveKeyDown(event, index)}
+                  />
+                ))}
+              </div>
+            ) : mobileViewMode === 'wall' ? (
+              /* 4-Column Letterboxd/Album Wall */
+              <div className="m-obj-wall-4col">
+                {filteredSubs.map((s) => {
+                  const realIndex = subs.findIndex(x => x.id === s.id)
+                  const subMediaList = mediaBySub.get(s.id) ?? []
+                  const lastImage = subMediaList.filter(m => m.kind === 'image').at(-1)
+                  const hue = titleToHue(s.title)
+                  const { autoDone, hasTarget } = computeAutoDone(s)
+                  const isDone = autoDone || (!hasTarget && !!s.is_done)
+                  const isStepRunning = running?.subId === s.id
+                  const stepMs = timeMap.get(s.id)?.total_ms ?? 0
+                  const bgStyle: React.CSSProperties = lastImage
+                    ? { backgroundImage: `url(${lastImage.data})` }
+                    : { background: `linear-gradient(155deg, hsl(${hue}, 44%, 28%), hsl(${(hue + 28) % 360}, 38%, 14%))` }
+
+                  return (
+                    <article
+                      key={s.id}
+                      className={`m-obj-wall-tile${isDone ? ' is-done' : ''}${isStepRunning ? ' is-running' : ''}`}
+                      onClick={() => { setActiveSubId(s.id); setMobileSheetOpen(true) }}
+                    >
+                      <div className="m-obj-wall-poster" style={bgStyle}>
+                        <span className="m-obj-wall-index">#{String(realIndex + 1).padStart(2, '0')}</span>
+                        <button
+                          type="button"
+                          className={`m-obj-wall-check${isDone ? ' is-done' : ''}`}
+                          onClick={(e) => void toggleStepDoneQuick(s, e)}
+                          aria-label={isDone ? 'Marquer non terminé' : 'Marquer terminé'}
+                        >
+                          ✓
+                        </button>
+                        {!lastImage && (
+                          <div className="m-obj-wall-fallback-title">
+                            <span>{s.title}</span>
+                          </div>
+                        )}
+                        {stepMs > 0 && (
+                          <span className="m-obj-wall-time">{formatDuration(stepMs)}</span>
+                        )}
+                      </div>
+                      <div className="m-obj-wall-caption">{s.title}</div>
+                    </article>
+                  )
+                })}
+              </div>
+            ) : (
+              /* Compact Scrollable List Rows */
+              <div className="m-obj-list-rows">
+                {filteredSubs.map((s) => {
+                  const realIndex = subs.findIndex(x => x.id === s.id)
+                  const subMediaList = mediaBySub.get(s.id) ?? []
+                  const lastImage = subMediaList.filter(m => m.kind === 'image').at(-1)
+                  const hue = titleToHue(s.title)
+                  const { autoDone, hasTarget } = computeAutoDone(s)
+                  const isDone = autoDone || (!hasTarget && !!s.is_done)
+                  const isStepRunning = running?.subId === s.id
+                  const stepMs = timeMap.get(s.id)?.total_ms ?? 0
+                  const progressBadge = hasTarget ? `${s.progress_current ?? 0}/${s.target_total}` : null
+
+                  return (
+                    <div
+                      key={s.id}
+                      className={`m-obj-list-row${isDone ? ' is-done' : ''}${isStepRunning ? ' is-running' : ''}`}
+                      onClick={() => { setActiveSubId(s.id); setMobileSheetOpen(true) }}
+                    >
+                      <span className="m-obj-row-num">{String(realIndex + 1).padStart(2, '0')}</span>
+                      <div
+                        className="m-obj-row-thumb"
+                        style={lastImage
+                          ? { backgroundImage: `url(${lastImage.data})` }
+                          : { background: `hsl(${hue}, 40%, 24%)` }}
                       />
+                      <div className="m-obj-row-main">
+                        <div className="m-obj-row-title">{s.title}</div>
+                        <div className="m-obj-row-meta">
+                          {stepMs > 0 && <span>{formatDuration(stepMs)}</span>}
+                          {progressBadge && <span>{progressBadge} {s.unit ?? ''}</span>}
+                          {subMediaList.length > 0 && <span>{subMediaList.length} souvenir{subMediaList.length > 1 ? 's' : ''}</span>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`m-obj-row-check${isDone ? ' is-done' : ''}`}
+                        onClick={(e) => void toggleStepDoneQuick(s, e)}
+                        aria-label={isDone ? 'Marquer non terminé' : 'Marquer terminé'}
+                      >
+                        ✓
+                      </button>
                     </div>
-                  </>
-                )
-              })()}
-            </div>
-          ) : mobileTab === 'steps' ? (
-            <div className="subGrid">
-              {subs.map((s, index) => (
-                <SubobjectiveTile
-                  key={s.id}
-                  s={s}
-                  subMedia={mediaBySub.get(s.id) ?? []}
-                  running={running}
-                  activeSubId={activeSubId}
-                  setActiveSubId={(subId) => {
-                    setActiveSubId(subId)
-                    if (subId) setMobileTab('active')
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Mobile Step Cockpit Bottom Sheet (Swipeable Left/Right across all steps!) */}
+            {mobileSheetOpen && activeSub && (
+              <div className="m-obj-sheet-backdrop" onClick={() => setMobileSheetOpen(false)}>
+                <div
+                  className="m-obj-sheet"
+                  onClick={e => e.stopPropagation()}
+                  onTouchStart={e => {
+                    const touch = e.touches[0]
+                    if (touch) sheetSwipeRef.current = { x: touch.clientX, y: touch.clientY }
                   }}
-                  onAddLink={() => setPendingAddLinkSubId(s.id)}
-                  navigationIndex={index}
-                  isKeyboardTabStop={keyboardFocusSubId === s.id}
-                  onKeyboardFocus={() => setKeyboardFocusSubId(s.id)}
-                  onKeyboardNavigate={(event) => handleSubobjectiveKeyDown(event, index)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="objPage-listCol">
-              {sortedSubs.map((s, index) => (
-                <SubobjectiveMemoryStrip
-                  key={s.id}
-                  s={s}
-                  subs={subs}
-                  setSubs={setSubs}
-                  timeStats={timeMap.get(s.id) ?? { total_ms: 0, last_end: null }}
-                  running={running}
-                  setRunning={setRunning}
-                  stopTimerIfRunning={stopTimerIfRunning}
-                  subMedia={mediaBySub.get(s.id) ?? []}
-                  activeSubId={activeSubId}
-                  setActiveSubId={(subId) => {
-                    setActiveSubId(subId)
-                    if (subId) setMobileTab('active')
+                  onTouchEnd={e => {
+                    const start = sheetSwipeRef.current
+                    sheetSwipeRef.current = null
+                    const touch = e.changedTouches[0]
+                    if (!start || !touch) return
+                    const dx = touch.clientX - start.x
+                    const dy = touch.clientY - start.y
+                    if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+                      if (dx > 0) stepToOffset(-1)
+                      else stepToOffset(1)
+                    }
                   }}
-                  reload={reload}
-                  onAddLink={() => setPendingAddLinkSubId(s.id)}
-                  navigationIndex={index}
-                  isKeyboardTabStop={keyboardFocusSubId === s.id}
-                  onKeyboardFocus={() => setKeyboardFocusSubId(s.id)}
-                  onKeyboardNavigate={(event) => handleSubobjectiveKeyDown(event, index)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
+                >
+                  <div className="m-obj-sheet-handle" />
+                  <div className="m-obj-sheet-nav">
+                    <button
+                      type="button"
+                      className="m-obj-sheet-nav-btn"
+                      disabled={subs.length <= 1}
+                      onClick={() => stepToOffset(-1)}
+                      aria-label="Étape précédente"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <select
+                      className="m-obj-sheet-select"
+                      aria-label="Choisir l’étape"
+                      value={activeSub.id}
+                      onChange={e => setActiveSubId(e.target.value)}
+                    >
+                      {subs.map((s, i) => {
+                        const { autoDone, hasTarget } = computeAutoDone(s)
+                        const done = autoDone || (!hasTarget && !!s.is_done)
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {i + 1}/{subs.length} · {done ? '✓ ' : ''}{s.title}
+                          </option>
+                        )
+                      })}
+                    </select>
+                    <button
+                      type="button"
+                      className="m-obj-sheet-nav-btn"
+                      disabled={subs.length <= 1}
+                      onClick={() => stepToOffset(1)}
+                      aria-label="Étape suivante"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="m-obj-sheet-close"
+                      onClick={() => setMobileSheetOpen(false)}
+                      aria-label="Fermer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="m-obj-sheet-swipe-hint">
+                    Glissez à gauche / droite pour parcourir vos {subs.length} étapes
+                  </div>
+                  <div className="m-obj-sheet-body">
+                    <ActiveTimerSection
+                      s={activeSub}
+                      timeStats={timeMap.get(activeSub.id) ?? { total_ms: 0, last_end: null }}
+                      subs={subs}
+                      setSubs={setSubs}
+                      running={running}
+                      setRunning={setRunning}
+                      stopTimerIfRunning={stopTimerIfRunning}
+                      subMedia={mediaBySub.get(activeSub.id) ?? []}
+                      reload={reload}
+                      playingSubId={playingSubId}
+                      setPlayingSubId={setPlayingSubId}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })() : (
       <div className={`objPage-layout${listView === 'overview' ? ' objPage-layout--memories' : ' objPage-layout--focus'}`}>
 
         {/* List column */}
@@ -699,42 +986,44 @@ export default function BingoObjectivePage() {
       </div>
       )}
 
-      {/* Narrow overlay — slide-up timer panel (CSS hides on 900px+) */}
-      <div className={`objPage-overlay${activeSubId ? ' objPage-overlay--open' : ''}`}>
-        {activeSubId && (() => {
-          const activeSub = subs.find(x => x.id === activeSubId)
-          if (!activeSub) return null
-          return (
-            <>
-              <div className="objPage-overlay-header">
-                <button
-                  className="btn btn-icon"
-                  onClick={() => setActiveSubId(null)}
-                  aria-label={t('bingoals.back')}
-                >
-                  <ArrowLeft size={18} />
-                </button>
-                <div className="objPage-overlay-title">{activeSub.title}</div>
-              </div>
-              <div className="objPage-overlay-body">
-                <ActiveTimerSection
-                  s={activeSub}
-                  timeStats={timeMap.get(activeSubId) ?? { total_ms: 0, last_end: null }}
-                  subs={subs}
-                  setSubs={setSubs}
-                  running={running}
-                  setRunning={setRunning}
-                  stopTimerIfRunning={stopTimerIfRunning}
-                  subMedia={mediaBySub.get(activeSubId) ?? []}
-                  reload={reload}
-                  playingSubId={playingSubId}
-                  setPlayingSubId={setPlayingSubId}
-                />
-              </div>
-            </>
-          )
-        })()}
-      </div>
+      {/* Narrow overlay — slide-up timer panel (desktop narrow window only; mobile uses m-obj-sheet) */}
+      {!isMobile && (
+        <div className={`objPage-overlay${activeSubId ? ' objPage-overlay--open' : ''}`}>
+          {activeSubId && (() => {
+            const activeSub = subs.find(x => x.id === activeSubId)
+            if (!activeSub) return null
+            return (
+              <>
+                <div className="objPage-overlay-header">
+                  <button
+                    className="btn btn-icon"
+                    onClick={() => setActiveSubId(null)}
+                    aria-label={t('bingoals.back')}
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <div className="objPage-overlay-title">{activeSub.title}</div>
+                </div>
+                <div className="objPage-overlay-body">
+                  <ActiveTimerSection
+                    s={activeSub}
+                    timeStats={timeMap.get(activeSubId) ?? { total_ms: 0, last_end: null }}
+                    subs={subs}
+                    setSubs={setSubs}
+                    running={running}
+                    setRunning={setRunning}
+                    stopTimerIfRunning={stopTimerIfRunning}
+                    subMedia={mediaBySub.get(activeSubId) ?? []}
+                    reload={reload}
+                    playingSubId={playingSubId}
+                    setPlayingSubId={setPlayingSubId}
+                  />
+                </div>
+              </>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Modals */}
       <AddSubobjectiveModal

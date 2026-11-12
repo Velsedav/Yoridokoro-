@@ -2,6 +2,7 @@ import { persistActiveSession, clearActiveSession } from '../lib/activeSessionRe
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { formatSecondsMMSS } from '../lib/time';
 import { getSubjects, getSessions, saveSession, saveErrorLogEntry, markSessionEvaluated, saveSessionEvidence, saveSessionContext, setSessionReturnSupportTag } from '../lib/db';
 import { TECHNIQUES } from '../lib/techniques';
@@ -235,6 +236,7 @@ function loadPaperNotes(): { checked: boolean[]; notes: Record<string, string>; 
 
 export default function Session() {
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
     const [session, setSession] = useState<any>(null);
     const [remaining, setRemaining] = useState(0);
     const [paused, setPaused] = useState(false);
@@ -1372,11 +1374,11 @@ export default function Session() {
                 {currentBlock.type === 'PREP' && (() => {
                     let globalIdx = 0;
                     return (
-                        <div className="prep-checklist-card">
-                            <div className="session-checklist-heading">
+                        <details className="prep-checklist-card m-session-checklist-drawer" open={!isMobile}>
+                            <summary className="session-checklist-heading">
                                 <div className="prep-checklist-title">{t('session.prep_checklist')}</div>
                                 <span>{checkedPrepCount} / {checkedItems.length}</span>
-                            </div>
+                            </summary>
                             <div className="checklist-sections-grid">
                             {PREP_SECTIONS.map(section => (
                                 <div key={section.labelKey} className="checklist-section">
@@ -1506,18 +1508,18 @@ export default function Session() {
                                 </button>
                             </div>
                             </details>
-                        </div>
+                        </details>
                     );
                 })()}
 
                 {currentBlock.type === 'BREAK' && (() => {
                     let globalIdx = 0;
                     return (
-                        <div className="break-checklist-card">
-                            <div className="session-checklist-heading">
+                        <details className="break-checklist-card m-session-checklist-drawer" open={!isMobile}>
+                            <summary className="session-checklist-heading">
                                 <div className="break-checklist-title">{t('session.break_checklist')}</div>
                                 <span>{checkedBreakCount} / {breakCheckedItems.length}</span>
-                            </div>
+                            </summary>
                             <div className="checklist-sections-grid">
                             {BREAK_SECTIONS.map(section => (
                                 <div key={section.labelKey} className="checklist-section">
@@ -1641,7 +1643,7 @@ export default function Session() {
                                 </button>
                             </div>
                             </details>
-                        </div>
+                        </details>
                     );
                 })()}
 

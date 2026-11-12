@@ -464,6 +464,28 @@ export async function ensureMobileElectronShim(): Promise<void> {
         stmt.free()
         return rows as unknown as T
       },
+      transaction: async (target: 'main' | 'bingo', statements: Array<{ sql: string; params?: unknown[] }>) => {
+        await ensureSqlInitialized()
+        const db = getTargetDb(target)
+        db.run('BEGIN')
+        try {
+          for (const stmt of statements) {
+            const { sql, params } = normalizeSqlStatement(stmt.sql, stmt.params ?? [])
+            const cleanParams = sanitizeParams(params)
+            db.run(sql, cleanParams)
+          }
+          db.run('COMMIT')
+          scheduleSave()
+          return { ok: true }
+        } catch (err) {
+          try {
+            db.run('ROLLBACK')
+          } catch {
+            // ignore rollback error
+          }
+          throw err
+        }
+      },
     },
     fs: {
       getUserDataPath: async () => '/yoridokoro-mobile-data',
@@ -506,7 +528,16 @@ export async function ensureMobileElectronShim(): Promise<void> {
         const exts = options?.filters?.flatMap(f => f.extensions ?? []).map(e => `.${e}`).join(',') || '.json,application/json'
         return pickFileFromDevice(exts)
       },
+      openFile: async (options?: { filters?: Array<{ extensions?: string[] }> }) => {
+        const exts = options?.filters?.flatMap(f => f.extensions ?? []).map(e => `.${e}`).join(',') || '.json,application/json'
+        return pickFileFromDevice(exts)
+      },
+      openDirectory: async () => '/mobile-download',
       save: async (options?: { defaultPath?: string }) => {
+        const name = options?.defaultPath?.split(/[/\\]/).pop() || 'yoridokoro-backup.json'
+        return `/mobile-download/${name}`
+      },
+      saveFile: async (options?: { defaultPath?: string }) => {
         const name = options?.defaultPath?.split(/[/\\]/).pop() || 'yoridokoro-backup.json'
         return `/mobile-download/${name}`
       },
@@ -515,17 +546,55 @@ export async function ensureMobileElectronShim(): Promise<void> {
       openExternal: async (url: string) => {
         window.open(url, '_blank', 'noopener,noreferrer')
       },
+      openPath: async (filePath: string) => {
+        if (/^https?:\/\//i.test(filePath)) {
+          window.open(filePath, '_blank', 'noopener,noreferrer')
+        }
+      },
+    },
+    playnite: {
+      readSessions: async () => ({ sessions: [], warning: null }),
+    },
+    images: {
+      fetchDataUrl: async (url: string): Promise<string> => {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const blob = await response.blob()
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') resolve(reader.result)
+            else reject(new Error('Failed to convert image to data URL'))
+          }
+          reader.onerror = () => reject(reader.error)
+          reader.readAsDataURL(blob)
+        })
+      },
+    },
+    catalogue: {
+      fetchJson: async <T = any>(url: string): Promise<{ ok: boolean; status: number; data: T }> => {
+        const response = await fetch(url)
+        const data = (await response.json().catch(() => null)) as T
+        return { ok: response.ok, status: response.status, data }
+      },
+      testIgdb: async () => {},
+      searchIgdbGames: async <T = any>(): Promise<T[]> => [],
+    },
+    autostart: {
+      isEnabled: async () => false,
+      setEnabled: async () => {},
     },
     windowControls: {
       minimize: async () => {},
       maximize: async () => {},
       close: async () => {},
-      toggleFullscreen: async () => {},
+      toggleFullscreen: async () => false,
     },
     lifecycle: {
-      onBeforeClose: () => {},
+      onBeforeClose: () => () => {},
       readyToClose: () => {},
       forceClose: () => {},
     },
+    platform: 'android',
   }
 }

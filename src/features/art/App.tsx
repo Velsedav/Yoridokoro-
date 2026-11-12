@@ -14,6 +14,7 @@ import type { ArtQuote, CategoryId, ImportedItem, RankedItem } from './types';
 import { categories } from './types';
 import { useModalFocus } from './hooks/useModalFocus';
 import { dialogFocusables } from '../../hooks/useDialogFocus';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { imageFileToDataUrl } from './lib/images';
 import { categoryCopy, I18nProvider, localeFor, useI18n, useTranslator } from './lib/i18n';
 import { buildCategoryStatistics } from './lib/statistics';
@@ -178,18 +179,19 @@ function Ladder({ items, fullRanking, periodRank, shelf, onSelect, onAction, row
   );
 }
 
-function CoverGrid({ items, fullRanking, periodRank, shelf, onSelect, onAction }: {
+function CoverGrid({ items, fullRanking, periodRank, shelf, onSelect, onAction, isMobile }: {
   items: RankedItem[];
   fullRanking: RankedItem[];
   periodRank?: PeriodRankContext;
   shelf: ArtShelf;
   onSelect: (item: RankedItem) => void;
   onAction: (item: RankedItem) => void;
+  isMobile?: boolean;
 }) {
   const { t } = useI18n();
   const rankById = useMemo(() => new Map(fullRanking.map((item, index) => [item.id, index + 1])), [fullRanking]);
   const rankGroups = useMemo(() => {
-    if (shelf === 'watchlist') return items.length ? [[0, items] as [number, RankedItem[]]] : [];
+    if (isMobile || shelf === 'watchlist') return items.length ? [[1, items] as [number, RankedItem[]]] : [];
     const groups = new Map<number, RankedItem[]>();
     for (const item of items) {
       const rank = rankById.get(item.id) ?? 1;
@@ -197,7 +199,40 @@ function CoverGrid({ items, fullRanking, periodRank, shelf, onSelect, onAction }
       groups.set(start, [...(groups.get(start) ?? []), item]);
     }
     return [...groups.entries()].sort(([a], [b]) => a - b);
-  }, [items, rankById, shelf]);
+  }, [items, rankById, shelf, isMobile]);
+
+  if (isMobile) {
+    return (
+      <div className="cover-rank-groups cover-rank-groups--mobile" role="region" aria-label={`${t('Cover grid view')}, ${items.length}`}>
+        <ol className="cover-grid cover-grid--letterboxd">
+          {items.map((item) => {
+            const rank = rankById.get(item.id) ?? 0;
+            return (
+              <li key={item.id} className={`cover-card cover-card--letterboxd cover-card--${item.category}`}>
+                <button
+                  type="button"
+                  className="cover-card-open"
+                  onClick={() => onSelect(item)}
+                  aria-label={shelf === 'collection' ? `${item.title}, #${rank}` : item.title}
+                >
+                  <span className="cover-card-art">
+                    <Artwork item={item} size="large" />
+                    {shelf === 'collection' && rank > 0 && (
+                      <span className={`m-letterboxd-rank${rank <= 3 ? ' is-top' : ''}`}>#{rank}</span>
+                    )}
+                    {!item.imageUrl && (
+                      <span className="m-letterboxd-fallback-title">{item.title}</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    );
+  }
+
   return (
     <div className="cover-rank-groups" role="region" aria-label={`${t('Cover grid view')}, ${items.length}`}>
       {rankGroups.map(([start, groupItems]) => {
@@ -513,7 +548,7 @@ function QuoteCarousel({ item }: { item: RankedItem }) {
   </section>;
 }
 
-function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onMoveToCollection }: {
+function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onMoveToCollection, onFight, onPrev, onNext, positionLabel }: {
   item: RankedItem;
   rank: number;
   shelf: ArtShelf;
@@ -522,11 +557,16 @@ function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onM
   onCover: (imageUrl?: string) => Promise<void>;
   onEdit: () => void;
   onMoveToCollection: () => void;
+  onFight?: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+  positionLabel?: string;
 }) {
   const { language, t } = useI18n();
   const ref = useRef<HTMLElement>(null);
   const moreActionsRef = useRef<HTMLDivElement>(null);
   const moreActionsButtonRef = useRef<HTMLButtonElement>(null);
+  const touchStartX = useRef<number | null>(null);
   const [editingCover, setEditingCover] = useState(false);
   const [cover, setCover] = useState(item.imageUrl ?? '');
   const [savingCover, setSavingCover] = useState(false);
@@ -564,14 +604,46 @@ function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onM
   };
   return (
     <div className="overlay overlay--drawer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <aside ref={ref} className="drawer drawer--notebook" role="dialog" aria-modal="true" aria-labelledby="item-title">
-        <button className="icon-button drawer-close" onClick={onClose} aria-label={t('Close details')}><X /></button>
+      <aside
+        ref={ref}
+        className="drawer drawer--notebook"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="item-title"
+        onTouchStart={(e) => { touchStartX.current = e.touches[0]?.clientX ?? null; }}
+        onTouchEnd={(e) => {
+          if (touchStartX.current === null) return;
+          const dx = (e.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(dx) > 64) {
+            if (dx > 0 && onPrev) onPrev();
+            else if (dx < 0 && onNext) onNext();
+          }
+        }}
+      >
+        <div className="m-drawer-QuickNav">
+          {(onPrev || onNext) && (
+            <div className="m-drawer-stepper">
+              <button type="button" className="icon-button" onClick={onPrev} disabled={!onPrev} aria-label="Œuvre précédente"><ChevronLeft size={18} /></button>
+              {positionLabel && <span className="m-drawer-stepper-label">{positionLabel}</span>}
+              <button type="button" className="icon-button" onClick={onNext} disabled={!onNext} aria-label="Œuvre suivante"><ChevronRight size={18} /></button>
+            </div>
+          )}
+          <button className="icon-button drawer-close" onClick={onClose} aria-label={t('Close details')}><X /></button>
+        </div>
         <Artwork item={item} size="large" />
         <div className="drawer-body">
           <div className="drawer-details-column">
             <span className="eyebrow">{shelf === 'collection' ? `#${rank} · ` : `${t('Watchlist')} · `}{categoryCopy(item.category, t).label}</span>
             <h2 id="item-title">{item.title}</h2><p className="drawer-creator">{item.creator}{item.year ? ` · ${item.year}` : ''}</p>
-            <button type="button" className="drawer-web-search" onClick={() => void openArtworkSearch(item)} aria-label={t('Search the web for {title}', { title: item.title })}><Search size={15} aria-hidden="true" />{t('Search the web')}</button>
+            <div className="m-drawer-hero-actions">
+              {shelf === 'collection' && onFight && (
+                <button type="button" className="drawer-web-search is-duel" onClick={onFight}>
+                  <Swords size={15} aria-hidden="true" /> {t('Make this item compete')}
+                </button>
+              )}
+              <button type="button" className="drawer-web-search" onClick={() => void openArtworkSearch(item)} aria-label={t('Search the web for {title}', { title: item.title })}><Search size={15} aria-hidden="true" />{t('Search the web')}</button>
+            </div>
             {shelf === 'collection' && <><div className="drawer-rating"><strong>{Math.round(item.rating)}</strong><span>{t('Elo rating')}</span><i /> <strong>{item.wins}–{item.losses}</strong><span>{t('record')}</span></div>{isProvisional(item) && <div className="placement-note"><Zap size={17} /><div><strong>{t('Fast-track active')}</strong><span>{Math.max(0, 8 - item.comparisons)} {t('more choices to settle its position.')}</span></div></div>}</>}
             <dl className="metadata">
               <div><dt>{t('Genre')}</dt><dd>{item.genres.join(', ') || t('Not set')}</dd></div>
@@ -591,6 +663,7 @@ function ItemDrawer({ item, rank, shelf, onClose, onDelete, onCover, onEdit, onM
             <div className="drawer-management-actions">
               <div className="drawer-management-main">
                 {shelf === 'watchlist' && <button type="button" className="drawer-management-button drawer-management-button--primary" onClick={onMoveToCollection}><Plus size={16} />{t('Add to collection')}</button>}
+                {shelf === 'collection' && onFight && <button type="button" className="drawer-management-button drawer-management-button--primary" onClick={onFight}><Swords size={16} />Duel</button>}
                 <button type="button" className="drawer-management-button" onClick={onEdit}><Pencil size={16} />{t('Edit details')}</button>
                 {!editingCover && <button type="button" className="drawer-management-button" onClick={() => setEditingCover(true)}><ImageIcon size={17} />{item.imageUrl ? t('Change cover') : t('Add cover')}</button>}
               </div>
@@ -888,6 +961,7 @@ function AddModal({ category, existing, shelf, onClose, onSave }: {
 }
 
 export default function App({ headerAction, design }: { headerAction?: ReactNode; design?: 'rework' } = {}) {
+  const isMobile = useIsMobile(860);
   const [items, setItems] = useState<RankedItem[]>([]);
   const [category, setCategory] = useState<CategoryId>('books');
   const [loading, setLoading] = useState(true);
@@ -1183,14 +1257,14 @@ export default function App({ headerAction, design }: { headerAction?: ReactNode
   if (loading) return <div className="app-loader"><span className="brand-mark"><KonomiMark /></span><p>{t('Opening your collection…')}</p></div>;
   if (loadError) return <div className="app-loader art-load-error" role="alert"><span className="brand-mark"><KonomiMark /></span><h1>{t('The collection could not be opened.')}</h1><p>{t('Your data has not been changed. Try opening it again.')}</p><button type="button" className="button button--primary" onClick={() => void openCollection()}>{t('Try again')}</button><details><summary>{t('Technical details')}</summary><code>{loadError}</code></details></div>;
   return (
-    <I18nProvider language={preferences.language}><div className={`app${design === 'rework' ? ' rw-art' : ''}`} style={{ '--accent': categoryDefinition.accent } as React.CSSProperties}>
+    <I18nProvider language={preferences.language}><div className={`app${design === 'rework' ? ' rw-art' : ''}${isMobile ? ' is-mobile-art' : ''}`} style={{ '--accent': categoryDefinition.accent } as React.CSSProperties}>
       <main className="main">
         {view === 'duel' ? <DuelView pair={pair} onChoose={choose} onSkip={() => nextPair()} onUndo={undoLastChoice} onExit={() => setView('ladder')} shortcuts={preferences.shortcuts} canUndo={canUndo} busy={decisionPending} headerAction={headerAction} /> : (
           <>
-            <nav className="art-category-tabs" aria-label={t('Your collections')} role="tablist">{categories.map((entry,index)=>{const Icon=categoryIcons[entry.id];return <button key={entry.id} role="tab" tabIndex={category===entry.id?0:-1} className={category===entry.id?'is-active':''} aria-selected={category===entry.id} onKeyDown={event=>handleCategoryKey(event,index)} onClick={()=>selectCategory(entry.id)}><Icon size={16}/><span>{categoryCopy(entry.id,t).label}</span><small>{counts[entry.id]}</small></button>})}</nav>
+            <nav className="art-category-tabs" aria-label={t('Your collections')} role="tablist">{categories.map((entry,index)=>{const Icon=categoryIcons[entry.id];return <button key={entry.id} role="tab" tabIndex={category===entry.id?0:-1} className={category===entry.id?'is-active':''} aria-selected={category===entry.id} onKeyDown={event=>handleCategoryKey(event,index)} onClick={(e)=>{selectCategory(entry.id);e.currentTarget.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});}}><Icon size={15}/><span>{categoryCopy(entry.id,t).label}</span><small>{counts[entry.id]}</small></button>})}</nav>
             <header className="topbar">
-              {design === 'rework' && <div className="rw-art-heading"><h1>Art</h1></div>}
-              <div><span className="eyebrow">{definition.eyebrow}</span><h1>{definition.label}</h1></div>
+              {design === 'rework' && !isMobile && <div className="rw-art-heading"><h1>Art</h1></div>}
+              <div className="m-art-title-block"><span className="eyebrow">{definition.eyebrow}</span><h1>{definition.label}</h1></div>
               <div className="top-actions">{headerAction}<button className={`button button--outline statistics-toggle ${view === 'statistics' ? 'active' : ''}`} onClick={() => setView(view === 'statistics' ? 'ladder' : 'statistics')}>{view === 'statistics' ? <ListTree size={17} /> : <BarChart3 size={17} />}{view === 'statistics' ? t('View ladder') : t('Statistics')}</button>{shelf === 'collection' && <button className="button button--outline duel-start" disabled={collectionCategoryItems.length < 2} onClick={() => openDuel()}><Swords size={17} />{t('Start a duel')}<kbd>{shortcutLabel(preferences.shortcuts.startDuel)}</kbd></button>}<button className="button button--primary add-item-button" onClick={() => setShowAdd(true)}><Plus size={17} />{shelf === 'collection' ? `${t('Add')} ${definition.singular.toLocaleLowerCase()}` : t('Add to watchlist')}<kbd>{shortcutLabel(preferences.shortcuts.addItem)}</kbd></button></div>
             </header>
             {view === 'statistics' ? <StatisticsDashboard items={collectionCategoryItems} matches={matchHistory} loading={statisticsLoading} onSelect={setSelected} onFight={openDuel} /> : <><section className="overview" aria-label={t('Collection summary')}>
@@ -1217,7 +1291,7 @@ export default function App({ headerAction, design }: { headerAction?: ReactNode
                 <label><span>{t('To year')}</span><input inputMode="numeric" value={yearTo} onChange={(event) => setYearTo(event.target.value)} placeholder={t('Any')} /></label>
                 <button className="text-button" onClick={() => { setGenre('all'); setCountry('all'); setYearFrom(''); setYearTo(''); }}>{t('Clear filters')}</button>
               </div>}
-              {categoryItems.length === 0 ? <EmptyState shelf={shelf} onAdd={() => setShowAdd(true)} /> : filtered.length === 0 ? <div className="no-results"><Search /><h3>{t('No matches')}</h3><p>{t('Try a broader search or clear your filters.')}</p></div> : collectionView === 'covers' ? <CoverGrid items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} /> : <Ladder rowHeight={design === 'rework' ? 82 : 70} items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} />}
+              {categoryItems.length === 0 ? <EmptyState shelf={shelf} onAdd={() => setShowAdd(true)} /> : filtered.length === 0 ? <div className="no-results"><Search /><h3>{t('No matches')}</h3><p>{t('Try a broader search or clear your filters.')}</p></div> : collectionView === 'covers' ? <CoverGrid items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} isMobile={isMobile} /> : <Ladder rowHeight={design === 'rework' ? 76 : 68} items={filtered} fullRanking={collectionCategoryItems} periodRank={periodRank} shelf={shelf} onSelect={setSelected} onAction={shelf === 'collection' ? openDuel : transferToCollection} />}
               {design === 'rework' && shelf === 'collection' && <PeriodHighlights items={collectionCategoryItems} onSelect={setSelected} onApplyPeriod={(start, end) => { setYearFrom(String(start)); setYearTo(String(end)); setShowFilters(true); }} />}
             </section></>}
           </>
@@ -1225,7 +1299,25 @@ export default function App({ headerAction, design }: { headerAction?: ReactNode
       </main>
       {showAdd && <AddModal category={category} existing={items} shelf={shelf} onClose={() => setShowAdd(false)} onSave={saveItem} />}
       {editing && <EditItemModal item={editing} existing={items} onClose={() => setEditing(undefined)} onSave={(form) => updateDetails(editing, form)} />}
-      {selected && <ItemDrawer item={selected} rank={collectionCategoryItems.findIndex((item) => item.id === selected.id) + 1} shelf={itemsOnShelf([selected], 'watchlist').length ? 'watchlist' : 'collection'} onClose={() => setSelected(undefined)} onDelete={() => deleteItem(selected)} onCover={(imageUrl) => updateCover(selected, imageUrl)} onEdit={() => { setEditing(selected); setSelected(undefined); }} onMoveToCollection={() => void transferToCollection(selected)} />}
+      {selected && (() => {
+        const selectedIdx = filtered.findIndex((item) => item.id === selected.id);
+        return (
+          <ItemDrawer
+            item={selected}
+            rank={collectionCategoryItems.findIndex((item) => item.id === selected.id) + 1}
+            shelf={itemsOnShelf([selected], 'watchlist').length ? 'watchlist' : 'collection'}
+            onClose={() => setSelected(undefined)}
+            onDelete={() => deleteItem(selected)}
+            onCover={(imageUrl) => updateCover(selected, imageUrl)}
+            onEdit={() => { setEditing(selected); setSelected(undefined); }}
+            onMoveToCollection={() => void transferToCollection(selected)}
+            onFight={shelf === 'collection' && collectionCategoryItems.length >= 2 ? () => openDuel(selected) : undefined}
+            onPrev={selectedIdx > 0 ? () => setSelected(filtered[selectedIdx - 1]) : undefined}
+            onNext={selectedIdx >= 0 && selectedIdx < filtered.length - 1 ? () => setSelected(filtered[selectedIdx + 1]) : undefined}
+            positionLabel={selectedIdx >= 0 ? `${selectedIdx + 1} / ${filtered.length}` : undefined}
+          />
+        );
+      })()}
       {completionSession && activeCompletionItem && <CompletionModeModal item={activeCompletionItem} existing={items} current={completionSession.currentIndex + 1} total={completionSession.itemIds.length} onClose={() => setCompletionSession(undefined)} onSave={(form) => updateDetails(activeCompletionItem, form)} onContinue={continueCompletion} />}
       <div className="toast-region" aria-live="polite">{toasts.map((entry) => <div className="toast" key={entry.id}><Check size={16} />{entry.message}</div>)}</div>
     </div></I18nProvider>
