@@ -47,18 +47,40 @@ import { syncLegacyTime } from '../lib/timeSync';
 import './ObsidianSettings.css';
 import { PageHeading } from '../design/rework/Primitives';
 import { useArgonauten, useRework } from '../design/rework/useRework';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { useBackHandler } from '../lib/backButton';
 
 type Category = 'look-and-feel' | 'sessions' | 'learning' | 'art' | 'audio' | 'data' | 'system';
 
 export default function ObsidianSettings() {
     const rework = useRework();
     const argonaute = useArgonauten();
+    const isMobile = useIsMobile();
     const { t } = useTranslation();
     const [category, setCategory] = useState<Category>('look-and-feel');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteInput, setDeleteInput] = useState('');
     const [showDeleteBingoModal, setShowDeleteBingoModal] = useState(false);
     const [deleteBingoInput, setDeleteBingoInput] = useState('');
+
+    useBackHandler(
+        Boolean(showDeleteModal || showDeleteBingoModal || (isMobile && category !== 'look-and-feel')),
+        () => {
+            if (showDeleteModal) {
+                setShowDeleteModal(false);
+                setDeleteInput('');
+                return;
+            }
+            if (showDeleteBingoModal) {
+                setShowDeleteBingoModal(false);
+                setDeleteBingoInput('');
+                return;
+            }
+            if (isMobile && category !== 'look-and-feel') {
+                setCategory('look-and-feel');
+            }
+        },
+    );
 
     async function handleDeleteAll() {
         await deleteAllData();
@@ -376,7 +398,7 @@ function ArtSettingsPanel() {
                 <label className="obs-settings-field"><span>IGDB Client Secret</span><input type="password" value={credentials.igdbClientSecret||''} onChange={event=>updateCredentials({igdbClientSecret:event.target.value})} autoComplete="off"/></label>
             </div>
         </section>
-        <section className="obs-settings-section">
+        <section className="obs-settings-section m-desktop-only-section">
             <h2 className="obs-settings-section-label"><Keyboard size={14}/> Raccourcis Art</h2>
             <p className="obs-settings-hint">Un seul caractère par action. Le thème, la langue et les sauvegardes sont gérés globalement par Yoridokoro.</p>
             <div className="art-shortcuts-grid">
@@ -562,7 +584,7 @@ function LookAndFeelPanel() {
 
             <section className="obs-settings-section">
                 <h2 className="obs-settings-section-label">{t('settings.system_behavior') || 'System behavior'}</h2>
-                <label className="obs-settings-toggle">
+                <label className="obs-settings-toggle m-desktop-only-row">
                     <Power size={17} className="obs-settings-toggle-icon" />
                     <span><strong>{t('settings.launch_at_login')}</strong><small>Ouvrir Yoridokoro avec votre session Windows.</small></span>
                     <input
@@ -637,7 +659,7 @@ function LearningPanel() {
                 </div>
             </section>
 
-            <section className="obs-settings-section">
+            <section className="obs-settings-section m-desktop-only-section">
                 <h2 className="obs-settings-section-label">
                     <Keyboard size={14} style={{ verticalAlign: '-2px', marginRight: 6, color: 'var(--text-muted)' }} />
                     {t('settings.shortcuts')}
@@ -810,7 +832,7 @@ function AudioPanel() {
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn btn-icon"
+                                        className="btn btn-icon m-desktop-only-btn"
                                         onClick={() => handlePickCustom(effect)}
                                         onMouseEnter={() => playSFX(SFX.HOVER)}
                                         aria-label={t('settings.audio_pick_custom') || 'Pick sound file'}
@@ -978,41 +1000,8 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
 
             <section className="obs-settings-section">
                 <h2 className="obs-settings-section-label">{t('settings.data_management')}</h2>
-                <p className="obs-settings-hint">{t('settings.export_path') || 'Export folder'} 1</p>
-                <div className="obs-settings-row">
-                    <input type="text" value={exportPath1} readOnly placeholder={t('settings.no_path') || 'No folder set'} style={{ flex: 1 }} />
-                    <button type="button" className="btn btn-icon" onClick={() => handlePickPath(1)} aria-label={t('settings.pick_folder')} title={t('settings.pick_folder')}>
-                        <FolderOpen size={14} />
-                    </button>
-                    {exportPath1 && (
-                        <button type="button" className="btn btn-icon" onClick={() => handleClearPath(1)} aria-label={t('settings.clear_path')} title={t('settings.clear_path')}>
-                            <X size={14} />
-                        </button>
-                    )}
-                </div>
-                <p className="obs-settings-hint">{t('settings.export_path') || 'Export folder'} 2</p>
-                <div className="obs-settings-row">
-                    <input type="text" value={exportPath2} readOnly placeholder={t('settings.no_path') || 'No folder set'} style={{ flex: 1 }} />
-                    <button type="button" className="btn btn-icon" onClick={() => handlePickPath(2)} aria-label={t('settings.pick_folder')} title={t('settings.pick_folder')}>
-                        <FolderOpen size={14} />
-                    </button>
-                    {exportPath2 && (
-                        <button type="button" className="btn btn-icon" onClick={() => handleClearPath(2)} aria-label={t('settings.clear_path')} title={t('settings.clear_path')}>
-                            <X size={14} />
-                        </button>
-                    )}
-                </div>
 
-                <div className="obs-settings-row" style={{ marginTop: 12 }}>
-                    <button type="button" className="btn btn-primary" onClick={handleExportNow} onMouseEnter={() => playSFX(SFX.HOVER)}>
-                        {t('settings.export_now') || 'Export now'}
-                    </button>
-                    <button type="button" className="btn btn-secondary" onClick={handleImport} onMouseEnter={() => playSFX(SFX.HOVER)}>
-                        Importer Yoridokoro / Konomi
-                    </button>
-                </div>
-
-                <div className="obs-settings-html-export" style={{ marginTop: 16 }}>
+                <div className="obs-settings-html-export m-gdrive-hero-card">
                     <div className="obs-settings-html-export__head">
                         <div>
                             <strong>☁️ Synchronisation Google Drive (PC ⇄ Samsung S23 Ultra)</strong>
@@ -1035,7 +1024,7 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
                                 style={{ flex: 1 }}
                             />
                         </div>
-                        <div className="obs-settings-row" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+                        <div className="obs-settings-row m-gdrive-actions-grid" style={{ marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
                             <button type="button" className="btn btn-primary" onClick={handleDrivePush} disabled={driveBusy}>
                                 Envoyer vers Google Drive (Push)
                             </button>
@@ -1061,7 +1050,43 @@ function SystemPanel(props: { onRequestDeleteAll: () => void; onRequestDeleteBin
                         </div>
                     </div>
                 </div>
-                <div className="obs-settings-html-export">
+
+                <div className="m-desktop-only-section">
+                    <p className="obs-settings-hint">{t('settings.export_path') || 'Export folder'} 1</p>
+                    <div className="obs-settings-row">
+                        <input type="text" value={exportPath1} readOnly placeholder={t('settings.no_path') || 'No folder set'} style={{ flex: 1 }} />
+                        <button type="button" className="btn btn-icon" onClick={() => handlePickPath(1)} aria-label={t('settings.pick_folder')} title={t('settings.pick_folder')}>
+                            <FolderOpen size={14} />
+                        </button>
+                        {exportPath1 && (
+                            <button type="button" className="btn btn-icon" onClick={() => handleClearPath(1)} aria-label={t('settings.clear_path')} title={t('settings.clear_path')}>
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+                    <p className="obs-settings-hint">{t('settings.export_path') || 'Export folder'} 2</p>
+                    <div className="obs-settings-row">
+                        <input type="text" value={exportPath2} readOnly placeholder={t('settings.no_path') || 'No folder set'} style={{ flex: 1 }} />
+                        <button type="button" className="btn btn-icon" onClick={() => handlePickPath(2)} aria-label={t('settings.pick_folder')} title={t('settings.pick_folder')}>
+                            <FolderOpen size={14} />
+                        </button>
+                        {exportPath2 && (
+                            <button type="button" className="btn btn-icon" onClick={() => handleClearPath(2)} aria-label={t('settings.clear_path')} title={t('settings.clear_path')}>
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="obs-settings-row" style={{ marginTop: 12 }}>
+                        <button type="button" className="btn btn-primary" onClick={handleExportNow} onMouseEnter={() => playSFX(SFX.HOVER)}>
+                            {t('settings.export_now') || 'Export now'}
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={handleImport} onMouseEnter={() => playSFX(SFX.HOVER)}>
+                            Importer Yoridokoro / Konomi
+                        </button>
+                    </div>
+                </div>
+                <div className="obs-settings-html-export m-desktop-only-section">
                     <div className="obs-settings-html-export__head">
                       <div>
                         <strong><FileCode2 size={16} aria-hidden="true" /> Art sur téléphone</strong>

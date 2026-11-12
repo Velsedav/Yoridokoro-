@@ -1,6 +1,7 @@
 import { PageHeading } from '../design/rework/Primitives'
 import { useRework } from '../design/rework/useRework'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useBackHandler } from '../lib/backButton'
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Archive, ArrowLeft, Building2, CalendarClock, Mail, MessageCircle, Phone, Plus, Search, StickyNote, UserRound, Users, Video, X } from 'lucide-react'
 import { addInteraction, addPersonNote, createPerson, daysSinceContact, getInteractions, getPeople, getPersonNotes, updatePerson, type InteractionChannel, type Person, type PersonInteraction, type PersonNote, type RelationshipKind } from '../lib/relations'
@@ -45,6 +46,16 @@ export default function Relations() {
   const [undoPerson, setUndoPerson] = useState<Person | null>(null)
 
   const selected = people.find(person => person.id === selectedId) ?? null
+
+  useBackHandler(Boolean(dialog || (isMobile && mobileShowDetail)), () => {
+    if (dialog) {
+      setDialog(null)
+      return
+    }
+    if (isMobile && mobileShowDetail) {
+      setMobileShowDetail(false)
+    }
+  })
 
   async function refreshPeople(preferredId?: string) {
     const next = await getPeople(true)

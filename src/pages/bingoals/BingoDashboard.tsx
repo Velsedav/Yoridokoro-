@@ -1,6 +1,7 @@
 import { PageHeading } from '../../design/rework/Primitives'
 import { useRework } from '../../design/rework/useRework'
 import { useIsMobile } from '../../hooks/useIsMobile'
+import { useBackHandler } from '../../lib/backButton'
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ExternalLink, Target, LayoutGrid, Clock3, ArrowRight, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -82,6 +83,16 @@ export default function BingoDashboard() {
   const [cardTimePeriodIndex, setCardTimePeriodIndex] = useState(0)
   const gridRef = useRef<HTMLDivElement>(null)
   const hasAutofocusedGrid = useRef(false)
+
+  useBackHandler(Boolean(createSlot !== null || showGridSettings), () => {
+    if (createSlot !== null) {
+      setCreateSlot(null)
+      return
+    }
+    if (showGridSettings) {
+      setShowGridSettings(false)
+    }
+  })
 
   async function load(year = selectedYear) {
     setLoading(true);

@@ -1,4 +1,5 @@
 import { type FormEvent } from 'react'
+import { useBackHandler } from '../lib/backButton'
 import {
   ArrowLeft,
   Briefcase,
@@ -232,6 +233,17 @@ export function MobileCareerView(props: MobileCareerViewProps) {
 
   const isApplicationsView = tab === 'all' || tab === 'en_cours' || tab === 'relances' || tab === 'clos'
   const showApplicationSheet = Boolean(selectedApp || isCreating)
+
+  useBackHandler(Boolean(showRomeForm || showApplicationSheet), () => {
+    if (showRomeForm) {
+      setShowRomeForm(false)
+      return
+    }
+    if (showApplicationSheet) {
+      setSelectedId(null)
+      setIsCreating(false)
+    }
+  })
 
   return (
     <div className="m-career">

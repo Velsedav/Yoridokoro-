@@ -20,6 +20,7 @@ import './ObsidianHome.css'
 import { useRework } from '../design/rework/useRework'
 import { PageHeading } from '../design/rework/Primitives'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useBackHandler } from '../lib/backButton'
 
 type ViewMode = 'list' | 'board'
 const LS_VIEW_KEY = 'obsidian-home-view'
@@ -149,6 +150,20 @@ export default function ObsidianHome() {
   const [quickStart, setQuickStart] = useState<{ subject: Subject; chapterName?: string } | null>(null)
   const [editingSubject, setEditingSubject] = useState<(Subject & { tags: Tag[] }) | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+
+  useBackHandler(Boolean(quickStart || editingSubject || createOpen), () => {
+    if (quickStart) {
+      setQuickStart(null)
+      return
+    }
+    if (editingSubject) {
+      setEditingSubject(null)
+      return
+    }
+    if (createOpen) {
+      setCreateOpen(false)
+    }
+  })
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   const opportunityIdRef = useRef(crypto.randomUUID())
   const workSecondsBySubject = usePlannerAllocation()

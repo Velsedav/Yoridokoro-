@@ -14,6 +14,9 @@ import './styles/argonauten.css'
 import './styles/mobile-s23.css'
 import AppErrorBoundary from './components/AppErrorBoundary.tsx'
 import { ensureMobileElectronShim } from './lib/webSqliteBridge.ts'
+import { installSystemBackBridge } from './lib/backButton.ts'
+
+installSystemBackBridge()
 
 const TodayDashboard = lazy(() => import('./pages/TodayDashboard.tsx'))
 const Home = lazy(() => import('./pages/Home.tsx'))

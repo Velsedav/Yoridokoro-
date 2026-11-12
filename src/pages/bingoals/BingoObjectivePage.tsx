@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, ExternalLink, Maximize, Minimize, Minus, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { useBackHandler } from "../../lib/backButton";
 import "../../styles/bingoals.css";
 const openExternal = (url: string) => (window as any).electronAPI.shell.openExternal(url);
 import BingoModal from "../../components/bingoals/BingoModal";
@@ -118,6 +119,28 @@ export default function BingoObjectivePage() {
   useEffect(() => {
     if (searchParams.get('edit') === '1') setEditingObjective(true)
   }, [searchParams])
+
+  useBackHandler(
+    Boolean(pendingAddLinkSubId || editingObjective || addOpen || mobileSheetOpen),
+    () => {
+      if (pendingAddLinkSubId) {
+        setPendingAddLinkSubId(null)
+        return
+      }
+      if (editingObjective) {
+        closeObjectiveEditor()
+        return
+      }
+      if (addOpen) {
+        setAddOpen(false)
+        return
+      }
+      if (mobileSheetOpen) {
+        setMobileSheetOpen(false)
+        return
+      }
+    },
+  )
 
   function closeObjectiveEditor() {
     setEditingObjective(false)

@@ -15,6 +15,7 @@ import { categories } from './types';
 import { useModalFocus } from './hooks/useModalFocus';
 import { dialogFocusables } from '../../hooks/useDialogFocus';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useBackHandler } from '../../lib/backButton';
 import { imageFileToDataUrl } from './lib/images';
 import { categoryCopy, I18nProvider, localeFor, useI18n, useTranslator } from './lib/i18n';
 import { buildCategoryStatistics } from './lib/statistics';
@@ -1011,6 +1012,18 @@ export default function App({ headerAction, design }: { headerAction?: ReactNode
   const t = useTranslator(preferences.language);
   const categoryDefinition = categories.find((entry) => entry.id === category)!;
   const definition = categoryCopy(category, t);
+
+  // Android back button: peel back Art layers one at a time (modal → dossier → duel/stats → filters)
+  // instead of leaving the module.
+  useBackHandler(Boolean(completionSession || editing || showAdd || selected || view !== 'ladder' || showFilters), () => {
+    if (completionSession) { setCompletionSession(undefined); return; }
+    if (editing) { setEditing(undefined); return; }
+    if (showAdd) { setShowAdd(false); return; }
+    if (selected) { setSelected(undefined); return; }
+    if (view !== 'ladder') { setView('ladder'); return; }
+    if (showFilters) { setShowFilters(false); return; }
+    return false;
+  });
 
   const changeCollectionView = (next: 'ladder' | 'covers') => {
     setCollectionView(next);

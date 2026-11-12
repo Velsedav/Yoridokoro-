@@ -3476,35 +3476,418 @@
   }
 
   /* ------------------------------------------------------------------------
-     10. SETTINGS, LEARNING, ANALYTICS & METACOGNITION
+     10. SETTINGS (`ObsidianSettings.tsx` — Mobile-First Overhaul)
      ------------------------------------------------------------------------ */
-  .obs-settings-root,
-  .obs-settings-layout,
-  .obs-settings-panel {
+  :root[data-theme^="yoridokoro-"] .obs-settings-root > .rw-page-heading,
+  .obs-settings-root > .rw-page-heading,
+  :root[data-theme^="yoridokoro-"] .obs-settings-rail-header,
+  .obs-settings-rail-header,
+  .obs-settings-rail-tooltip,
+  .argo-settings-rail-idx,
+  .m-desktop-only-section,
+  .m-desktop-only-row,
+  .m-desktop-only-btn {
+    display: none !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-root,
+  .obs-settings-root {
     display: flex !important;
     flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
-    max-height: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
     overflow: visible !important;
   }
 
-  .obs-settings-root {
-    padding: 10px var(--m-pad) 24px !important;
+  :root[data-theme^="yoridokoro-"] .obs-settings-layout,
+  .obs-settings-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 0 28px !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
   }
 
-  .obs-settings-nav {
+  /* Sticky horizontal swipeable category pill rail */
+  :root[data-theme^="yoridokoro-"] .obs-settings-rail,
+  .obs-settings-rail {
+    position: sticky !important;
+    top: var(--m-header-h, 54px) !important;
+    z-index: 35 !important;
     display: flex !important;
     flex-direction: row !important;
-    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
     gap: 6px !important;
-    padding-bottom: 8px !important;
-    border-right: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    flex: 0 0 auto !important;
+    padding: 8px 12px !important;
+    margin: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    border: 0 !important;
     border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1)) !important;
+    background: color-mix(in srgb, var(--bg-color, #111318) 92%, transparent) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+  }
+
+  .obs-settings-rail::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-rail-item,
+  .obs-settings-rail-item {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    padding: 0 13px !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12)) !important;
+    background: var(--card-bg, rgba(255, 255, 255, 0.04)) !important;
+    color: var(--text-muted, #9e9a90) !important;
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 7px !important;
+    white-space: nowrap !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-rail-item .obs-settings-rail-label,
+  .obs-settings-rail-item .obs-settings-rail-label {
+    display: inline !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-rail-item--active,
+  .obs-settings-rail-item--active {
+    background: var(--primary, var(--accent, #6ea8fe)) !important;
+    border-color: var(--primary, var(--accent, #6ea8fe)) !important;
+    color: var(--palette-accent-text, #0b0e14) !important;
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--primary, #6ea8fe) 30%, transparent) !important;
+  }
+
+  /* Main Settings Panel Container */
+  :root[data-theme^="yoridokoro-"] .obs-settings-panel,
+  .obs-settings-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 4px 12px 24px !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-panel-content,
+  :root[data-theme^="yoridokoro-"] .obs-settings-panel-content--wide,
+  .obs-settings-panel-content,
+  .obs-settings-panel-content--wide {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-panel-title,
+  .obs-settings-panel-title {
+    font-size: 20px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.02em !important;
+    margin: 2px 0 4px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-section,
+  .obs-settings-section {
+    padding: 14px !important;
+    border-radius: 14px !important;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1)) !important;
+    background: var(--card-bg, rgba(255, 255, 255, 0.03)) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Argonaute showcase card in Look & Feel */
+  .argo-settings-showcase {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 14px !important;
+    border-radius: 12px !important;
+  }
+
+  .argo-showcase-orb {
+    display: none !important;
+  }
+
+  .argo-showcase-copy h3 {
+    font-size: 15px !important;
+    margin: 2px 0 4px !important;
+  }
+
+  .argo-showcase-copy p {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+  }
+
+  .argo-showcase-btn {
+    width: 100% !important;
+    min-height: 40px !important;
+    justify-content: center !important;
+  }
+
+  /* Theme Selector 2-Column Mobile Grid */
+  :root[data-theme^="yoridokoro-"] .obs-settings-theme-groups,
+  .obs-settings-theme-groups {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-theme-grid,
+  .obs-theme-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-theme-card,
+  .obs-theme-card {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    min-height: 0 !important;
+    padding: 10px !important;
+    border-radius: 11px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-theme-preview,
+  .obs-theme-preview {
+    width: 100% !important;
+    height: 42px !important;
+    padding: 6px !important;
+    box-sizing: border-box !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-theme-copy,
+  .obs-theme-copy {
+    padding-right: 0 !important;
+    gap: 2px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-theme-copy strong,
+  .obs-theme-copy strong {
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-theme-copy small,
+  .obs-theme-copy small {
+    font-size: 10.5px !important;
+    line-height: 1.3 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+  }
+
+  .obs-theme-check {
+    top: 8px !important;
+    right: 8px !important;
+  }
+
+  /* Setting Rows (Language, WeekStart, MetacognitionDay) */
+  :root[data-theme^="yoridokoro-"] .obs-settings-setting-row,
+  .obs-settings-setting-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    min-height: 0 !important;
+    padding: 10px 0 !important;
+  }
+
+  .obs-settings-setting-icon {
+    display: none !important;
+  }
+
+  /* Toggle switches */
+  :root[data-theme^="yoridokoro-"] .obs-settings-toggle,
+  .obs-settings-toggle {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 44px !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: 48px !important;
+    padding: 8px 0 !important;
+  }
+
+  .obs-settings-toggle-icon {
+    display: none !important;
+  }
+
+  /* Session Resources Rows */
+  .session-resource-row {
+    display: grid !important;
+    grid-template-columns: 28px minmax(0, 1fr) 36px !important;
+    gap: 6px !important;
+    padding: 8px !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)) !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+  }
+
+  .session-resource-row input:nth-of-type(2) {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* Art Credentials & Generic Fields */
+  .art-credentials-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-field,
+  .obs-settings-field {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 5px !important;
+    margin-top: 4px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-field input,
+  :root[data-theme^="yoridokoro-"] .obs-settings-field select,
+  .obs-settings-field input,
+  .obs-settings-field select {
     width: 100% !important;
   }
 
-  .obs-settings-nav-item {
-    flex: 0 0 auto !important;
-    white-space: nowrap !important;
+  /* Audio SFX Sliders */
+  :root[data-theme^="yoridokoro-"] .obs-settings-sfx-grid,
+  .obs-settings-sfx-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+
+  :root[data-theme^="yoridokoro-"] .obs-settings-sfx-row,
+  .obs-settings-sfx-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 90px 34px 34px !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 6px 0 !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color, rgba(255,255,255,0.08)) 50%, transparent) !important;
+  }
+
+  .obs-settings-sfx-row:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .obs-settings-sfx-row__volume {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  /* Observation / Data & AI Stats */
+  :root[data-theme^="yoridokoro-"] .observation-stats,
+  .observation-stats {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1px !important;
+    border-radius: 10px !important;
+  }
+
+  .observation-stats > div {
+    padding: 12px !important;
+    border: 0 !important;
+  }
+
+  .observation-export-actions,
+  .obs-settings-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .observation-export-actions .btn {
+    flex: 1 1 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Google Drive Hero Card & Actions in System Panel */
+  .m-gdrive-hero-card {
+    margin-top: 4px !important;
+    padding: 14px !important;
+    border-radius: 12px !important;
+    border: 1px solid color-mix(in srgb, var(--primary, #6ea8fe) 35%, var(--border-color)) !important;
+    background: color-mix(in srgb, var(--primary, #6ea8fe) 6%, var(--card-bg)) !important;
+  }
+
+  .m-gdrive-actions-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .m-gdrive-actions-grid .btn {
+    width: 100% !important;
+    min-height: 40px !important;
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+    text-align: center !important;
+    justify-content: center !important;
+    white-space: normal !important;
+    line-height: 1.25 !important;
+  }
+
+  /* Danger Zone Modals on Mobile */
+  .danger-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: 400px !important;
+    padding: 18px !important;
+    border-radius: 16px !important;
+  }
+
+  .danger-modal-actions {
+    display: flex !important;
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+  }
+
+  .danger-modal-actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
   }
 }

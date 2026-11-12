@@ -43,6 +43,7 @@ import {
   shareOrDownloadBackupForDrive,
   type GoogleDriveSyncConfig,
 } from '../lib/googleDriveSync'
+import { useBackHandler } from '../lib/backButton'
 
 interface MobileAppShellProps {
   onNavigate?: (e: React.MouseEvent, path: string) => void
@@ -167,6 +168,19 @@ export function MobileAppShell({ onNavigate }: MobileAppShellProps) {
     navigate(path)
   }
 
+  // Android back button: close the menu drawer first.
+  useBackHandler(drawerOpen, () => setDrawerOpen(false))
+
+  const goBack = (e: React.MouseEvent) => {
+    const routerIndex = (window.history.state as { idx?: number } | null)?.idx ?? 0
+    if (routerIndex > 0) {
+      setDrawerOpen(false)
+      navigate(-1)
+      return
+    }
+    go(e, meta.backTo ?? '/')
+  }
+
   async function handlePushDrive() {
     if (syncBusy) return
     setSyncBusy(true)
@@ -212,7 +226,7 @@ export function MobileAppShell({ onNavigate }: MobileAppShellProps) {
             <button
               type="button"
               className="m-shell-back-btn"
-              onClick={e => go(e, meta.backTo!)}
+              onClick={goBack}
               aria-label="Retour"
             >
               <ArrowLeft size={18} />
